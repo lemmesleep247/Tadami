@@ -33,6 +33,8 @@ class NovelReaderPreferencesTest {
         prefs.autoScrollInterval().get() shouldBe 10
         prefs.autoScrollOffset().get() shouldBe 0
         prefs.prefetchNextChapter().get() shouldBe false
+        prefs.cacheReadChapters().get() shouldBe false
+        prefs.cacheReadChaptersUnlimited().get() shouldBe false
         prefs.bionicReading().get() shouldBe false
         prefs.swipeGestures().get() shouldBe false
         prefs.customThemes().get() shouldBe emptyList()

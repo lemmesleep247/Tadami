@@ -550,6 +550,37 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
+    fun `early webview reveal is enabled for image-heavy html`() {
+        val html = buildString {
+            append("<html><body>")
+            repeat(6) { index ->
+                append("<img src=\"https://example.com/$index.jpg\" />")
+            }
+            append("</body></html>")
+        }
+
+        assertTrue(shouldUseEarlyWebViewReveal(rawHtml = html))
+    }
+
+    @Test
+    fun `early webview reveal is enabled for hexnovels plugin images`() {
+        val html = """
+            <html><body>
+            <img src="novelimg://hexnovels?ref=chapter%2Fimg-1" />
+            </body></html>
+        """.trimIndent()
+
+        assertTrue(shouldUseEarlyWebViewReveal(rawHtml = html))
+    }
+
+    @Test
+    fun `early webview reveal stays disabled for plain text html`() {
+        val html = "<html><body><p>Chapter text only</p></body></html>"
+
+        assertFalse(shouldUseEarlyWebViewReveal(rawHtml = html))
+    }
+
+    @Test
     fun `reader exit restores captured system bars state when available`() {
         val captured = ReaderSystemBarsState(
             isLightStatusBars = false,

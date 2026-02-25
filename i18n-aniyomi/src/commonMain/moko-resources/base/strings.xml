@@ -449,6 +449,13 @@
     <string name="novel_reader_auto_scroll_offset">Auto-scroll offset (px)</string>
     <string name="novel_reader_prefetch_next_chapter">Prefetch next chapter</string>
     <string name="novel_reader_prefetch_next_chapter_summary">Silently prefetch next chapter after reaching 50% progress</string>
+    <string name="novel_reader_cache_read_chapters">Cache read chapters</string>
+    <string name="novel_reader_cache_read_chapters_summary">Store opened chapters in a compressed temporary cache for faster reopen (auto-limited size)</string>
+    <string name="novel_reader_cache_read_chapters_unlimited">Unlimited chapter cache</string>
+    <string name="novel_reader_cache_read_chapters_unlimited_summary">Disable chapter cache entry/size limits (may use a lot of storage)</string>
+    <string name="novel_reader_chapter_cache_size">Chapter cache usage</string>
+    <string name="novel_reader_chapter_cache_size_summary_limited">%1$s • %2$s entries • limit %3$s / %4$s chapters</string>
+    <string name="novel_reader_chapter_cache_size_summary_unlimited">%1$s • %2$s entries • unlimited</string>
 
     <!-- Accessibility -->
     <string name="novel_reader_fullscreen">Fullscreen mode</string>

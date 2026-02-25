@@ -1067,6 +1067,13 @@
     <string name="novel_reader_auto_scroll_offset">Смещение автопрокрутки (px)</string>
     <string name="novel_reader_prefetch_next_chapter">Предзагрузка следующей главы</string>
     <string name="novel_reader_prefetch_next_chapter_summary">Тихо предзагружать следующую главу после достижения 50% прогресса</string>
+    <string name="novel_reader_cache_read_chapters">Кэшировать прочитанные главы</string>
+    <string name="novel_reader_cache_read_chapters_summary">Сохранять открытые главы во временный сжатый кэш для быстрого повторного открытия (размер ограничен автоматически)</string>
+    <string name="novel_reader_cache_read_chapters_unlimited">Безлимитный кэш глав</string>
+    <string name="novel_reader_cache_read_chapters_unlimited_summary">Отключить ограничения по размеру и количеству глав в кэше (может занять много места)</string>
+    <string name="novel_reader_chapter_cache_size">Размер кэша глав</string>
+    <string name="novel_reader_chapter_cache_size_summary_limited">%1$s • %2$s записей • лимит %3$s / %4$s глав</string>
+    <string name="novel_reader_chapter_cache_size_summary_unlimited">%1$s • %2$s записей • без лимита</string>
     <string name="novel_reader_show_scroll_percentage">Показывать процент чтения</string>
     <string name="novel_reader_show_battery_time">Показывать батарею и время</string>
     <string name="novel_reader_bionic_reading">Бионическое чтение</string>

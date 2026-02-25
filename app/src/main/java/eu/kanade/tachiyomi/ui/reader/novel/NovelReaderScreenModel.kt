@@ -109,10 +109,22 @@ class NovelReaderScreenModel(
         }
 
         val html = try {
+            val cacheReadChapters = novelReaderPreferences.cacheReadChapters().get()
             withContext(Dispatchers.IO) {
                 novelDownloadManager.getDownloadedChapterText(novel, chapter.id)
+                    ?: cacheReadChapters.takeIf { it }?.let { NovelReaderChapterDiskCacheStore.get(chapter.id) }
                     ?: NovelReaderChapterPrefetchCache.get(chapter.id)
+                        ?.also { prefetchedHtml ->
+                            if (cacheReadChapters) {
+                                NovelReaderChapterDiskCacheStore.put(chapter.id, prefetchedHtml)
+                            }
+                        }
                     ?: source.getChapterText(chapter.toSNovelChapter())
+                        .also { fetchedHtml ->
+                            if (cacheReadChapters) {
+                                NovelReaderChapterDiskCacheStore.put(chapter.id, fetchedHtml)
+                            }
+                        }
             }
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Failed to load novel chapter text" }
@@ -202,11 +214,16 @@ class NovelReaderScreenModel(
         nextChapterPrefetchJob?.cancel()
         nextChapterPrefetchJob = screenModelScope.launch(Dispatchers.IO) {
             runCatching {
+                val cacheReadChapters = novelReaderPreferences.cacheReadChapters().get()
                 if (novelDownloadManager.getDownloadedChapterText(novel, nextChapter.id) != null) return@runCatching
+                if (cacheReadChapters && NovelReaderChapterDiskCacheStore.contains(nextChapter.id)) return@runCatching
                 if (NovelReaderChapterPrefetchCache.contains(nextChapter.id)) return@runCatching
 
                 val nextHtml = source.getChapterText(nextChapter.toSNovelChapter())
                 NovelReaderChapterPrefetchCache.put(nextChapter.id, nextHtml)
+                if (cacheReadChapters) {
+                    NovelReaderChapterDiskCacheStore.put(nextChapter.id, nextHtml)
+                }
             }.onFailure { error ->
                 logcat(LogPriority.WARN, error) { "Failed to prefetch next novel chapter" }
             }

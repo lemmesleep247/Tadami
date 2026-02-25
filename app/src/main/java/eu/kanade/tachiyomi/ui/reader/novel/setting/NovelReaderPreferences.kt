@@ -168,6 +168,10 @@ class NovelReaderPreferences(
 
     fun prefetchNextChapter() = preferenceStore.getBoolean("novel_reader_prefetch_next_chapter", false)
 
+    fun cacheReadChapters() = preferenceStore.getBoolean("novel_reader_cache_read_chapters", false)
+
+    fun cacheReadChaptersUnlimited() = preferenceStore.getBoolean("novel_reader_cache_read_chapters_unlimited", false)
+
     // Accessibility
     fun fullScreenMode() = preferenceStore.getBoolean("novel_reader_fullscreen", true)
 

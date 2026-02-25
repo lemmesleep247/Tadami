@@ -1,5 +1,6 @@
 package eu.kanade.presentation.more.settings.screen
 
+import android.text.format.Formatter
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,10 +19,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,6 +35,8 @@ import eu.kanade.presentation.more.settings.widget.PrefsHorizontalPadding
 import eu.kanade.presentation.reader.novel.novelReaderFonts
 import eu.kanade.presentation.reader.novel.novelReaderPresetThemes
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderColorTheme
+import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderChapterDiskCache
+import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderChapterDiskCacheStore
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderTheme
 import eu.kanade.tachiyomi.ui.reader.novel.setting.TextAlign
@@ -215,12 +220,48 @@ object SettingsNovelReaderScreen : SearchableSettings {
 
     @Composable
     private fun getNavigationGroup(prefs: NovelReaderPreferences): Preference.PreferenceGroup {
+        val context = LocalContext.current
         val autoScrollPref = prefs.autoScroll()
         val autoScroll by autoScrollPref.collectAsState()
         val autoScrollIntervalPref = prefs.autoScrollInterval()
         val autoScrollInterval by autoScrollIntervalPref.collectAsState()
         val autoScrollOffsetPref = prefs.autoScrollOffset()
         val autoScrollOffset by autoScrollOffsetPref.collectAsState()
+        val cacheReadChaptersPref = prefs.cacheReadChapters()
+        val cacheReadChapters by cacheReadChaptersPref.collectAsState()
+        val cacheReadChaptersUnlimitedPref = prefs.cacheReadChaptersUnlimited()
+        val cacheReadChaptersUnlimited by cacheReadChaptersUnlimitedPref.collectAsState()
+        val chapterCacheStats by produceState(
+            initialValue = NovelReaderChapterDiskCacheStore.stats(),
+            cacheReadChapters,
+            cacheReadChaptersUnlimited,
+        ) {
+            if (!cacheReadChaptersUnlimited) {
+                NovelReaderChapterDiskCacheStore.trimToCurrentLimits()
+            }
+            value = NovelReaderChapterDiskCacheStore.stats()
+        }
+        val chapterCacheLimitSizeText = remember(context) {
+            Formatter.formatFileSize(context, NovelReaderChapterDiskCache.DEFAULT_MAX_TOTAL_BYTES)
+        }
+        val chapterCacheSizeText = remember(chapterCacheStats.totalBytes, context) {
+            Formatter.formatFileSize(context, chapterCacheStats.totalBytes)
+        }
+        val chapterCacheSummary = if (cacheReadChaptersUnlimited) {
+            stringResource(
+                AYMR.strings.novel_reader_chapter_cache_size_summary_unlimited,
+                chapterCacheSizeText,
+                chapterCacheStats.entryCount.toString(),
+            )
+        } else {
+            stringResource(
+                AYMR.strings.novel_reader_chapter_cache_size_summary_limited,
+                chapterCacheSizeText,
+                chapterCacheStats.entryCount.toString(),
+                chapterCacheLimitSizeText,
+                NovelReaderChapterDiskCache.DEFAULT_MAX_ENTRIES.toString(),
+            )
+        }
 
         return Preference.PreferenceGroup(
             title = stringResource(AYMR.strings.novel_reader_navigation),
@@ -291,6 +332,27 @@ object SettingsNovelReaderScreen : SearchableSettings {
                     preference = prefs.prefetchNextChapter(),
                     title = stringResource(AYMR.strings.novel_reader_prefetch_next_chapter),
                     subtitle = stringResource(AYMR.strings.novel_reader_prefetch_next_chapter_summary),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = prefs.cacheReadChapters(),
+                    title = stringResource(AYMR.strings.novel_reader_cache_read_chapters),
+                    subtitle = stringResource(AYMR.strings.novel_reader_cache_read_chapters_summary),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = cacheReadChaptersUnlimitedPref,
+                    title = stringResource(AYMR.strings.novel_reader_cache_read_chapters_unlimited),
+                    subtitle = stringResource(AYMR.strings.novel_reader_cache_read_chapters_unlimited_summary),
+                    enabled = cacheReadChapters,
+                    onValueChanged = { enabled ->
+                        if (!enabled) {
+                            NovelReaderChapterDiskCacheStore.trimToCurrentLimits(unlimitedOverride = false)
+                        }
+                        true
+                    },
+                ),
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(AYMR.strings.novel_reader_chapter_cache_size),
+                    subtitle = chapterCacheSummary,
                 ),
             ),
         )

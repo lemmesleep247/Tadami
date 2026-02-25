@@ -1088,7 +1088,17 @@ fun NovelReaderScreen(
                             rawHtml = state.html,
                             readerCss = currentReaderCss,
                         )
+                        val shouldEarlyRevealWebView = shouldUseEarlyWebViewReveal(state.html)
                         webView.webViewClient = object : WebViewClient() {
+                            private var hasEarlyRevealedPage = false
+
+                            override fun onPageCommitVisible(view: WebView?, url: String?) {
+                                super.onPageCommitVisible(view, url)
+                                if (!shouldEarlyRevealWebView || hasEarlyRevealedPage) return
+                                hasEarlyRevealedPage = true
+                                view?.revealReaderDocumentAndWebView()
+                            }
+
                             override fun shouldInterceptRequest(
                                 view: WebView?,
                                 request: WebResourceRequest?,
@@ -1639,6 +1649,21 @@ internal fun escapeCssForInlineStyleTag(css: String): String {
 
 private fun buildWebReaderBootstrapCss(): String {
     return "html, body { visibility: hidden !important; }"
+}
+
+private const val EARLY_WEBVIEW_REVEAL_IMAGE_THRESHOLD = 6
+private val webViewHtmlImageTagRegex = Regex("<img\\b", RegexOption.IGNORE_CASE)
+private val hexNovelsPluginImageUrlRegex = Regex("""(?:novelimg|heximg)://hexnovels\b""", RegexOption.IGNORE_CASE)
+
+internal fun shouldUseEarlyWebViewReveal(rawHtml: String): Boolean {
+    if (rawHtml.isBlank()) return false
+    if (hexNovelsPluginImageUrlRegex.containsMatchIn(rawHtml)) return true
+
+    val imageCount = webViewHtmlImageTagRegex
+        .findAll(rawHtml)
+        .take(EARLY_WEBVIEW_REVEAL_IMAGE_THRESHOLD)
+        .count()
+    return imageCount >= EARLY_WEBVIEW_REVEAL_IMAGE_THRESHOLD
 }
 
 private fun injectHtmlFragmentIntoHead(
