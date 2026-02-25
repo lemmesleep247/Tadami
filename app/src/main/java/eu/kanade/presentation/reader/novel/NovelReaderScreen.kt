@@ -5,8 +5,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.IntentFilter
-import android.os.Build
 import android.os.BatteryManager
+import android.os.Build
 import android.os.SystemClock
 import android.text.Layout
 import android.text.StaticLayout
@@ -70,6 +70,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -79,7 +80,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -1647,7 +1647,7 @@ private fun injectHtmlFragmentIntoHead(
 ): String {
     val headCloseRegex = Regex("</head>", RegexOption.IGNORE_CASE)
     if (headCloseRegex.containsMatchIn(rawHtml)) {
-        return headCloseRegex.replaceFirst(rawHtml, "${fragment}</head>")
+        return headCloseRegex.replaceFirst(rawHtml, "$fragment</head>")
     }
 
     val bodyOpenRegex = Regex("<body[^>]*>", RegexOption.IGNORE_CASE)
