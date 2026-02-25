@@ -1,11 +1,20 @@
 package eu.kanade.presentation.reader.novel
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.core.view.WindowInsetsControllerCompat
+import eu.kanade.tachiyomi.ui.reader.novel.NovelRichBlockTextAlign
+import eu.kanade.tachiyomi.ui.reader.novel.NovelRichContentBlock
+import eu.kanade.tachiyomi.ui.reader.novel.NovelRichTextSegment
+import eu.kanade.tachiyomi.ui.reader.novel.NovelRichTextStyle
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import eu.kanade.tachiyomi.ui.reader.novel.setting.TextAlign as ReaderTextAlign
 
 class NovelReaderUiVisibilityTest {
 
@@ -494,8 +503,10 @@ class NovelReaderUiVisibilityTest {
         assertTrue(
             shouldStartInWebView(
                 preferWebViewRenderer = true,
+                richNativeRendererExperimentalEnabled = false,
                 pageReaderEnabled = false,
                 contentBlocksCount = 10,
+                richContentUnsupportedFeaturesDetected = false,
             ),
         )
     }
@@ -505,15 +516,19 @@ class NovelReaderUiVisibilityTest {
         assertFalse(
             shouldStartInWebView(
                 preferWebViewRenderer = false,
+                richNativeRendererExperimentalEnabled = false,
                 pageReaderEnabled = false,
                 contentBlocksCount = 2,
+                richContentUnsupportedFeaturesDetected = false,
             ),
         )
         assertTrue(
             shouldStartInWebView(
                 preferWebViewRenderer = false,
+                richNativeRendererExperimentalEnabled = false,
                 pageReaderEnabled = false,
                 contentBlocksCount = 0,
+                richContentUnsupportedFeaturesDetected = false,
             ),
         )
     }
@@ -523,15 +538,116 @@ class NovelReaderUiVisibilityTest {
         assertFalse(
             shouldStartInWebView(
                 preferWebViewRenderer = true,
+                richNativeRendererExperimentalEnabled = false,
                 pageReaderEnabled = true,
                 contentBlocksCount = 5,
+                richContentUnsupportedFeaturesDetected = false,
             ),
         )
         assertTrue(
             shouldStartInWebView(
                 preferWebViewRenderer = true,
+                richNativeRendererExperimentalEnabled = false,
                 pageReaderEnabled = true,
                 contentBlocksCount = 0,
+                richContentUnsupportedFeaturesDetected = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `unsupported rich content forces webview startup only when experimental rich native is enabled`() {
+        assertFalse(
+            shouldStartInWebView(
+                preferWebViewRenderer = false,
+                richNativeRendererExperimentalEnabled = false,
+                pageReaderEnabled = false,
+                contentBlocksCount = 5,
+                richContentUnsupportedFeaturesDetected = true,
+            ),
+        )
+        assertTrue(
+            shouldStartInWebView(
+                preferWebViewRenderer = false,
+                richNativeRendererExperimentalEnabled = true,
+                pageReaderEnabled = false,
+                contentBlocksCount = 5,
+                richContentUnsupportedFeaturesDetected = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `rich native scroll renderer supports images unless bionic or unsupported`() {
+        assertTrue(
+            shouldUseRichNativeScrollRenderer(
+                richNativeRendererExperimentalEnabled = true,
+                showWebView = false,
+                usePageReader = false,
+                bionicReadingEnabled = false,
+                richContentBlocks = listOf(
+                    NovelRichContentBlock.Paragraph(
+                        segments = listOf(NovelRichTextSegment("Hello")),
+                    ),
+                ),
+                richContentUnsupportedFeaturesDetected = false,
+            ),
+        )
+
+        assertTrue(
+            shouldUseRichNativeScrollRenderer(
+                richNativeRendererExperimentalEnabled = true,
+                showWebView = false,
+                usePageReader = false,
+                bionicReadingEnabled = false,
+                richContentBlocks = listOf(
+                    NovelRichContentBlock.Image(url = "https://example.org/image.jpg"),
+                ),
+                richContentUnsupportedFeaturesDetected = false,
+            ),
+        )
+
+        assertFalse(
+            shouldUseRichNativeScrollRenderer(
+                richNativeRendererExperimentalEnabled = true,
+                showWebView = false,
+                usePageReader = false,
+                bionicReadingEnabled = true,
+                richContentBlocks = listOf(
+                    NovelRichContentBlock.Paragraph(
+                        segments = listOf(NovelRichTextSegment("Hello")),
+                    ),
+                ),
+                richContentUnsupportedFeaturesDetected = false,
+            ),
+        )
+
+        assertFalse(
+            shouldUseRichNativeScrollRenderer(
+                richNativeRendererExperimentalEnabled = true,
+                showWebView = false,
+                usePageReader = false,
+                bionicReadingEnabled = false,
+                richContentBlocks = listOf(
+                    NovelRichContentBlock.Paragraph(
+                        segments = listOf(NovelRichTextSegment("Hello")),
+                    ),
+                ),
+                richContentUnsupportedFeaturesDetected = true,
+            ),
+        )
+        assertFalse(
+            shouldUseRichNativeScrollRenderer(
+                richNativeRendererExperimentalEnabled = false,
+                showWebView = false,
+                usePageReader = false,
+                bionicReadingEnabled = false,
+                richContentBlocks = listOf(
+                    NovelRichContentBlock.Paragraph(
+                        segments = listOf(NovelRichTextSegment("Hello")),
+                    ),
+                ),
+                richContentUnsupportedFeaturesDetected = false,
             ),
         )
     }
@@ -560,6 +676,7 @@ class NovelReaderUiVisibilityTest {
             resolveHorizontalChapterSwipeAction(
                 swipeGesturesEnabled = true,
                 deltaX = -220f,
+                deltaY = 0f,
                 thresholdPx = 160f,
                 hasPreviousChapter = true,
                 hasNextChapter = true,
@@ -569,10 +686,70 @@ class NovelReaderUiVisibilityTest {
             resolveHorizontalChapterSwipeAction(
                 swipeGesturesEnabled = false,
                 deltaX = -220f,
+                deltaY = 0f,
                 thresholdPx = 160f,
                 hasPreviousChapter = true,
                 hasNextChapter = true,
             ) == HorizontalChapterSwipeAction.NONE,
+        )
+    }
+
+    @Test
+    fun `horizontal chapter swipe helper ignores vertical dominant gestures`() {
+        assertTrue(
+            resolveHorizontalChapterSwipeAction(
+                swipeGesturesEnabled = true,
+                deltaX = -220f,
+                deltaY = -520f,
+                thresholdPx = 160f,
+                hasPreviousChapter = true,
+                hasNextChapter = true,
+            ) == HorizontalChapterSwipeAction.NONE,
+        )
+    }
+
+    @Test
+    fun `native text align uses source alignment when preserve is enabled`() {
+        assertTrue(
+            resolveNativeTextAlign(
+                globalTextAlign = ReaderTextAlign.JUSTIFY,
+                preserveSourceTextAlignInNative = true,
+                sourceTextAlign = NovelRichBlockTextAlign.CENTER,
+            ) == TextAlign.Center,
+        )
+        assertTrue(
+            resolveNativeTextAlign(
+                globalTextAlign = ReaderTextAlign.JUSTIFY,
+                preserveSourceTextAlignInNative = true,
+                sourceTextAlign = null,
+            ) == null,
+        )
+    }
+
+    @Test
+    fun `native text align uses global alignment when preserve is disabled`() {
+        assertTrue(
+            resolveNativeTextAlign(
+                globalTextAlign = ReaderTextAlign.JUSTIFY,
+                preserveSourceTextAlignInNative = false,
+                sourceTextAlign = NovelRichBlockTextAlign.LEFT,
+            ) == TextAlign.Justify,
+        )
+    }
+
+    @Test
+    fun `page reader layout align avoids forced justify when preserve is enabled`() {
+        assertTrue(
+            resolvePageReaderLayoutTextAlign(
+                globalTextAlign = ReaderTextAlign.JUSTIFY,
+                preserveSourceTextAlignInNative = true,
+            ) == ReaderTextAlign.LEFT,
+        )
+        assertTrue(
+            resolvePageReaderLayoutTextAlign(
+                globalTextAlign = ReaderTextAlign.RIGHT,
+                preserveSourceTextAlignInNative = false,
+            ) == ReaderTextAlign.RIGHT,
         )
     }
 
@@ -715,5 +892,148 @@ class NovelReaderUiVisibilityTest {
         )
 
         assertTrue(resolved == base)
+    }
+
+    @Test
+    fun `rich segments are converted to annotated string styles and links`() {
+        val annotated = buildNovelRichAnnotatedString(
+            listOf(
+                NovelRichTextSegment(
+                    text = "Bold",
+                    style = NovelRichTextStyle(bold = true),
+                ),
+                NovelRichTextSegment(
+                    text = " and ",
+                ),
+                NovelRichTextSegment(
+                    text = "link",
+                    style = NovelRichTextStyle(italic = true, underline = true),
+                    linkUrl = "https://example.org",
+                ),
+            ),
+        )
+
+        assertTrue(annotated.text == "Bold and link")
+        assertTrue(annotated.getStringAnnotations(tag = "URL", start = 0, end = annotated.length).size == 1)
+        assertTrue(
+            annotated.getStringAnnotations(tag = "URL", start = 0, end = annotated.length)
+                .single().item == "https://example.org",
+        )
+        assertTrue(annotated.spanStyles.any { it.item.fontWeight == FontWeight.Bold && it.start == 0 && it.end == 4 })
+        assertTrue(
+            annotated.spanStyles.any {
+                it.item.fontStyle == FontStyle.Italic &&
+                    it.item.textDecoration == TextDecoration.Underline &&
+                    it.start == 9 &&
+                    it.end == 13
+            },
+        )
+    }
+
+    @Test
+    fun `rich segments parse css text and background colors`() {
+        val annotated = buildNovelRichAnnotatedString(
+            listOf(
+                NovelRichTextSegment(
+                    text = "C",
+                    style = NovelRichTextStyle(
+                        colorCss = "#112233",
+                        backgroundColorCss = "#445566",
+                    ),
+                ),
+            ),
+        )
+
+        val span = annotated.spanStyles.single()
+        assertTrue(span.item.color == Color(0xFF112233))
+        assertTrue(span.item.background == Color(0xFF445566))
+    }
+
+    @Test
+    fun `rich link helper resolves url annotation at char offset`() {
+        val annotated = buildNovelRichAnnotatedString(
+            listOf(
+                NovelRichTextSegment(text = "Hello "),
+                NovelRichTextSegment(text = "link", linkUrl = "https://example.org"),
+            ),
+        )
+
+        assertTrue(resolveNovelRichLinkAtCharOffset(annotated, 0) == null)
+        assertTrue(resolveNovelRichLinkAtCharOffset(annotated, 6) == "https://example.org")
+        assertTrue(resolveNovelRichLinkAtCharOffset(annotated, 9) == "https://example.org")
+    }
+
+    @Test
+    fun `reader rich link resolver supports relative urls`() {
+        assertTrue(
+            resolveNovelReaderLinkUrl(
+                rawUrl = "/chapter-2",
+                chapterWebUrl = "https://example.org/novel/chapter-1",
+                novelUrl = "https://example.org/novel",
+            ) == "https://example.org/chapter-2",
+        )
+        assertTrue(
+            resolveNovelReaderLinkUrl(
+                rawUrl = "chapter-2",
+                chapterWebUrl = "https://example.org/novel/chapter-1",
+                novelUrl = "https://example.org/novel",
+            ) == "https://example.org/novel/chapter-2",
+        )
+    }
+
+    @Test
+    fun `page range paginator matches page text paginator output`() {
+        val text = (1..120).joinToString(" ") { "word$it" }
+
+        val pages = paginateTextIntoPages(
+            text = text,
+            widthPx = 240,
+            heightPx = 120,
+            textSizePx = 32f,
+            lineHeightMultiplier = 1.2f,
+            typeface = null,
+            textAlign = eu.kanade.tachiyomi.ui.reader.novel.setting.TextAlign.LEFT,
+        )
+        val pageRanges = paginateTextIntoPageRanges(
+            text = text,
+            widthPx = 240,
+            heightPx = 120,
+            textSizePx = 32f,
+            lineHeightMultiplier = 1.2f,
+            typeface = null,
+            textAlign = eu.kanade.tachiyomi.ui.reader.novel.setting.TextAlign.LEFT,
+        )
+
+        val pagesFromRanges = pageRanges.map { range ->
+            text.substring(range.start, range.endExclusive).trim()
+        }
+        assertTrue(pagesFromRanges == pages)
+    }
+
+    @Test
+    fun `annotated page paginator preserves url annotations`() {
+        val annotated = buildNovelRichAnnotatedString(
+            listOf(
+                NovelRichTextSegment(text = "Alpha "),
+                NovelRichTextSegment(text = "link", linkUrl = "https://example.org"),
+                NovelRichTextSegment(text = " omega ".repeat(80)),
+            ),
+        )
+
+        val pages = paginateAnnotatedTextIntoPages(
+            text = annotated,
+            widthPx = 240,
+            heightPx = 120,
+            textSizePx = 32f,
+            lineHeightMultiplier = 1.2f,
+            typeface = null,
+            textAlign = eu.kanade.tachiyomi.ui.reader.novel.setting.TextAlign.LEFT,
+        )
+
+        assertTrue(pages.isNotEmpty())
+        val hasUrlAnnotation = pages.any { page ->
+            page.getStringAnnotations(tag = "URL", start = 0, end = page.length).isNotEmpty()
+        }
+        assertTrue(hasUrlAnnotation)
     }
 }

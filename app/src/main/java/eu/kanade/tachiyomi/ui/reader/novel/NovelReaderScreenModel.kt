@@ -71,6 +71,7 @@ class NovelReaderScreenModel(
     private var chapterWebUrl: String? = null
     private var parsedContentBlocks: List<ContentBlock>? = null
     private var parsedTextBlocks: List<String>? = null
+    private var parsedRichContentResult: NovelRichContentParseResult? = null
     private var lastSavedProgress: Long? = null
     private var lastSavedRead: Boolean? = null
     private var initialProgressIndex: Int = 0
@@ -145,6 +146,7 @@ class NovelReaderScreenModel(
         currentChapter = chapter
         parsedContentBlocks = null
         parsedTextBlocks = null
+        parsedRichContentResult = null
         lastSavedProgress = chapter.lastPageRead
         lastSavedRead = chapter.read
         val savedNativeProgress = decodeNativeScrollProgress(chapter.lastPageRead)
@@ -277,6 +279,8 @@ class NovelReaderScreenModel(
                 .filterIsInstance<ContentBlock.Text>()
                 .map { it.text }
                 .also { parsedTextBlocks = it }
+        val richContentResult = parsedRichContentResult
+            ?: parseNovelRichContent(html).also { parsedRichContentResult = it }
         mutableState.value = State.Success(
             novel = novel,
             chapter = chapter,
@@ -285,6 +289,8 @@ class NovelReaderScreenModel(
             readerSettings = settings,
             contentBlocks = contentBlocks,
             textBlocks = textBlocks,
+            richContentBlocks = richContentResult.blocks,
+            richContentUnsupportedFeaturesDetected = richContentResult.unsupportedFeaturesDetected,
             lastSavedIndex = lastSavedIndex,
             lastSavedScrollOffsetPx = lastSavedScrollOffsetPx,
             lastSavedWebProgressPercent = lastSavedWebProgressPercent,
@@ -300,8 +306,8 @@ class NovelReaderScreenModel(
         novelUrl: String,
         pluginSite: String?,
     ) {
-        val blocks = withContext(Dispatchers.Default) {
-            extractContentBlocks(
+        val (blocks, richContentResult) = withContext(Dispatchers.Default) {
+            val extractedBlocks = extractContentBlocks(
                 rawHtml = rawHtml,
                 chapterWebUrl = chapterWebUrl,
                 novelUrl = novelUrl,
@@ -309,11 +315,13 @@ class NovelReaderScreenModel(
             ).ifEmpty {
                 extractTextBlocks(rawHtml).map(ContentBlock::Text)
             }
+            extractedBlocks to parseNovelRichContent(rawHtml)
         }
         parsedContentBlocks = blocks
         parsedTextBlocks = blocks
             .filterIsInstance<ContentBlock.Text>()
             .map { it.text }
+        parsedRichContentResult = richContentResult
     }
 
     private suspend fun resolveChapterWebUrl(
@@ -1284,6 +1292,8 @@ class NovelReaderScreenModel(
             val readerSettings: NovelReaderSettings,
             val contentBlocks: List<ContentBlock>,
             val textBlocks: List<String>,
+            val richContentBlocks: List<NovelRichContentBlock>,
+            val richContentUnsupportedFeaturesDetected: Boolean,
             val lastSavedIndex: Int,
             val lastSavedScrollOffsetPx: Int,
             val lastSavedWebProgressPercent: Int,

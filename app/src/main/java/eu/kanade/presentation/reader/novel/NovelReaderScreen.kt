@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -49,6 +50,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -96,6 +98,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -117,6 +121,8 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.tachiyomi.source.novel.NovelPluginImage
 import eu.kanade.tachiyomi.source.novel.NovelPluginImageResolver
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreenModel
+import eu.kanade.tachiyomi.ui.reader.novel.NovelRichBlockTextAlign
+import eu.kanade.tachiyomi.ui.reader.novel.NovelRichContentBlock
 import eu.kanade.tachiyomi.ui.reader.novel.encodeNativeScrollProgress
 import eu.kanade.tachiyomi.ui.reader.novel.encodeWebScrollProgressPercent
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderPreferences
@@ -125,6 +131,7 @@ import eu.kanade.tachiyomi.ui.webview.WebViewActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONObject
 import tachiyomi.presentation.core.components.material.padding
 import uy.kohesive.injekt.Injekt
@@ -157,8 +164,10 @@ fun NovelReaderScreen(
         mutableStateOf(
             shouldStartInWebView(
                 preferWebViewRenderer = state.readerSettings.preferWebViewRenderer,
+                richNativeRendererExperimentalEnabled = state.readerSettings.richNativeRendererExperimental,
                 pageReaderEnabled = state.readerSettings.pageReader,
                 contentBlocksCount = state.contentBlocks.size,
+                richContentUnsupportedFeaturesDetected = state.richContentUnsupportedFeaturesDetected,
             ),
         )
     }
@@ -271,8 +280,20 @@ fun NovelReaderScreen(
         state.contentBlocks.takeIf { it.isNotEmpty() }
             ?: state.textBlocks.map { NovelReaderScreenModel.ContentBlock.Text(it) }
     }
+    val richScrollBlocks = remember(state.chapter.id, state.richContentBlocks) {
+        state.richContentBlocks
+    }
     val shouldPaginateForPageReader = state.readerSettings.pageReader &&
         scrollContentBlocks.none { it is NovelReaderScreenModel.ContentBlock.Image }
+    val pageReaderLayoutTextAlign = remember(
+        state.readerSettings.textAlign,
+        state.readerSettings.preserveSourceTextAlignInNative,
+    ) {
+        resolvePageReaderLayoutTextAlign(
+            globalTextAlign = state.readerSettings.textAlign,
+            preserveSourceTextAlignInNative = state.readerSettings.preserveSourceTextAlignInNative,
+        )
+    }
     val pageReaderBlocks: List<String> = remember(
         state.chapter.id,
         state.textBlocks,
@@ -305,20 +326,80 @@ fun NovelReaderScreen(
                 textSizePx = with(density) { state.readerSettings.fontSize.sp.toPx() },
                 lineHeightMultiplier = state.readerSettings.lineHeight.coerceAtLeast(1f),
                 typeface = composeTypeface,
-                textAlign = state.readerSettings.textAlign,
+                textAlign = pageReaderLayoutTextAlign,
             )
         }
     }
-    val usePageReader = shouldPaginateForPageReader && pageReaderBlocks.isNotEmpty()
+    val shouldPaginateRichForPageReader = shouldPaginateForPageReader &&
+        state.readerSettings.richNativeRendererExperimental &&
+        !state.readerSettings.bionicReading &&
+        !state.richContentUnsupportedFeaturesDetected &&
+        state.richContentBlocks.isNotEmpty() &&
+        state.richContentBlocks.none { it is NovelRichContentBlock.Image }
+    val richPageReaderBlocks: List<AnnotatedString> = remember(
+        state.chapter.id,
+        state.richContentBlocks,
+        shouldPaginateRichForPageReader,
+        state.readerSettings.fontSize,
+        state.readerSettings.lineHeight,
+        state.readerSettings.margin,
+        state.readerSettings.textAlign,
+        composeTypeface,
+        pageViewportSize,
+        contentPaddingPx,
+        statusBarTopPadding,
+    ) {
+        if (!shouldPaginateRichForPageReader) {
+            emptyList()
+        } else {
+            val richChapterText = buildRichPageReaderChapterAnnotatedText(state.richContentBlocks)
+            if (richChapterText.text.isBlank()) {
+                emptyList()
+            } else {
+                val screenWidthPx = pageViewportSize.width.takeIf { it > 0 }
+                    ?: with(density) { configuration.screenWidthDp.dp.roundToPx() }
+                val screenHeightPx = pageViewportSize.height.takeIf { it > 0 }
+                    ?: with(density) { configuration.screenHeightDp.dp.roundToPx() }
+                val horizontalPaddingPx = with(density) { (state.readerSettings.margin.dp * 2).roundToPx() }
+                val topPaddingPx = with(density) { (contentPaddingPx + statusBarTopPadding).roundToPx() }
+                val bottomPaddingPx = with(density) { contentPaddingPx.roundToPx() }
+                val verticalPaddingPx = topPaddingPx + bottomPaddingPx
+                paginateAnnotatedTextIntoPages(
+                    text = richChapterText,
+                    widthPx = (screenWidthPx - horizontalPaddingPx).coerceAtLeast(1),
+                    heightPx = (screenHeightPx - verticalPaddingPx).coerceAtLeast(1),
+                    textSizePx = with(density) { state.readerSettings.fontSize.sp.toPx() },
+                    lineHeightMultiplier = state.readerSettings.lineHeight.coerceAtLeast(1f),
+                    typeface = composeTypeface,
+                    textAlign = pageReaderLayoutTextAlign,
+                )
+            }
+        }
+    }
+    val usePageReader = shouldPaginateForPageReader &&
+        (
+            pageReaderBlocks.isNotEmpty() || richPageReaderBlocks.isNotEmpty()
+            )
+    val useRichPageReader = usePageReader && richPageReaderBlocks.isNotEmpty()
+    val pageReaderItemsCount = if (useRichPageReader) richPageReaderBlocks.size else pageReaderBlocks.size
+    val useRichNativeScroll = shouldUseRichNativeScrollRenderer(
+        richNativeRendererExperimentalEnabled = state.readerSettings.richNativeRendererExperimental,
+        showWebView = showWebView,
+        usePageReader = usePageReader,
+        bionicReadingEnabled = state.readerSettings.bionicReading,
+        richContentBlocks = richScrollBlocks,
+        richContentUnsupportedFeaturesDetected = state.richContentUnsupportedFeaturesDetected,
+    )
+    val nativeScrollItemsCount = if (useRichNativeScroll) richScrollBlocks.size else scrollContentBlocks.size
     val pagerState = rememberPagerState(
-        initialPage = state.lastSavedIndex.coerceIn(0, pageReaderBlocks.lastIndex.coerceAtLeast(0)),
-        pageCount = { pageReaderBlocks.size.coerceAtLeast(1) },
+        initialPage = state.lastSavedIndex.coerceIn(0, pageReaderItemsCount.coerceAtLeast(1) - 1),
+        pageCount = { pageReaderItemsCount.coerceAtLeast(1) },
     )
     val readingProgressPercent by remember(
         showWebView,
         webProgressPercent,
-        scrollContentBlocks.size,
-        pageReaderBlocks.size,
+        nativeScrollItemsCount,
+        pageReaderItemsCount,
         pagerState.currentPage,
         textListState.firstVisibleItemIndex,
         usePageReader,
@@ -327,13 +408,13 @@ fun NovelReaderScreen(
             when {
                 showWebView -> webProgressPercent
                 usePageReader -> {
-                    (((pagerState.currentPage + 1).toFloat() / pageReaderBlocks.size.toFloat()) * 100f)
+                    (((pagerState.currentPage + 1).toFloat() / pageReaderItemsCount.toFloat()) * 100f)
                         .roundToInt()
                         .coerceIn(0, 100)
                 }
-                scrollContentBlocks.isEmpty() -> 0
+                nativeScrollItemsCount <= 0 -> 0
                 else -> {
-                    (((textListState.firstVisibleItemIndex + 1).toFloat() / scrollContentBlocks.size.toFloat()) * 100f)
+                    (((textListState.firstVisibleItemIndex + 1).toFloat() / nativeScrollItemsCount.toFloat()) * 100f)
                         .roundToInt()
                         .coerceIn(0, 100)
                 }
@@ -428,8 +509,8 @@ fun NovelReaderScreen(
         usePageReader,
         showWebView,
         showReaderUI,
-        pageReaderBlocks.size,
-        scrollContentBlocks.size,
+        pageReaderItemsCount,
+        nativeScrollItemsCount,
     ) {
         val listener = ViewCompat.OnUnhandledKeyEventListenerCompat { _, event ->
             handleVolumeKey(event)
@@ -453,7 +534,7 @@ fun NovelReaderScreen(
         webViewInstance,
         state.nextChapterId,
         state.readerSettings.swipeToNextChapter,
-        pageReaderBlocks.size,
+        pageReaderItemsCount,
     ) {
         if (!autoScrollEnabled) return@LaunchedEffect
         while (isActive && autoScrollEnabled) {
@@ -521,18 +602,18 @@ fun NovelReaderScreen(
             if (!showWebView && scrollContentBlocks.isNotEmpty()) {
                 // Отслеживание прогресса в зависимости от режима
                 if (usePageReader) {
-                    LaunchedEffect(pagerState.currentPage, pageReaderBlocks.size) {
+                    LaunchedEffect(pagerState.currentPage, pageReaderItemsCount) {
                         onReadingProgress(
                             pagerState.currentPage,
-                            pageReaderBlocks.size,
+                            pageReaderItemsCount,
                             pagerState.currentPage.toLong(),
                         )
                     }
-                    DisposableEffect(pagerState, pageReaderBlocks.size) {
+                    DisposableEffect(pagerState, pageReaderItemsCount) {
                         onDispose {
                             onReadingProgress(
                                 pagerState.currentPage,
-                                pageReaderBlocks.size,
+                                pageReaderItemsCount,
                                 pagerState.currentPage.toLong(),
                             )
                         }
@@ -541,11 +622,11 @@ fun NovelReaderScreen(
                     LaunchedEffect(
                         textListState.firstVisibleItemIndex,
                         textListState.canScrollForward,
-                        scrollContentBlocks.size,
+                        nativeScrollItemsCount,
                     ) {
                         val (progressIndex, progressTotal) = resolveNativeScrollProgressForTracking(
                             firstVisibleItemIndex = textListState.firstVisibleItemIndex,
-                            textBlocksCount = scrollContentBlocks.size,
+                            textBlocksCount = nativeScrollItemsCount,
                             canScrollForward = textListState.canScrollForward,
                         )
                         onReadingProgress(
@@ -557,11 +638,11 @@ fun NovelReaderScreen(
                             ),
                         )
                     }
-                    DisposableEffect(textListState, textListState.canScrollForward, scrollContentBlocks.size) {
+                    DisposableEffect(textListState, textListState.canScrollForward, nativeScrollItemsCount) {
                         onDispose {
                             val (progressIndex, progressTotal) = resolveNativeScrollProgressForTracking(
                                 firstVisibleItemIndex = textListState.firstVisibleItemIndex,
-                                textBlocksCount = scrollContentBlocks.size,
+                                textBlocksCount = nativeScrollItemsCount,
                                 canScrollForward = textListState.canScrollForward,
                             )
                             onReadingProgress(
@@ -622,22 +703,22 @@ fun NovelReaderScreen(
                             contentAlignment = androidx.compose.ui.Alignment.TopStart,
                         ) {
                             Text(
-                                text = if (state.readerSettings.bionicReading) {
-                                    toBionicText(pageReaderBlocks[page])
-                                } else {
-                                    AnnotatedString(pageReaderBlocks[page])
+                                text = when {
+                                    useRichPageReader -> richPageReaderBlocks[page]
+                                    state.readerSettings.bionicReading -> toBionicText(pageReaderBlocks[page])
+                                    else -> AnnotatedString(pageReaderBlocks[page])
                                 },
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     color = textColor,
                                     fontSize = state.readerSettings.fontSize.sp,
                                     lineHeight = state.readerSettings.lineHeight.em,
                                     fontFamily = composeFontFamily,
-                                    textAlign = when (state.readerSettings.textAlign) {
-                                        ReaderTextAlign.LEFT -> TextAlign.Start
-                                        ReaderTextAlign.CENTER -> TextAlign.Center
-                                        ReaderTextAlign.JUSTIFY -> TextAlign.Justify
-                                        ReaderTextAlign.RIGHT -> TextAlign.End
-                                    },
+                                ).withOptionalTextAlign(
+                                    resolveNativeTextAlign(
+                                        globalTextAlign = state.readerSettings.textAlign,
+                                        preserveSourceTextAlignInNative =
+                                        state.readerSettings.preserveSourceTextAlignInNative,
+                                    ),
                                 ),
                             )
                         }
@@ -653,7 +734,7 @@ fun NovelReaderScreen(
                                 state.readerSettings.swipeToNextChapter,
                                 state.previousChapterId,
                                 state.nextChapterId,
-                                scrollContentBlocks.size,
+                                nativeScrollItemsCount,
                             ) {
                                 detectTapGestures(
                                     onTap = { offset ->
@@ -796,67 +877,100 @@ fun NovelReaderScreen(
                             end = state.readerSettings.margin.dp,
                         ),
                     ) {
-                        itemsIndexed(scrollContentBlocks) { index, block ->
-                            when (block) {
-                                is NovelReaderScreenModel.ContentBlock.Text -> {
-                                    val isChapterTitle = index == 0 &&
-                                        isNativeChapterTitleText(block.text, state.chapter.name)
-                                    Text(
-                                        text = if (state.readerSettings.bionicReading) {
-                                            toBionicText(block.text)
-                                        } else {
-                                            AnnotatedString(block.text)
-                                        },
-                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                            color = textColor,
-                                            fontSize = if (isChapterTitle) {
-                                                (state.readerSettings.fontSize * 1.12f).sp
+                        if (useRichNativeScroll) {
+                            itemsIndexed(richScrollBlocks) { index, block ->
+                                NovelRichNativeScrollItem(
+                                    block = block,
+                                    index = index,
+                                    lastIndex = richScrollBlocks.lastIndex,
+                                    chapterTitle = state.chapter.name,
+                                    novelTitle = state.novel.title,
+                                    sourceId = state.novel.source,
+                                    chapterWebUrl = state.chapterWebUrl,
+                                    novelUrl = state.novel.url,
+                                    statusBarTopPadding = statusBarTopPadding,
+                                    textColor = textColor,
+                                    fontSize = state.readerSettings.fontSize,
+                                    lineHeight = state.readerSettings.lineHeight,
+                                    composeFontFamily = composeFontFamily,
+                                    textAlign = state.readerSettings.textAlign,
+                                    preserveSourceTextAlignInNative =
+                                    state.readerSettings.preserveSourceTextAlignInNative,
+                                )
+                            }
+                        } else {
+                            itemsIndexed(scrollContentBlocks) { index, block ->
+                                when (block) {
+                                    is NovelReaderScreenModel.ContentBlock.Text -> {
+                                        val isChapterTitle = index == 0 &&
+                                            isNativeChapterTitleText(block.text, state.chapter.name)
+                                        Text(
+                                            text = if (state.readerSettings.bionicReading) {
+                                                toBionicText(block.text)
                                             } else {
-                                                state.readerSettings.fontSize.sp
+                                                AnnotatedString(block.text)
                                             },
-                                            lineHeight = if (isChapterTitle) {
-                                                (state.readerSettings.lineHeight * 1.08f).em
-                                            } else {
-                                                state.readerSettings.lineHeight.em
-                                            },
-                                            fontFamily = composeFontFamily,
-                                            fontWeight = if (isChapterTitle) FontWeight.SemiBold else FontWeight.Normal,
-                                            textAlign = when (state.readerSettings.textAlign) {
-                                                ReaderTextAlign.LEFT -> TextAlign.Start
-                                                ReaderTextAlign.CENTER -> TextAlign.Center
-                                                ReaderTextAlign.JUSTIFY -> TextAlign.Justify
-                                                ReaderTextAlign.RIGHT -> TextAlign.End
-                                            },
-                                        ),
-                                        modifier = Modifier.padding(
-                                            top = if (index == 0) statusBarTopPadding else 0.dp,
-                                            bottom = if (index == scrollContentBlocks.lastIndex) {
-                                                0.dp
-                                            } else if (isChapterTitle) {
-                                                16.dp
-                                            } else {
-                                                12.dp
-                                            },
-                                        ),
-                                    )
-                                }
-                                is NovelReaderScreenModel.ContentBlock.Image -> {
-                                    val imageModel = if (NovelPluginImage.isSupported(block.url)) {
-                                        NovelPluginImage(block.url)
-                                    } else {
-                                        block.url
-                                    }
-                                    AsyncImage(
-                                        model = imageModel,
-                                        contentDescription = block.alt,
-                                        contentScale = ContentScale.FillWidth,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(
-                                                top = if (index == 0) statusBarTopPadding else 0.dp,
-                                                bottom = if (index == scrollContentBlocks.lastIndex) 0.dp else 12.dp,
+                                            style = MaterialTheme.typography.bodyLarge.copy(
+                                                color = textColor,
+                                                fontSize = if (isChapterTitle) {
+                                                    (state.readerSettings.fontSize * 1.12f).sp
+                                                } else {
+                                                    state.readerSettings.fontSize.sp
+                                                },
+                                                lineHeight = if (isChapterTitle) {
+                                                    (state.readerSettings.lineHeight * 1.08f).em
+                                                } else {
+                                                    state.readerSettings.lineHeight.em
+                                                },
+                                                fontFamily = composeFontFamily,
+                                                fontWeight = if (isChapterTitle) {
+                                                    FontWeight.SemiBold
+                                                } else {
+                                                    FontWeight.Normal
+                                                },
+                                            ).withOptionalTextAlign(
+                                                resolveNativeTextAlign(
+                                                    globalTextAlign = state.readerSettings.textAlign,
+                                                    preserveSourceTextAlignInNative =
+                                                    state.readerSettings.preserveSourceTextAlignInNative,
+                                                ),
                                             ),
-                                    )
+                                            modifier = Modifier.padding(
+                                                top = if (index == 0) statusBarTopPadding else 0.dp,
+                                                bottom = if (index == scrollContentBlocks.lastIndex) {
+                                                    0.dp
+                                                } else if (isChapterTitle) {
+                                                    16.dp
+                                                } else {
+                                                    12.dp
+                                                },
+                                            ),
+                                        )
+                                    }
+                                    is NovelReaderScreenModel.ContentBlock.Image -> {
+                                        val imageModel = if (NovelPluginImage.isSupported(block.url)) {
+                                            NovelPluginImage(block.url)
+                                        } else {
+                                            block.url
+                                        }
+                                        AsyncImage(
+                                            model = imageModel,
+                                            contentDescription = block.alt,
+                                            contentScale = ContentScale.FillWidth,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(
+                                                    top = if (index == 0) statusBarTopPadding else 0.dp,
+                                                    bottom = if (index ==
+                                                        scrollContentBlocks.lastIndex
+                                                    ) {
+                                                        0.dp
+                                                    } else {
+                                                        12.dp
+                                                    },
+                                                ),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1037,6 +1151,7 @@ fun NovelReaderScreen(
                                             resolveHorizontalChapterSwipeAction(
                                                 swipeGesturesEnabled = state.readerSettings.swipeGestures,
                                                 deltaX = event.x - touchStartX,
+                                                deltaY = event.y - touchStartY,
                                                 thresholdPx = 160f,
                                                 hasPreviousChapter = state.previousChapterId != null,
                                                 hasNextChapter = state.nextChapterId != null,
@@ -1324,9 +1439,9 @@ fun NovelReaderScreen(
         val seekbarItemsCount = if (showWebView) {
             101
         } else if (usePageReader) {
-            pageReaderBlocks.size
+            pageReaderItemsCount
         } else {
-            scrollContentBlocks.size
+            nativeScrollItemsCount
         }
         if (
             shouldShowVerticalSeekbar(
@@ -2108,12 +2223,29 @@ internal fun shouldShowVerticalSeekbar(
 
 internal fun shouldStartInWebView(
     preferWebViewRenderer: Boolean,
+    richNativeRendererExperimentalEnabled: Boolean,
     pageReaderEnabled: Boolean,
     contentBlocksCount: Int,
+    richContentUnsupportedFeaturesDetected: Boolean,
 ): Boolean {
     if (contentBlocksCount <= 0) return true
     if (pageReaderEnabled) return false
+    if (richNativeRendererExperimentalEnabled && richContentUnsupportedFeaturesDetected) return true
     return preferWebViewRenderer
+}
+
+internal fun shouldUseRichNativeScrollRenderer(
+    richNativeRendererExperimentalEnabled: Boolean,
+    showWebView: Boolean,
+    usePageReader: Boolean,
+    bionicReadingEnabled: Boolean,
+    richContentBlocks: List<NovelRichContentBlock>,
+    richContentUnsupportedFeaturesDetected: Boolean,
+): Boolean {
+    if (!richNativeRendererExperimentalEnabled) return false
+    if (showWebView || usePageReader || bionicReadingEnabled) return false
+    if (richContentUnsupportedFeaturesDetected) return false
+    return richContentBlocks.isNotEmpty()
 }
 
 internal enum class ReaderTapAction {
@@ -2148,6 +2280,29 @@ internal fun resolvePageReaderBlocks(
     if (chapterText.isBlank()) return fallbackBlocks
 
     return paginate(chapterText).ifEmpty { fallbackBlocks }
+}
+
+internal fun buildRichPageReaderChapterAnnotatedText(
+    richBlocks: List<NovelRichContentBlock>,
+): AnnotatedString {
+    if (richBlocks.isEmpty()) return AnnotatedString("")
+
+    return buildAnnotatedString {
+        var appendedAny = false
+        richBlocks.forEach { block ->
+            val blockText: AnnotatedString = when (block) {
+                is NovelRichContentBlock.Paragraph -> buildNovelRichAnnotatedString(block.segments)
+                is NovelRichContentBlock.Heading -> buildNovelRichAnnotatedString(block.segments)
+                is NovelRichContentBlock.BlockQuote -> buildNovelRichAnnotatedString(block.segments)
+                NovelRichContentBlock.HorizontalRule -> AnnotatedString("* * *")
+                is NovelRichContentBlock.Image -> AnnotatedString("")
+            }
+            if (blockText.text.isBlank()) return@forEach
+            if (appendedAny) append("\n\n")
+            append(blockText)
+            appendedAny = true
+        }
+    }
 }
 
 internal fun shouldEnableJavaScriptInReaderWebView(
@@ -2209,11 +2364,13 @@ internal enum class HorizontalChapterSwipeAction {
 internal fun resolveHorizontalChapterSwipeAction(
     swipeGesturesEnabled: Boolean,
     deltaX: Float,
+    deltaY: Float,
     thresholdPx: Float,
     hasPreviousChapter: Boolean,
     hasNextChapter: Boolean,
 ): HorizontalChapterSwipeAction {
     if (!swipeGesturesEnabled) return HorizontalChapterSwipeAction.NONE
+    if (abs(deltaX) <= abs(deltaY)) return HorizontalChapterSwipeAction.NONE
     if (deltaX > thresholdPx && hasPreviousChapter) return HorizontalChapterSwipeAction.PREVIOUS
     if (deltaX < -thresholdPx && hasNextChapter) return HorizontalChapterSwipeAction.NEXT
     return HorizontalChapterSwipeAction.NONE
@@ -2308,6 +2465,258 @@ internal fun resolveWebViewTextAlignCss(
         ReaderTextAlign.JUSTIFY -> "justify"
         ReaderTextAlign.RIGHT -> "right"
     }
+}
+
+@Composable
+private fun NovelRichNativeScrollItem(
+    block: NovelRichContentBlock,
+    index: Int,
+    lastIndex: Int,
+    chapterTitle: String,
+    novelTitle: String,
+    sourceId: Long,
+    chapterWebUrl: String?,
+    novelUrl: String?,
+    statusBarTopPadding: androidx.compose.ui.unit.Dp,
+    textColor: Color,
+    fontSize: Int,
+    lineHeight: Float,
+    composeFontFamily: FontFamily?,
+    textAlign: ReaderTextAlign,
+    preserveSourceTextAlignInNative: Boolean,
+) {
+    val context = LocalContext.current
+    val onLinkClick: (String) -> Unit = { rawUrl ->
+        val resolvedUrl = resolveNovelReaderLinkUrl(
+            rawUrl = rawUrl,
+            chapterWebUrl = chapterWebUrl,
+            novelUrl = novelUrl,
+        )
+        if (!resolvedUrl.isNullOrBlank()) {
+            context.startActivity(
+                WebViewActivity.newIntent(
+                    context = context,
+                    url = resolvedUrl,
+                    sourceId = sourceId,
+                    title = novelTitle,
+                ),
+            )
+        }
+    }
+    when (block) {
+        is NovelRichContentBlock.Paragraph -> {
+            val text = buildNovelRichAnnotatedString(block.segments)
+            val isChapterTitle = index == 0 && isNativeChapterTitleText(text.text, chapterTitle)
+            NovelRichAnnotatedText(
+                text = text,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    color = textColor,
+                    fontSize = if (isChapterTitle) (fontSize * 1.12f).sp else fontSize.sp,
+                    lineHeight = if (isChapterTitle) (lineHeight * 1.08f).em else lineHeight.em,
+                    fontFamily = composeFontFamily,
+                    fontWeight = if (isChapterTitle) FontWeight.SemiBold else FontWeight.Normal,
+                ).withOptionalTextAlign(
+                    resolveNativeTextAlign(
+                        globalTextAlign = textAlign,
+                        preserveSourceTextAlignInNative = preserveSourceTextAlignInNative,
+                        sourceTextAlign = block.textAlign,
+                    ),
+                ),
+                modifier = Modifier.padding(
+                    top = if (index == 0) statusBarTopPadding else 0.dp,
+                    bottom = if (index == lastIndex) {
+                        0.dp
+                    } else if (isChapterTitle) {
+                        16.dp
+                    } else {
+                        12.dp
+                    },
+                ),
+                onLinkClick = onLinkClick,
+            )
+        }
+        is NovelRichContentBlock.Heading -> {
+            val headingScale = when (block.level) {
+                1 -> 1.24f
+                2 -> 1.18f
+                3 -> 1.13f
+                else -> 1.08f
+            }
+            NovelRichAnnotatedText(
+                text = buildNovelRichAnnotatedString(block.segments),
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    color = textColor,
+                    fontSize = (fontSize * headingScale).sp,
+                    lineHeight = (lineHeight * 1.1f).em,
+                    fontFamily = composeFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                ).withOptionalTextAlign(
+                    resolveNativeTextAlign(
+                        globalTextAlign = textAlign,
+                        preserveSourceTextAlignInNative = preserveSourceTextAlignInNative,
+                        sourceTextAlign = block.textAlign,
+                    ),
+                ),
+                modifier = Modifier.padding(
+                    top = if (index == 0) statusBarTopPadding else 4.dp,
+                    bottom = if (index == lastIndex) 0.dp else 14.dp,
+                ),
+                onLinkClick = onLinkClick,
+            )
+        }
+        is NovelRichContentBlock.BlockQuote -> {
+            NovelRichAnnotatedText(
+                text = buildNovelRichAnnotatedString(block.segments),
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    color = textColor.copy(alpha = 0.92f),
+                    fontSize = fontSize.sp,
+                    lineHeight = lineHeight.em,
+                    fontFamily = composeFontFamily,
+                ).withOptionalTextAlign(
+                    resolveNativeTextAlign(
+                        globalTextAlign = textAlign,
+                        preserveSourceTextAlignInNative = preserveSourceTextAlignInNative,
+                        sourceTextAlign = block.textAlign,
+                    ),
+                ),
+                modifier = Modifier
+                    .padding(
+                        top = if (index == 0) statusBarTopPadding else 0.dp,
+                        bottom = if (index == lastIndex) 0.dp else 12.dp,
+                    )
+                    .padding(start = 12.dp),
+                onLinkClick = onLinkClick,
+            )
+        }
+        NovelRichContentBlock.HorizontalRule -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        top = if (index == 0) statusBarTopPadding else 4.dp,
+                        bottom = if (index == lastIndex) 4.dp else 16.dp,
+                    )
+                    .height(1.dp)
+                    .background(textColor.copy(alpha = 0.22f)),
+            )
+        }
+        is NovelRichContentBlock.Image -> {
+            val imageModel = if (NovelPluginImage.isSupported(block.url)) {
+                NovelPluginImage(block.url)
+            } else {
+                block.url
+            }
+            AsyncImage(
+                model = imageModel,
+                contentDescription = block.alt,
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        top = if (index == 0) statusBarTopPadding else 0.dp,
+                        bottom = if (index == lastIndex) 0.dp else 12.dp,
+                    ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun NovelRichAnnotatedText(
+    text: AnnotatedString,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    onLinkClick: (String) -> Unit,
+) {
+    val hasLinkAnnotations = remember(text) {
+        text.length > 0 && text.getStringAnnotations(tag = "URL", start = 0, end = text.length).isNotEmpty()
+    }
+    if (!hasLinkAnnotations) {
+        Text(
+            text = text,
+            style = style,
+            modifier = modifier,
+        )
+        return
+    }
+
+    @Suppress("DEPRECATION")
+    ClickableText(
+        text = text,
+        style = style,
+        modifier = modifier,
+        onClick = { offset ->
+            resolveNovelRichLinkAtCharOffset(text, offset)?.let(onLinkClick)
+        },
+    )
+}
+
+private fun novelReaderTextAlign(textAlign: ReaderTextAlign): TextAlign {
+    return when (textAlign) {
+        ReaderTextAlign.LEFT -> TextAlign.Start
+        ReaderTextAlign.CENTER -> TextAlign.Center
+        ReaderTextAlign.JUSTIFY -> TextAlign.Justify
+        ReaderTextAlign.RIGHT -> TextAlign.End
+    }
+}
+
+private fun TextStyle.withOptionalTextAlign(textAlign: TextAlign?): TextStyle {
+    return if (textAlign == null) this else copy(textAlign = textAlign)
+}
+
+internal fun resolvePageReaderLayoutTextAlign(
+    globalTextAlign: ReaderTextAlign,
+    preserveSourceTextAlignInNative: Boolean,
+): ReaderTextAlign {
+    return if (preserveSourceTextAlignInNative) {
+        // Page mode uses a flattened text layout, so keep layout stable and avoid forcing justify.
+        ReaderTextAlign.LEFT
+    } else {
+        globalTextAlign
+    }
+}
+
+internal fun resolveNativeTextAlign(
+    globalTextAlign: ReaderTextAlign,
+    preserveSourceTextAlignInNative: Boolean,
+    sourceTextAlign: NovelRichBlockTextAlign? = null,
+): TextAlign? {
+    if (!preserveSourceTextAlignInNative) {
+        return novelReaderTextAlign(textAlign = globalTextAlign)
+    }
+    return when (sourceTextAlign) {
+        NovelRichBlockTextAlign.LEFT -> TextAlign.Start
+        NovelRichBlockTextAlign.CENTER -> TextAlign.Center
+        NovelRichBlockTextAlign.JUSTIFY -> TextAlign.Justify
+        NovelRichBlockTextAlign.RIGHT -> TextAlign.End
+        null -> null
+    }
+}
+
+internal fun resolveNovelRichLinkAtCharOffset(
+    text: AnnotatedString,
+    offset: Int,
+): String? {
+    if (text.isEmpty()) return null
+    val clamped = offset.coerceIn(0, text.length - 1)
+    return text.getStringAnnotations(
+        tag = "URL",
+        start = clamped,
+        end = (clamped + 1).coerceAtMost(text.length),
+    ).lastOrNull()?.item
+}
+
+internal fun resolveNovelReaderLinkUrl(
+    rawUrl: String,
+    chapterWebUrl: String?,
+    novelUrl: String?,
+): String? {
+    val trimmed = rawUrl.trim()
+    if (trimmed.isBlank()) return null
+    trimmed.toHttpUrlOrNull()?.let { return it.toString() }
+    chapterWebUrl?.toHttpUrlOrNull()?.resolve(trimmed)?.let { return it.toString() }
+    novelUrl?.toHttpUrlOrNull()?.resolve(trimmed)?.let { return it.toString() }
+    return null
 }
 
 internal fun isNativeChapterTitleText(
@@ -2494,7 +2903,12 @@ internal fun autoScrollScrollStepPx(speed: Int): Float {
     return 1.5f + (clamped - 1) * (8.5f / 99f)
 }
 
-internal fun paginateTextIntoPages(
+internal data class TextPageRange(
+    val start: Int,
+    val endExclusive: Int,
+)
+
+internal fun paginateTextIntoPageRanges(
     text: String,
     widthPx: Int,
     heightPx: Int,
@@ -2502,7 +2916,7 @@ internal fun paginateTextIntoPages(
     lineHeightMultiplier: Float,
     typeface: android.graphics.Typeface?,
     textAlign: ReaderTextAlign,
-): List<String> {
+): List<TextPageRange> {
     if (text.isBlank()) return emptyList()
 
     val safeWidth = widthPx.coerceAtLeast(1)
@@ -2526,15 +2940,20 @@ internal fun paginateTextIntoPages(
             .toInt()
             .coerceAtLeast(8)
         val chunkSize = (approxCharsPerLine * approxLinesPerPage).coerceAtLeast(120)
-        return text
-            .chunked(chunkSize)
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
+        val ranges = mutableListOf<TextPageRange>()
+        var start = 0
+        while (start < text.length) {
+            val end = (start + chunkSize).coerceAtMost(text.length)
+            val trimmed = trimTextRange(text, start, end)
+            if (trimmed != null) ranges += trimmed
+            start = end
+        }
+        return ranges
     }
 
-    if (layout.lineCount <= 0) return listOf(text)
+    if (layout.lineCount <= 0) return listOf(TextPageRange(0, text.length))
 
-    val pages = mutableListOf<String>()
+    val ranges = mutableListOf<TextPageRange>()
     var startLine = 0
     while (startLine < layout.lineCount) {
         val startOffset = layout.getLineStart(startLine)
@@ -2545,20 +2964,71 @@ internal fun paginateTextIntoPages(
         ) {
             endLineExclusive++
         }
-        val endLine = if (endLineExclusive > startLine) {
-            endLineExclusive - 1
-        } else {
-            startLine
-        }
+        val endLine = if (endLineExclusive > startLine) endLineExclusive - 1 else startLine
         val endOffset = layout.getLineEnd(endLine).coerceIn(startOffset, text.length)
-        val pageText = text.substring(startOffset, endOffset).trim()
-        if (pageText.isNotBlank()) {
-            pages += pageText
-        }
+        trimTextRange(text, startOffset, endOffset)?.let { ranges += it }
         startLine = endLine + 1
     }
 
-    return if (pages.isNotEmpty()) pages else listOf(text)
+    return if (ranges.isNotEmpty()) ranges else listOf(TextPageRange(0, text.length))
+}
+
+internal fun paginateAnnotatedTextIntoPages(
+    text: AnnotatedString,
+    widthPx: Int,
+    heightPx: Int,
+    textSizePx: Float,
+    lineHeightMultiplier: Float,
+    typeface: android.graphics.Typeface?,
+    textAlign: ReaderTextAlign,
+): List<AnnotatedString> {
+    if (text.text.isBlank()) return emptyList()
+    val ranges = paginateTextIntoPageRanges(
+        text = text.text,
+        widthPx = widthPx,
+        heightPx = heightPx,
+        textSizePx = textSizePx,
+        lineHeightMultiplier = lineHeightMultiplier,
+        typeface = typeface,
+        textAlign = textAlign,
+    )
+    return ranges.map { range ->
+        text.subSequence(TextRange(range.start, range.endExclusive))
+    }
+}
+
+internal fun paginateTextIntoPages(
+    text: String,
+    widthPx: Int,
+    heightPx: Int,
+    textSizePx: Float,
+    lineHeightMultiplier: Float,
+    typeface: android.graphics.Typeface?,
+    textAlign: ReaderTextAlign,
+): List<String> {
+    return paginateTextIntoPageRanges(
+        text = text,
+        widthPx = widthPx,
+        heightPx = heightPx,
+        textSizePx = textSizePx,
+        lineHeightMultiplier = lineHeightMultiplier,
+        typeface = typeface,
+        textAlign = textAlign,
+    ).map { range ->
+        text.substring(range.start, range.endExclusive)
+    }
+}
+
+private fun trimTextRange(
+    text: String,
+    startInclusive: Int,
+    endExclusive: Int,
+): TextPageRange? {
+    var start = startInclusive.coerceIn(0, text.length)
+    var end = endExclusive.coerceIn(start, text.length)
+    while (start < end && text[start].isWhitespace()) start++
+    while (end > start && text[end - 1].isWhitespace()) end--
+    return if (start < end) TextPageRange(start, end) else null
 }
 
 private fun ReaderTextAlign.toLayoutAlignment(): Layout.Alignment {

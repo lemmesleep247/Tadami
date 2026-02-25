@@ -824,6 +824,102 @@ class NovelReaderScreenModelTest {
     }
 
     @Test
+    fun `exposes rich parsed content and unsupported flag in success state`() {
+        runBlocking {
+            val novel = Novel.create().copy(id = 1L, source = 10L, title = "Novel")
+            val chapter = NovelChapter.create().copy(
+                id = 5L,
+                novelId = 1L,
+                name = "Chapter 1",
+                url = "https://example.org/ch1",
+            )
+
+            val screenModel = trackedNovelReaderScreenModel(
+                chapterId = chapter.id,
+                novelChapterRepository = FakeNovelChapterRepository(chapter),
+                getNovel = GetNovel(FakeNovelRepository(novel)),
+                sourceManager = FakeNovelSourceManager(
+                    sourceId = novel.source,
+                    chapterHtml = "<p>Hello <strong>world</strong></p><table><tr><td>x</td></tr></table>",
+                ),
+                pluginStorage = FakeNovelPluginStorage(emptyList()),
+                novelReaderPreferences = createNovelReaderPreferences(),
+                isSystemDark = { false },
+            )
+
+            withTimeout(1_000) {
+                while (screenModel.state.value is NovelReaderScreenModel.State.Loading) {
+                    yield()
+                }
+            }
+
+            val state = screenModel.state.value.shouldBeInstanceOf<NovelReaderScreenModel.State.Success>()
+            state.richContentBlocks.isNotEmpty() shouldBe true
+            state.richContentBlocks.any { it is NovelRichContentBlock.Paragraph } shouldBe true
+            state.richContentUnsupportedFeaturesDetected shouldBe true
+        }
+    }
+
+    @Test
+    fun `reuses parsed rich content blocks when settings change`() {
+        runBlocking {
+            val store = ReactivePreferenceStore()
+            val prefs = NovelReaderPreferences(
+                preferenceStore = store,
+                json = Json { encodeDefaults = true },
+            )
+            val novel = Novel.create().copy(id = 1L, source = 10L, title = "Novel")
+            val chapter = NovelChapter.create().copy(
+                id = 5L,
+                novelId = 1L,
+                name = "Chapter 1",
+                url = "https://example.org/ch1",
+            )
+
+            val screenModel = trackedNovelReaderScreenModel(
+                chapterId = chapter.id,
+                novelChapterRepository = FakeNovelChapterRepository(chapter),
+                getNovel = GetNovel(FakeNovelRepository(novel)),
+                sourceManager = FakeNovelSourceManager(
+                    sourceId = novel.source,
+                    chapterHtml = "<p>Hello <em>styled</em> world</p>",
+                ),
+                pluginStorage = FakeNovelPluginStorage(emptyList()),
+                novelReaderPreferences = prefs,
+                isSystemDark = { false },
+            )
+
+            try {
+                withTimeout(1_000) {
+                    while (screenModel.state.value is NovelReaderScreenModel.State.Loading) {
+                        yield()
+                    }
+                }
+
+                val initialState = screenModel.state.value.shouldBeInstanceOf<NovelReaderScreenModel.State.Success>()
+                val initialRichBlocks = initialState.richContentBlocks
+
+                prefs.fontSize().set(22)
+
+                withTimeout(1_000) {
+                    while (true) {
+                        val state = screenModel.state.value
+                        if (state is NovelReaderScreenModel.State.Success && state.readerSettings.fontSize == 22) {
+                            break
+                        }
+                        yield()
+                    }
+                }
+
+                val updatedState = screenModel.state.value.shouldBeInstanceOf<NovelReaderScreenModel.State.Success>()
+                (updatedState.richContentBlocks === initialRichBlocks) shouldBe true
+            } finally {
+                screenModel.onDispose()
+            }
+        }
+    }
+
+    @Test
     fun `missing chapter shows error state`() {
         runBlocking {
             val screenModel = trackedNovelReaderScreenModel(
