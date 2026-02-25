@@ -1077,6 +1077,7 @@
     <string name="home_header_layout_editor_title">Расположение шапки Home</string>
     <string name="home_header_layout_editor_description">Перетаскивайте элементы, чтобы изменить их положение в шапке Home.</string>
     <string name="home_header_layout_editor_show_grid">Показывать сетку</string>
+    <string name="home_header_layout_editor_greeting_align_right">Выравнивать приветствие по правому краю блока</string>
     <string name="home_header_layout_editor_nickname_align_right">Выравнивать никнейм по правому краю блока</string>
     <string name="home_header_layout_editor_selected">Выбрано: %s</string>
     <string name="home_header_layout_editor_reset">Сбросить</string>
