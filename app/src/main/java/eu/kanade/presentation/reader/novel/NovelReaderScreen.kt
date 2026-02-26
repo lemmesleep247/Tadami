@@ -136,6 +136,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.components.TabbedDialog
 import eu.kanade.tachiyomi.source.novel.NovelPluginImage
 import eu.kanade.tachiyomi.source.novel.NovelPluginImageResolver
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreenModel
@@ -149,6 +150,7 @@ import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderTheme
 import eu.kanade.tachiyomi.ui.reader.novel.setting.GeminiPromptMode
 import eu.kanade.tachiyomi.ui.reader.novel.translation.GeminiPromptModifiers
 import eu.kanade.tachiyomi.ui.webview.WebViewActivity
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -1570,13 +1572,15 @@ fun NovelReaderScreen(
                     }
                     val quickActionContainerColor = when {
                         state.isGeminiTranslating -> MaterialTheme.colorScheme.errorContainer
-                        hasTranslationResult && state.isGeminiTranslationVisible -> MaterialTheme.colorScheme.tertiaryContainer
+                        hasTranslationResult && state.isGeminiTranslationVisible ->
+                            MaterialTheme.colorScheme.tertiaryContainer
                         hasTranslationResult -> MaterialTheme.colorScheme.secondaryContainer
                         else -> MaterialTheme.colorScheme.primaryContainer
                     }
                     val quickActionContentColor = when {
                         state.isGeminiTranslating -> MaterialTheme.colorScheme.onErrorContainer
-                        hasTranslationResult && state.isGeminiTranslationVisible -> MaterialTheme.colorScheme.onTertiaryContainer
+                        hasTranslationResult && state.isGeminiTranslationVisible ->
+                            MaterialTheme.colorScheme.onTertiaryContainer
                         hasTranslationResult -> MaterialTheme.colorScheme.onSecondaryContainer
                         else -> MaterialTheme.colorScheme.onPrimaryContainer
                     }
@@ -1915,6 +1919,32 @@ fun NovelReaderScreen(
     }
 }
 
+private data class GeminiStatusPresentation(
+    val title: String,
+    val subtitle: String,
+)
+
+private fun geminiStatusPresentation(uiState: GeminiTranslationUiState): GeminiStatusPresentation {
+    return when (uiState) {
+        GeminiTranslationUiState.Translating -> GeminiStatusPresentation(
+            title = "Перевод выполняется",
+            subtitle = "Обновление текста в реальном времени",
+        )
+        GeminiTranslationUiState.CachedVisible -> GeminiStatusPresentation(
+            title = "Показывается перевод",
+            subtitle = "Можно быстро переключать оригинал и перевод",
+        )
+        GeminiTranslationUiState.CachedHidden -> GeminiStatusPresentation(
+            title = "Кэш готов",
+            subtitle = "Можно быстро переключать оригинал и перевод",
+        )
+        GeminiTranslationUiState.Ready -> GeminiStatusPresentation(
+            title = "Готов к запуску",
+            subtitle = "Выберите модель и запустите перевод главы",
+        )
+    }
+}
+
 @Composable
 private fun GeminiTranslationDialog(
     readerSettings: NovelReaderSettings,
@@ -2014,26 +2044,31 @@ private fun GeminiTranslationDialog(
     }
 
     val progressValue = translationProgress.coerceIn(0, 100) / 100f
-    val statusTitle = when {
-        isTranslating -> "Перевод выполняется"
-        hasCache && isVisible -> "Показывается перевод"
-        hasCache -> "Кэш готов"
-        else -> "Готов к запуску"
-    }
-    val statusSubtitle = when {
-        isTranslating -> "Обновление текста в реальном времени"
-        hasCache -> "Можно быстро переключать оригинал и перевод"
-        else -> "Выберите модель и запустите перевод главы"
-    }
+    val uiState = resolveGeminiTranslationUiState(
+        isTranslating = isTranslating,
+        hasCache = hasCache,
+        isVisible = isVisible,
+        translationProgress = translationProgress,
+    )
+    val status = geminiStatusPresentation(uiState)
+    val hasTranslationResult = hasCache || translationProgress >= 100
+    val tabTitles = remember { persistentListOf("Основные", "Промпт", "Еще") }
 
-    AlertDialog(
+    TabbedDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Gemini Переводчик") },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+        tabTitles = tabTitles,
+    ) { page ->
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "Gemini Переводчик",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            if (page == 0) {
                 GeminiSettingsBlock(
                     title = "Статус и действия",
                     subtitle = "Запуск, остановка и переключение отображения",
@@ -2053,7 +2088,7 @@ private fun GeminiTranslationDialog(
                                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                             ) {
                                 Text(
-                                    text = statusTitle,
+                                    text = status.title,
                                     style = MaterialTheme.typography.titleSmall,
                                 )
                                 Text(
@@ -2063,7 +2098,7 @@ private fun GeminiTranslationDialog(
                                 )
                             }
                             Text(
-                                text = statusSubtitle,
+                                text = status.subtitle,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -2092,14 +2127,14 @@ private fun GeminiTranslationDialog(
                         }
                         OutlinedButton(
                             onClick = onToggleVisibility,
-                            enabled = hasCache,
+                            enabled = hasTranslationResult,
                             modifier = Modifier.weight(1f),
                         ) {
                             Text(if (isVisible) "Оригинал" else "Перевод")
                         }
                     }
 
-                    if (hasCache) {
+                    if (hasTranslationResult) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End,
@@ -2110,128 +2145,137 @@ private fun GeminiTranslationDialog(
                         }
                     }
                 }
+            }
 
+            if (page == 0 || page == 1) {
                 GeminiSettingsBlock(
                     title = "Основные параметры",
                     subtitle = "Модель, режим промпта и производительность",
                 ) {
-                    Text(
-                        "Модель",
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                    eu.kanade.presentation.more.settings.widget.ListPreferenceWidget(
-                        value = tempModel,
-                        title = "Текущая модель",
-                        subtitle = modelMap[tempModel] ?: tempModel,
-                        icon = null,
-                        entries = modelMap,
-                        onValueChange = { selected ->
-                            tempModel = selected
-                            onSetGeminiModel(selected)
-                            onAddLog("⚙️ Model: ${modelMap[selected] ?: selected}")
-                        },
-                    )
-
-                    Text(
-                        "Режим промпта",
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(
-                            listOf(
-                                GeminiPromptMode.CLASSIC to "Классический",
-                                GeminiPromptMode.ADULT_18 to "18+",
-                            ),
-                        ) { option ->
-                            val selected = tempPromptMode == option.first
-                            OutlinedButton(
-                                onClick = {
-                                    tempPromptMode = option.first
-                                    onSetGeminiPromptMode(option.first)
-                                    onAddLog("⚙️ Prompt mode: ${option.second}")
-                                },
-                            ) {
-                                Text(if (selected) "• ${option.second}" else option.second)
-                            }
-                        }
+                    if (page == 0) {
+                        Text(
+                            "Модель",
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                        eu.kanade.presentation.more.settings.widget.ListPreferenceWidget(
+                            value = tempModel,
+                            title = "Текущая модель",
+                            subtitle = modelMap[tempModel] ?: tempModel,
+                            icon = null,
+                            entries = modelMap,
+                            onValueChange = { selected ->
+                                tempModel = selected
+                                onSetGeminiModel(selected)
+                                onAddLog("⚙️ Model: ${modelMap[selected] ?: selected}")
+                            },
+                        )
                     }
 
-                    Text(
-                        "Модификаторы промпта",
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(GeminiPromptModifiers.all) { modifier ->
-                            val selected = tempEnabledModifiers.contains(modifier.id)
-                            Surface(
-                                color = if (selected) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                },
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.clickable {
-                                    tempEnabledModifiers = if (selected) {
-                                        tempEnabledModifiers - modifier.id
+                    if (page == 1) {
+                        Text(
+                            "Режим промпта",
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(
+                                listOf(
+                                    GeminiPromptMode.CLASSIC to "Классический",
+                                    GeminiPromptMode.ADULT_18 to "18+",
+                                ),
+                            ) { option ->
+                                val selected = tempPromptMode == option.first
+                                OutlinedButton(
+                                    onClick = {
+                                        tempPromptMode = option.first
+                                        onSetGeminiPromptMode(option.first)
+                                        onAddLog("⚙️ Prompt mode: ${option.second}")
+                                    },
+                                ) {
+                                    Text(if (selected) "• ${option.second}" else option.second)
+                                }
+                            }
+                        }
+
+                        Text(
+                            "Модификаторы промпта",
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(GeminiPromptModifiers.all) { modifier ->
+                                val selected = tempEnabledModifiers.contains(modifier.id)
+                                Surface(
+                                    color = if (selected) {
+                                        MaterialTheme.colorScheme.primaryContainer
                                     } else {
-                                        tempEnabledModifiers + modifier.id
-                                    }
-                                    onSetGeminiEnabledPromptModifiers(
-                                        tempEnabledModifiers.toList(),
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier.clickable {
+                                        tempEnabledModifiers = if (selected) {
+                                            tempEnabledModifiers - modifier.id
+                                        } else {
+                                            tempEnabledModifiers + modifier.id
+                                        }
+                                        onSetGeminiEnabledPromptModifiers(
+                                            tempEnabledModifiers.toList(),
+                                        )
+                                    },
+                                ) {
+                                    Text(
+                                        text = modifier.label,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        style = MaterialTheme.typography.labelMedium,
                                     )
-                                },
-                            ) {
-                                Text(
-                                    text = modifier.label,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
+                                }
                             }
-                        }
-                        item {
-                            Surface(
-                                color = if (tempCustomModifier.isNotBlank()) {
-                                    MaterialTheme.colorScheme.tertiaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                },
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.clickable { showCustomPromptDialog = true },
-                            ) {
-                                Text(
-                                    text = if (tempCustomModifier.isBlank()) "+ Свой" else "Свой",
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
+                            item {
+                                Surface(
+                                    color = if (tempCustomModifier.isNotBlank()) {
+                                        MaterialTheme.colorScheme.tertiaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier.clickable { showCustomPromptDialog = true },
+                                ) {
+                                    Text(
+                                        text = if (tempCustomModifier.isBlank()) "+ Свой" else "Свой",
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
                             }
                         }
                     }
 
-                    Text(
-                        "Скорость (батч-параллельность)",
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(speedPresets) { preset ->
-                            val label = preset.first
-                            val batch = preset.second.first
-                            val concurrency = preset.second.second
-                            val selected = tempBatch == batch.toString() && tempConcurrency == concurrency.toString()
-                            OutlinedButton(
-                                onClick = {
-                                    tempBatch = batch.toString()
-                                    tempConcurrency = concurrency.toString()
-                                    onSetGeminiBatchSize(batch)
-                                    onSetGeminiConcurrency(concurrency)
-                                    onAddLog("🚀 Speed: $label")
-                                },
-                            ) {
-                                Text(if (selected) "• $label" else label)
+                    if (page == 0) {
+                        Text(
+                            "Скорость (батч-параллельность)",
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(speedPresets) { preset ->
+                                val label = preset.first
+                                val batch = preset.second.first
+                                val concurrency = preset.second.second
+                                val selected = tempBatch == batch.toString() &&
+                                    tempConcurrency == concurrency.toString()
+                                OutlinedButton(
+                                    onClick = {
+                                        tempBatch = batch.toString()
+                                        tempConcurrency = concurrency.toString()
+                                        onSetGeminiBatchSize(batch)
+                                        onSetGeminiConcurrency(concurrency)
+                                        onAddLog("🚀 Speed: $label")
+                                    },
+                                ) {
+                                    Text(if (selected) "• $label" else label)
+                                }
                             }
                         }
                     }
 
-                    if (tempModel == "gemini-3-flash-preview" || tempModel == "gemini-3-pro-preview") {
+                    if (page == 1 && (tempModel == "gemini-3-flash-preview" || tempModel == "gemini-3-pro-preview")) {
                         Text(
                             "Уровень размышления",
                             style = MaterialTheme.typography.labelLarge,
@@ -2256,7 +2300,7 @@ private fun GeminiTranslationDialog(
                         }
                     }
 
-                    if (tempModel == "gemini-2.5-flash") {
+                    if (page == 1 && tempModel == "gemini-2.5-flash") {
                         Text(
                             "Бюджет токенов (Gemini 2.5)",
                             style = MaterialTheme.typography.labelLarge,
@@ -2277,7 +2321,9 @@ private fun GeminiTranslationDialog(
                         }
                     }
                 }
+            }
 
+            if (page == 2) {
                 GeminiSettingsBlock(
                     title = "Система и кэш",
                     subtitle = "API ключ, кэш и ручной контроль потоков",
@@ -2363,7 +2409,9 @@ private fun GeminiTranslationDialog(
                         }
                     }
                 }
+            }
 
+            if (page == 1) {
                 GeminiSettingsBlock(
                     title = "Генерация",
                     subtitle = "Пресеты и ручные параметры sampling",
@@ -2441,7 +2489,9 @@ private fun GeminiTranslationDialog(
                         }
                     }
                 }
+            }
 
+            if (page == 2) {
                 GeminiSettingsBlock(
                     title = "Логи",
                     subtitle = "Диагностика запросов и ответа модели",
@@ -2483,11 +2533,8 @@ private fun GeminiTranslationDialog(
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Закрыть") }
-        },
-    )
+        }
+    }
 
     if (showCustomPromptDialog) {
         AlertDialog(
