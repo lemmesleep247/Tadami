@@ -54,6 +54,8 @@ class NovelReaderScreen(
                 onSetGeminiPromptMode = screenModel::setGeminiPromptMode,
                 onSetGeminiEnabledPromptModifiers = screenModel::setGeminiEnabledPromptModifiers,
                 onSetGeminiCustomPromptModifier = screenModel::setGeminiCustomPromptModifier,
+                onSetGeminiAutoTranslateEnglishSource = screenModel::setGeminiAutoTranslateEnglishSource,
+                onSetGeminiPrefetchNextChapterTranslation = screenModel::setGeminiPrefetchNextChapterTranslation,
                 onOpenPreviousChapter = { previousChapterId ->
                     navigator.replace(NovelReaderScreen(previousChapterId))
                 },

@@ -49,6 +49,8 @@ class NovelReaderPreferencesTest {
         prefs.geminiBudgetTokens().get() shouldBe 8192
         prefs.geminiTopP().get() shouldBe 0.95f
         prefs.geminiTopK().get() shouldBe 40
+        prefs.geminiAutoTranslateEnglishSource().get() shouldBe false
+        prefs.geminiPrefetchNextChapterTranslation().get() shouldBe false
     }
 
     @Test
@@ -86,6 +88,8 @@ class NovelReaderPreferencesTest {
         prefs.geminiTargetLang().set("Russian")
         prefs.geminiPromptMode().set(GeminiPromptMode.ADULT_18)
         prefs.geminiPromptModifiers().set("modifiers")
+        prefs.geminiAutoTranslateEnglishSource().set(true)
+        prefs.geminiPrefetchNextChapterTranslation().set(true)
         prefs.customThemes().set(
             listOf(
                 NovelReaderColorTheme(backgroundColor = "#111111", textColor = "#eeeeee"),
@@ -125,6 +129,8 @@ class NovelReaderPreferencesTest {
         override?.geminiTargetLang shouldBe "Russian"
         override?.geminiPromptMode shouldBe GeminiPromptMode.ADULT_18
         override?.geminiPromptModifiers shouldBe "modifiers"
+        override?.geminiAutoTranslateEnglishSource shouldBe true
+        override?.geminiPrefetchNextChapterTranslation shouldBe true
         override?.customThemes shouldBe listOf(
             NovelReaderColorTheme(backgroundColor = "#111111", textColor = "#eeeeee"),
         )
@@ -165,6 +171,8 @@ class NovelReaderPreferencesTest {
         prefs.geminiTargetLang().set("Russian")
         prefs.geminiPromptMode().set(GeminiPromptMode.CLASSIC)
         prefs.geminiPromptModifiers().set("")
+        prefs.geminiAutoTranslateEnglishSource().set(false)
+        prefs.geminiPrefetchNextChapterTranslation().set(false)
         prefs.customThemes().set(
             listOf(
                 NovelReaderColorTheme(backgroundColor = "#f5f5fa", textColor = "#111111"),
@@ -204,6 +212,8 @@ class NovelReaderPreferencesTest {
                 geminiTargetLang = "Russian",
                 geminiPromptMode = GeminiPromptMode.ADULT_18,
                 geminiPromptModifiers = "override-mod",
+                geminiAutoTranslateEnglishSource = true,
+                geminiPrefetchNextChapterTranslation = true,
                 customThemes = listOf(
                     NovelReaderColorTheme(backgroundColor = "#000000", textColor = "#ffffff"),
                 ),
@@ -242,6 +252,8 @@ class NovelReaderPreferencesTest {
         settings.geminiTargetLang shouldBe "Russian"
         settings.geminiPromptMode shouldBe GeminiPromptMode.ADULT_18
         settings.geminiPromptModifiers shouldBe "override-mod"
+        settings.geminiAutoTranslateEnglishSource shouldBe true
+        settings.geminiPrefetchNextChapterTranslation shouldBe true
         settings.customThemes shouldBe listOf(
             NovelReaderColorTheme(backgroundColor = "#000000", textColor = "#ffffff"),
         )

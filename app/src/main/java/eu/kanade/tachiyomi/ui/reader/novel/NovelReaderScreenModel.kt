@@ -105,6 +105,9 @@ class NovelReaderScreenModel(
     private var chapterReadStartTimeMs: Long = System.currentTimeMillis()
     private var nextChapterPrefetchJob: Job? = null
     private var hasTriggeredNextChapterPrefetch: Boolean = false
+    private var nextChapterGeminiPrefetchJob: Job? = null
+    private var hasTriggeredNextChapterGeminiPrefetch: Boolean = false
+    private var hasTriggeredGeminiAutoStart: Boolean = false
     private var geminiTranslationJob: Job? = null
     private var geminiTranslatedByIndex: Map<Int, String> = emptyMap()
     private var isGeminiTranslating: Boolean = false
@@ -198,6 +201,8 @@ class NovelReaderScreenModel(
             ?: chapter.lastPageRead.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
         hasProgressChanged = false
         hasTriggeredNextChapterPrefetch = false
+        hasTriggeredNextChapterGeminiPrefetch = false
+        hasTriggeredGeminiAutoStart = false
         customCss = pluginPackage?.customCss?.toString(Charsets.UTF_8)
         customJs = pluginPackage?.customJs?.toString(Charsets.UTF_8)
         pluginSite = pluginPackage?.entry?.site ?: sourceSiteUrl
@@ -234,10 +239,12 @@ class NovelReaderScreenModel(
                     }
                     skippedInitialEmission = true
                     updateContent(settings)
+                    maybeAutoStartGeminiTranslation(settings)
                 }
         }
         saveHistorySnapshot(chapter.id, sessionReadDurationMs = 0L)
         updateContent(initialSettings)
+        maybeAutoStartGeminiTranslation(initialSettings)
     }
 
     private fun setError(message: String?) {
@@ -249,11 +256,7 @@ class NovelReaderScreenModel(
         currentChapter: NovelChapter,
         source: eu.kanade.tachiyomi.novelsource.NovelSource,
     ) {
-        val nextChapter = chapterOrderList
-            .indexOfFirst { it.id == currentChapter.id }
-            .takeIf { it >= 0 }
-            ?.let { chapterOrderList.getOrNull(it + 1) }
-            ?: return
+        val nextChapter = findNextChapter(currentChapter) ?: return
 
         if (NovelReaderChapterPrefetchCache.contains(nextChapter.id)) {
             return
@@ -276,6 +279,26 @@ class NovelReaderScreenModel(
                 logcat(LogPriority.WARN, error) { "Failed to prefetch next novel chapter" }
             }
         }
+    }
+
+    private fun maybeAutoStartGeminiTranslation(settings: NovelReaderSettings) {
+        if (hasTriggeredGeminiAutoStart) return
+        if (!settings.geminiEnabled || !settings.geminiAutoTranslateEnglishSource) return
+        if (!isGeminiSourceLanguageEnglish(settings.geminiSourceLang)) return
+        if (settings.geminiApiKey.isBlank()) return
+        if (parsedTextBlocks.orEmpty().isEmpty()) return
+        if (isGeminiTranslating || hasGeminiTranslationCache || geminiTranslatedByIndex.isNotEmpty()) return
+
+        hasTriggeredGeminiAutoStart = true
+        addGeminiLog("🤖 Auto-start Gemini translation for English source")
+        startGeminiTranslation()
+    }
+
+    private fun findNextChapter(currentChapter: NovelChapter): NovelChapter? {
+        return chapterOrderList
+            .indexOfFirst { it.id == currentChapter.id }
+            .takeIf { it >= 0 }
+            ?.let { chapterOrderList.getOrNull(it + 1) }
     }
 
     private fun updateContent(settings: NovelReaderSettings) {
@@ -476,6 +499,10 @@ class NovelReaderScreenModel(
             currentIndex = currentIndex,
             totalItems = totalItems,
         )
+        maybePrefetchNextChapterGeminiTranslationOnProgress(
+            currentIndex = currentIndex,
+            totalItems = totalItems,
+        )
 
         if (lastSavedRead == shouldPersistRead && lastSavedProgress == newProgress) {
             return
@@ -538,6 +565,33 @@ class NovelReaderScreenModel(
         )
     }
 
+    private fun maybePrefetchNextChapterGeminiTranslationOnProgress(
+        currentIndex: Int,
+        totalItems: Int,
+    ) {
+        if (hasTriggeredNextChapterGeminiPrefetch) return
+        if (!hasReachedGeminiNextChapterTranslationPrefetchThreshold(currentIndex, totalItems)) return
+
+        val state = mutableState.value as? State.Success ?: return
+        val settings = state.readerSettings
+        if (!settings.geminiEnabled || !settings.geminiPrefetchNextChapterTranslation) return
+        if (settings.geminiDisableCache) return
+        if (settings.geminiApiKey.isBlank()) return
+
+        val novel = currentNovel ?: return
+        val chapter = currentChapter ?: return
+        val source = sourceManager.get(novel.source) ?: return
+        val nextChapter = findNextChapter(chapter) ?: return
+        if (hasReusableGeminiTranslationCache(nextChapter.id, settings)) return
+
+        hasTriggeredNextChapterGeminiPrefetch = true
+        scheduleNextChapterGeminiTranslationPrefetch(
+            nextChapter = nextChapter,
+            source = source,
+            settings = settings,
+        )
+    }
+
     private fun hasReachedNextChapterPrefetchThreshold(
         currentIndex: Int,
         totalItems: Int,
@@ -548,6 +602,99 @@ class NovelReaderScreenModel(
         } else {
             totalItems > 1 && ((currentIndex + 1).toFloat() / totalItems.toFloat()) >= 0.5f
         }
+    }
+
+    private fun scheduleNextChapterGeminiTranslationPrefetch(
+        nextChapter: NovelChapter,
+        source: eu.kanade.tachiyomi.novelsource.NovelSource,
+        settings: NovelReaderSettings,
+    ) {
+        if (hasReusableGeminiTranslationCache(nextChapter.id, settings)) return
+
+        nextChapterGeminiPrefetchJob?.cancel()
+        nextChapterGeminiPrefetchJob = screenModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                if (hasReusableGeminiTranslationCache(nextChapter.id, settings)) return@runCatching
+
+                val cacheReadChapters = novelReaderPreferences.cacheReadChapters().get()
+                val nextHtml = NovelReaderChapterPrefetchCache.get(nextChapter.id)
+                    ?: source.getChapterText(nextChapter.toSNovelChapter()).also { fetchedHtml ->
+                        NovelReaderChapterPrefetchCache.put(nextChapter.id, fetchedHtml)
+                        if (cacheReadChapters) {
+                            NovelReaderChapterDiskCacheStore.put(nextChapter.id, fetchedHtml)
+                        }
+                    }
+                if (nextHtml.isBlank()) return@runCatching
+
+                val normalizedNextHtml = prependChapterHeadingIfMissing(
+                    rawHtml = nextHtml.normalizeStructuredChapterPayload(),
+                    chapterName = nextChapter.name,
+                )
+                val nextTextBlocks = extractTextBlocks(normalizedNextHtml)
+                if (nextTextBlocks.isEmpty()) return@runCatching
+
+                val translationParams = settings.toGeminiTranslationParams()
+                val chunkSize = settings.geminiBatchSize.coerceIn(1, 80)
+                val chunks = nextTextBlocks.chunked(chunkSize)
+                val semaphore = Semaphore(settings.geminiConcurrency.coerceIn(1, 8))
+                val translated = mutableMapOf<Int, String>()
+
+                coroutineScope {
+                    chunks.mapIndexed { chunkIndex, chunk ->
+                        async {
+                            semaphore.withPermit {
+                                val result = geminiTranslationService.translateBatch(
+                                    segments = chunk,
+                                    params = translationParams,
+                                ) { message ->
+                                    addGeminiLog("⏭️ Next chapter: $message")
+                                }
+                                if (result == null && !settings.geminiRelaxedMode) {
+                                    throw IllegalStateException(
+                                        "Gemini returned empty response for prefetched chunk ${chunkIndex + 1}",
+                                    )
+                                }
+
+                                result.orEmpty().forEachIndexed { localIndex, text ->
+                                    if (!text.isNullOrBlank()) {
+                                        val globalIndex = chunkIndex * chunkSize + localIndex
+                                        translated[globalIndex] = text
+                                    }
+                                }
+                            }
+                        }
+                    }.awaitAll()
+                }
+
+                if (translated.isEmpty()) return@runCatching
+
+                NovelReaderTranslationDiskCacheStore.put(
+                    GeminiTranslationCacheEntry(
+                        chapterId = nextChapter.id,
+                        translatedByIndex = translated.toMap(),
+                        model = settings.geminiModel.normalizeGeminiModelId(),
+                        sourceLang = settings.geminiSourceLang,
+                        targetLang = settings.geminiTargetLang,
+                        promptMode = settings.geminiPromptMode,
+                    ),
+                )
+                addGeminiLog("⏭️ Cached Gemini translation for next chapter ${nextChapter.id}")
+            }.onFailure { error ->
+                logcat(LogPriority.WARN, error) { "Failed to prefetch Gemini translation for next chapter" }
+            }
+        }
+    }
+
+    private fun hasReusableGeminiTranslationCache(
+        chapterId: Long,
+        settings: NovelReaderSettings,
+    ): Boolean {
+        val cached = NovelReaderTranslationDiskCacheStore.get(chapterId) ?: return false
+        if (cached.translatedByIndex.isEmpty()) return false
+        return cached.model.normalizeGeminiModelId() == settings.geminiModel.normalizeGeminiModelId() &&
+            cached.sourceLang == settings.geminiSourceLang &&
+            cached.targetLang == settings.geminiTargetLang &&
+            cached.promptMode == settings.geminiPromptMode
     }
 
     private fun applyLocalChapterProgress(
@@ -618,6 +765,7 @@ class NovelReaderScreenModel(
     override fun onDispose() {
         settingsJob?.cancel()
         nextChapterPrefetchJob?.cancel()
+        nextChapterGeminiPrefetchJob?.cancel()
         geminiTranslationJob?.cancel()
         super.onDispose()
     }
@@ -715,6 +863,16 @@ class NovelReaderScreenModel(
     fun setGeminiCustomPromptModifier(value: String) = updateGeminiSetting(
         setGlobal = { novelReaderPreferences.geminiCustomPromptModifier().set(value) },
         setOverride = { it.copy(geminiCustomPromptModifier = value) },
+    )
+
+    fun setGeminiAutoTranslateEnglishSource(value: Boolean) = updateGeminiSetting(
+        setGlobal = { novelReaderPreferences.geminiAutoTranslateEnglishSource().set(value) },
+        setOverride = { it.copy(geminiAutoTranslateEnglishSource = value) },
+    )
+
+    fun setGeminiPrefetchNextChapterTranslation(value: Boolean) = updateGeminiSetting(
+        setGlobal = { novelReaderPreferences.geminiPrefetchNextChapterTranslation().set(value) },
+        setOverride = { it.copy(geminiPrefetchNextChapterTranslation = value) },
     )
 
     private fun updateGeminiSetting(
@@ -1840,6 +1998,23 @@ class NovelReaderScreenModel(
             "image",
             "text",
         )
+    }
+}
+
+internal fun isGeminiSourceLanguageEnglish(sourceLang: String): Boolean {
+    val normalized = sourceLang.trim().lowercase()
+    return normalized == "english" || normalized == "en" || normalized == "английский"
+}
+
+internal fun hasReachedGeminiNextChapterTranslationPrefetchThreshold(
+    currentIndex: Int,
+    totalItems: Int,
+): Boolean {
+    if (totalItems <= 0 || currentIndex < 0) return false
+    return if (totalItems == 100) {
+        currentIndex >= 30
+    } else {
+        totalItems > 1 && ((currentIndex + 1).toFloat() / totalItems.toFloat()) >= 0.3f
     }
 }
 

@@ -197,6 +197,8 @@ fun NovelReaderScreen(
     onSetGeminiPromptMode: (GeminiPromptMode) -> Unit = {},
     onSetGeminiEnabledPromptModifiers: (List<String>) -> Unit = {},
     onSetGeminiCustomPromptModifier: (String) -> Unit = {},
+    onSetGeminiAutoTranslateEnglishSource: (Boolean) -> Unit = {},
+    onSetGeminiPrefetchNextChapterTranslation: (Boolean) -> Unit = {},
     onOpenPreviousChapter: ((Long) -> Unit)? = null,
     onOpenNextChapter: ((Long) -> Unit)? = null,
 ) {
@@ -1913,6 +1915,8 @@ fun NovelReaderScreen(
                 onSetGeminiPromptMode = onSetGeminiPromptMode,
                 onSetGeminiEnabledPromptModifiers = onSetGeminiEnabledPromptModifiers,
                 onSetGeminiCustomPromptModifier = onSetGeminiCustomPromptModifier,
+                onSetGeminiAutoTranslateEnglishSource = onSetGeminiAutoTranslateEnglishSource,
+                onSetGeminiPrefetchNextChapterTranslation = onSetGeminiPrefetchNextChapterTranslation,
                 onDismiss = { showGeminiDialog = false },
             )
         }
@@ -1974,6 +1978,8 @@ private fun GeminiTranslationDialog(
     onSetGeminiPromptMode: (GeminiPromptMode) -> Unit,
     onSetGeminiEnabledPromptModifiers: (List<String>) -> Unit,
     onSetGeminiCustomPromptModifier: (String) -> Unit,
+    onSetGeminiAutoTranslateEnglishSource: (Boolean) -> Unit,
+    onSetGeminiPrefetchNextChapterTranslation: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val modelEntries = remember {
@@ -2028,6 +2034,12 @@ private fun GeminiTranslationDialog(
     }
     var tempCustomModifier by remember(readerSettings.geminiCustomPromptModifier) {
         mutableStateOf(readerSettings.geminiCustomPromptModifier)
+    }
+    var tempAutoTranslateEnglish by remember(readerSettings.geminiAutoTranslateEnglishSource) {
+        mutableStateOf(readerSettings.geminiAutoTranslateEnglishSource)
+    }
+    var tempPrefetchNextChapterTranslation by remember(readerSettings.geminiPrefetchNextChapterTranslation) {
+        mutableStateOf(readerSettings.geminiPrefetchNextChapterTranslation)
     }
     var showAdvanced by remember { mutableStateOf(false) }
     var showGenerationConfig by remember { mutableStateOf(false) }
@@ -2328,6 +2340,44 @@ private fun GeminiTranslationDialog(
                     title = "Система и кэш",
                     subtitle = "API ключ, кэш и ручной контроль потоков",
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Автостарт перевода для English",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Switch(
+                            checked = tempAutoTranslateEnglish,
+                            onCheckedChange = { enabled ->
+                                tempAutoTranslateEnglish = enabled
+                                onSetGeminiAutoTranslateEnglishSource(enabled)
+                                onAddLog("⚙️ Auto English: ${if (enabled) "ON" else "OFF"}")
+                            },
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Превентивный перевод следующей главы (30%)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Switch(
+                            checked = tempPrefetchNextChapterTranslation,
+                            onCheckedChange = { enabled ->
+                                tempPrefetchNextChapterTranslation = enabled
+                                onSetGeminiPrefetchNextChapterTranslation(enabled)
+                                onAddLog("⚙️ Next chapter pre-translation: ${if (enabled) "ON" else "OFF"}")
+                            },
+                        )
+                    }
                     TextButton(onClick = { showAdvanced = !showAdvanced }) {
                         Text(if (showAdvanced) "Скрыть доп. настройки" else "Доп. настройки")
                     }

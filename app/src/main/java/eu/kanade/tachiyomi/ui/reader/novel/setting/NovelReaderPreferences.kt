@@ -75,6 +75,8 @@ data class NovelReaderSettings(
     val geminiEnabledPromptModifiers: List<String> = emptyList(),
     val geminiCustomPromptModifier: String = "",
     val geminiPromptModifiers: String = "",
+    val geminiAutoTranslateEnglishSource: Boolean = false,
+    val geminiPrefetchNextChapterTranslation: Boolean = false,
 )
 
 enum class NovelReaderTheme {
@@ -164,6 +166,8 @@ data class NovelReaderOverride(
     val geminiEnabledPromptModifiers: List<String>? = null,
     val geminiCustomPromptModifier: String? = null,
     val geminiPromptModifiers: String? = null,
+    val geminiAutoTranslateEnglishSource: Boolean? = null,
+    val geminiPrefetchNextChapterTranslation: Boolean? = null,
 )
 
 class NovelReaderPreferences(
@@ -293,6 +297,12 @@ class NovelReaderPreferences(
 
     fun geminiPromptModifiers() = preferenceStore.getString("novel_reader_gemini_prompt_modifiers", "")
 
+    fun geminiAutoTranslateEnglishSource() =
+        preferenceStore.getBoolean("novel_reader_gemini_auto_translate_english_source", false)
+
+    fun geminiPrefetchNextChapterTranslation() =
+        preferenceStore.getBoolean("novel_reader_gemini_prefetch_next_chapter_translation", false)
+
     // EPUB export
     fun epubExportLocation() = preferenceStore.getString("novel_epub_export_location", "")
 
@@ -374,6 +384,8 @@ class NovelReaderPreferences(
                 geminiEnabledPromptModifiers = geminiEnabledPromptModifiers().get(),
                 geminiCustomPromptModifier = geminiCustomPromptModifier().get(),
                 geminiPromptModifiers = geminiPromptModifiers().get(),
+                geminiAutoTranslateEnglishSource = geminiAutoTranslateEnglishSource().get(),
+                geminiPrefetchNextChapterTranslation = geminiPrefetchNextChapterTranslation().get(),
             ),
         )
     }
@@ -441,6 +453,10 @@ class NovelReaderPreferences(
             override?.geminiEnabledPromptModifiers ?: geminiEnabledPromptModifiers().get(),
             geminiCustomPromptModifier = override?.geminiCustomPromptModifier ?: geminiCustomPromptModifier().get(),
             geminiPromptModifiers = override?.geminiPromptModifiers ?: geminiPromptModifiers().get(),
+            geminiAutoTranslateEnglishSource =
+            override?.geminiAutoTranslateEnglishSource ?: geminiAutoTranslateEnglishSource().get(),
+            geminiPrefetchNextChapterTranslation =
+            override?.geminiPrefetchNextChapterTranslation ?: geminiPrefetchNextChapterTranslation().get(),
         )
     }
 
@@ -555,6 +571,8 @@ class NovelReaderPreferences(
             geminiEnabledPromptModifiers().changes(),
             geminiCustomPromptModifier().changes(),
             geminiPromptModifiers().changes(),
+            geminiAutoTranslateEnglishSource().changes(),
+            geminiPrefetchNextChapterTranslation().changes(),
         ) { values: Array<Any?> ->
             GeminiSettings(
                 enabled = values[0] as Boolean,
@@ -575,6 +593,8 @@ class NovelReaderPreferences(
                 enabledPromptModifiers = values[15] as List<String>,
                 customPromptModifier = values[16] as String,
                 promptModifiers = values[17] as String,
+                autoTranslateEnglishSource = values[18] as Boolean,
+                prefetchNextChapterTranslation = values[19] as Boolean,
             )
         }
 
@@ -648,6 +668,10 @@ class NovelReaderPreferences(
                 geminiEnabledPromptModifiers = override?.geminiEnabledPromptModifiers ?: gemini.enabledPromptModifiers,
                 geminiCustomPromptModifier = override?.geminiCustomPromptModifier ?: gemini.customPromptModifier,
                 geminiPromptModifiers = override?.geminiPromptModifiers ?: gemini.promptModifiers,
+                geminiAutoTranslateEnglishSource =
+                override?.geminiAutoTranslateEnglishSource ?: gemini.autoTranslateEnglishSource,
+                geminiPrefetchNextChapterTranslation =
+                override?.geminiPrefetchNextChapterTranslation ?: gemini.prefetchNextChapterTranslation,
             )
         }
     }
@@ -718,6 +742,8 @@ class NovelReaderPreferences(
         val enabledPromptModifiers: List<String>,
         val customPromptModifier: String,
         val promptModifiers: String,
+        val autoTranslateEnglishSource: Boolean,
+        val prefetchNextChapterTranslation: Boolean,
     )
 
     companion object {

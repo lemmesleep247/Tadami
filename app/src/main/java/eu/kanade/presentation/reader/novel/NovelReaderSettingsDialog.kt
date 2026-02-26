@@ -29,7 +29,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -103,6 +105,8 @@ private fun GeneralTab(
     overrideEnabled: Boolean,
     preferences: NovelReaderPreferences,
 ) {
+    var showGeminiSettings by remember { mutableStateOf(false) }
+
     fun <T> update(
         value: T,
         copyOverride: (NovelReaderOverride, T) -> NovelReaderOverride,
@@ -273,6 +277,49 @@ private fun GeneralTab(
                 )
             },
         )
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showGeminiSettings = !showGeminiSettings },
+        ) {
+            Text(
+                text = if (showGeminiSettings) {
+                    "Gemini переводчик: скрыть"
+                } else {
+                    "Gemini переводчик: показать"
+                },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+        if (showGeminiSettings) {
+            SwitchPreferenceWidget(
+                title = "Автостарт перевода для English",
+                subtitle = "Автоматически запускать Gemini перевод при English source language",
+                checked = settings.geminiAutoTranslateEnglishSource,
+                onCheckedChanged = {
+                    update(
+                        it,
+                        { o, v -> o.copy(geminiAutoTranslateEnglishSource = v) },
+                        { preferences.geminiAutoTranslateEnglishSource().set(it) },
+                    )
+                },
+            )
+            SwitchPreferenceWidget(
+                title = "Превентивный перевод следующей главы (30%)",
+                subtitle = "Запускать перевод следующей главы в фоне после 30% чтения текущей",
+                checked = settings.geminiPrefetchNextChapterTranslation,
+                onCheckedChanged = {
+                    update(
+                        it,
+                        { o, v -> o.copy(geminiPrefetchNextChapterTranslation = v) },
+                        { preferences.geminiPrefetchNextChapterTranslation().set(it) },
+                    )
+                },
+            )
+        }
 
         SwitchPreferenceWidget(
             title = stringResource(AYMR.strings.novel_reader_fullscreen),
