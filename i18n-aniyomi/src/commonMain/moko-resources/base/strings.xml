@@ -426,10 +426,13 @@
 
     <!-- Text Align -->
     <string name="novel_reader_text_align">Text alignment</string>
+    <string name="novel_reader_text_align_source">Source (disabled)</string>
     <string name="novel_reader_text_align_left">Left</string>
     <string name="novel_reader_text_align_center">Center</string>
     <string name="novel_reader_text_align_justify">Justify</string>
     <string name="novel_reader_text_align_right">Right</string>
+    <string name="novel_reader_force_paragraph_indent">Force first-line indent for paragraphs</string>
+    <string name="novel_reader_force_paragraph_indent_summary">Apply a fixed first-line indent to each paragraph in reader mode</string>
     <string name="novel_reader_preserve_source_text_align_native">Preserve source text alignment in native reader</string>
     <string name="novel_reader_preserve_source_text_align_native_summary">Do not force the global text alignment in native mode; keep source alignment where supported</string>
 

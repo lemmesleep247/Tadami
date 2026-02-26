@@ -122,6 +122,11 @@ object SettingsNovelReaderScreen : SearchableSettings {
                     title = stringResource(AYMR.strings.novel_reader_text_align),
                 ),
                 Preference.PreferenceItem.SwitchPreference(
+                    preference = prefs.forceParagraphIndent(),
+                    title = stringResource(AYMR.strings.novel_reader_force_paragraph_indent),
+                    subtitle = stringResource(AYMR.strings.novel_reader_force_paragraph_indent_summary),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
                     preference = prefs.preserveSourceTextAlignInNative(),
                     title = stringResource(AYMR.strings.novel_reader_preserve_source_text_align_native),
                     subtitle = stringResource(AYMR.strings.novel_reader_preserve_source_text_align_native_summary),
@@ -435,6 +440,7 @@ object SettingsNovelReaderScreen : SearchableSettings {
     @Composable
     private fun getTextAlignString(textAlign: TextAlign): String {
         return when (textAlign) {
+            TextAlign.SOURCE -> stringResource(AYMR.strings.novel_reader_text_align_source)
             TextAlign.LEFT -> stringResource(AYMR.strings.novel_reader_text_align_left)
             TextAlign.CENTER -> stringResource(AYMR.strings.novel_reader_text_align_center)
             TextAlign.JUSTIFY -> stringResource(AYMR.strings.novel_reader_text_align_justify)

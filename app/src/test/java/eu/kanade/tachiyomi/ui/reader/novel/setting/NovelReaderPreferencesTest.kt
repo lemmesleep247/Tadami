@@ -22,8 +22,10 @@ class NovelReaderPreferencesTest {
     fun `defaults include lnreader parity options`() {
         val prefs = createPrefs()
 
+        prefs.textAlign().get() shouldBe TextAlign.SOURCE
         prefs.preferWebViewRenderer().get() shouldBe false
         prefs.richNativeRendererExperimental().get() shouldBe true
+        prefs.forceParagraphIndent().get() shouldBe true
         prefs.preserveSourceTextAlignInNative().get() shouldBe true
         prefs.showScrollPercentage().get() shouldBe true
         prefs.showBatteryAndTime().get() shouldBe false
@@ -35,7 +37,7 @@ class NovelReaderPreferencesTest {
         prefs.autoScrollInterval().get() shouldBe 10
         prefs.autoScrollOffset().get() shouldBe 0
         prefs.prefetchNextChapter().get() shouldBe false
-        prefs.cacheReadChapters().get() shouldBe false
+        prefs.cacheReadChapters().get() shouldBe true
         prefs.cacheReadChaptersUnlimited().get() shouldBe false
         prefs.bionicReading().get() shouldBe false
         prefs.swipeGestures().get() shouldBe false
@@ -51,6 +53,7 @@ class NovelReaderPreferencesTest {
         prefs.showBatteryAndTime().set(true)
         prefs.preferWebViewRenderer().set(false)
         prefs.richNativeRendererExperimental().set(true)
+        prefs.forceParagraphIndent().set(true)
         prefs.preserveSourceTextAlignInNative().set(false)
         prefs.verticalSeekbar().set(false)
         prefs.swipeToNextChapter().set(true)
@@ -74,6 +77,7 @@ class NovelReaderPreferencesTest {
         override?.showBatteryAndTime shouldBe true
         override?.preferWebViewRenderer shouldBe false
         override?.richNativeRendererExperimental shouldBe true
+        override?.forceParagraphIndent shouldBe true
         override?.preserveSourceTextAlignInNative shouldBe false
         override?.verticalSeekbar shouldBe false
         override?.swipeToNextChapter shouldBe true
@@ -98,6 +102,7 @@ class NovelReaderPreferencesTest {
         prefs.showBatteryAndTime().set(false)
         prefs.preferWebViewRenderer().set(true)
         prefs.richNativeRendererExperimental().set(false)
+        prefs.forceParagraphIndent().set(true)
         prefs.preserveSourceTextAlignInNative().set(true)
         prefs.verticalSeekbar().set(true)
         prefs.swipeToNextChapter().set(false)
@@ -121,6 +126,7 @@ class NovelReaderPreferencesTest {
                 showBatteryAndTime = true,
                 preferWebViewRenderer = false,
                 richNativeRendererExperimental = true,
+                forceParagraphIndent = false,
                 preserveSourceTextAlignInNative = false,
                 verticalSeekbar = false,
                 swipeToNextChapter = true,
@@ -143,6 +149,7 @@ class NovelReaderPreferencesTest {
         settings.showBatteryAndTime shouldBe true
         settings.preferWebViewRenderer shouldBe false
         settings.richNativeRendererExperimental shouldBe true
+        settings.forceParagraphIndent shouldBe false
         settings.preserveSourceTextAlignInNative shouldBe false
         settings.verticalSeekbar shouldBe false
         settings.swipeToNextChapter shouldBe true

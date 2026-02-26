@@ -5,6 +5,8 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextIndent
+import androidx.compose.ui.unit.em
 import androidx.core.view.WindowInsetsControllerCompat
 import eu.kanade.tachiyomi.ui.reader.novel.NovelRichBlockTextAlign
 import eu.kanade.tachiyomi.ui.reader.novel.NovelRichContentBlock
@@ -158,16 +160,21 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
-    fun `webview text align keeps site alignment for default left`() {
+    fun `webview text align keeps site alignment when source mode is selected`() {
         val alignCss = resolveWebViewTextAlignCss(
-            textAlign = eu.kanade.tachiyomi.ui.reader.novel.setting.TextAlign.LEFT,
+            textAlign = eu.kanade.tachiyomi.ui.reader.novel.setting.TextAlign.SOURCE,
         )
 
         assertTrue(alignCss == null)
     }
 
     @Test
-    fun `webview text align applies explicit non-default alignments`() {
+    fun `webview text align applies explicit alignments`() {
+        assertTrue(
+            resolveWebViewTextAlignCss(
+                textAlign = eu.kanade.tachiyomi.ui.reader.novel.setting.TextAlign.LEFT,
+            ) == "left",
+        )
         assertTrue(
             resolveWebViewTextAlignCss(
                 textAlign = eu.kanade.tachiyomi.ui.reader.novel.setting.TextAlign.CENTER,
@@ -183,6 +190,12 @@ class NovelReaderUiVisibilityTest {
                 textAlign = eu.kanade.tachiyomi.ui.reader.novel.setting.TextAlign.RIGHT,
             ) == "right",
         )
+    }
+
+    @Test
+    fun `webview first-line indent css is controlled by force paragraph indent setting`() {
+        assertTrue(resolveWebViewFirstLineIndentCss(forceParagraphIndent = false) == null)
+        assertTrue(resolveWebViewFirstLineIndentCss(forceParagraphIndent = true) == "2.0em")
     }
 
     @Test
@@ -735,6 +748,35 @@ class NovelReaderUiVisibilityTest {
                 sourceTextAlign = NovelRichBlockTextAlign.LEFT,
             ) == TextAlign.Justify,
         )
+        assertTrue(
+            resolveNativeTextAlign(
+                globalTextAlign = ReaderTextAlign.SOURCE,
+                preserveSourceTextAlignInNative = false,
+                sourceTextAlign = NovelRichBlockTextAlign.LEFT,
+            ) == null,
+        )
+    }
+
+    @Test
+    fun `native first-line indent can be forced for every paragraph`() {
+        assertTrue(
+            resolveNativeFirstLineIndentEm(
+                forceParagraphIndent = false,
+                sourceFirstLineIndentEm = 2f,
+            ) == 2f,
+        )
+        assertTrue(
+            resolveNativeFirstLineIndentEm(
+                forceParagraphIndent = true,
+                sourceFirstLineIndentEm = 2f,
+            ) == 2f,
+        )
+        assertTrue(
+            resolveNativeFirstLineIndentEm(
+                forceParagraphIndent = true,
+                sourceFirstLineIndentEm = null,
+            ) == 2f,
+        )
     }
 
     @Test
@@ -751,12 +793,41 @@ class NovelReaderUiVisibilityTest {
                 preserveSourceTextAlignInNative = false,
             ) == ReaderTextAlign.RIGHT,
         )
+        assertTrue(
+            resolvePageReaderLayoutTextAlign(
+                globalTextAlign = ReaderTextAlign.SOURCE,
+                preserveSourceTextAlignInNative = false,
+            ) == ReaderTextAlign.LEFT,
+        )
     }
 
     @Test
     fun `reader webview keeps javascript enabled even without plugin script`() {
         assertTrue(shouldEnableJavaScriptInReaderWebView(pluginRequestsJavaScript = false))
         assertTrue(shouldEnableJavaScriptInReaderWebView(pluginRequestsJavaScript = true))
+    }
+
+    @Test
+    fun `webview css keeps forced paragraph indent when explicit text alignment is set`() {
+        val css = buildWebReaderCssText(
+            fontFaceCss = "",
+            paddingTop = 0,
+            paddingBottom = 0,
+            paddingHorizontal = 16,
+            fontSizePx = 16,
+            lineHeightMultiplier = 1.6f,
+            textAlignCss = "justify",
+            firstLineIndentCss = "2em",
+            textColorHex = "#111111",
+            backgroundHex = "#FFFFFF",
+            fontFamilyName = null,
+            customCss = "",
+        )
+
+        assertTrue(css.contains("--an-reader-align: justify;"))
+        assertTrue(css.contains("--an-reader-first-line-indent: 2em;"))
+        assertTrue(css.contains("text-align: var(--an-reader-align) !important;"))
+        assertTrue(css.contains("text-indent: var(--an-reader-first-line-indent) !important;"))
     }
 
     @Test
@@ -1035,5 +1106,26 @@ class NovelReaderUiVisibilityTest {
             page.getStringAnnotations(tag = "URL", start = 0, end = page.length).isNotEmpty()
         }
         assertTrue(hasUrlAnnotation)
+    }
+
+    @Test
+    fun `rich page builder preserves first-line indent as paragraph style`() {
+        val chapter = buildRichPageReaderChapterAnnotatedText(
+            listOf(
+                NovelRichContentBlock.Paragraph(
+                    segments = listOf(NovelRichTextSegment(text = "Indented paragraph")),
+                    firstLineIndentEm = 2f,
+                ),
+                NovelRichContentBlock.Paragraph(
+                    segments = listOf(NovelRichTextSegment(text = "No indent paragraph")),
+                    firstLineIndentEm = null,
+                ),
+            ),
+        )
+
+        val hasIndent = chapter.paragraphStyles.any { range ->
+            range.item.textIndent == TextIndent(firstLine = 2.em)
+        }
+        assertTrue(hasIndent)
     }
 }

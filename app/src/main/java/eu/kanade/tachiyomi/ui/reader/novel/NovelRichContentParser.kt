@@ -10,6 +10,7 @@ internal fun parseNovelRichContent(rawHtml: String): NovelRichContentParseResult
     val doc = Jsoup.parse(rawHtml)
     val body = doc.body()
     val unsupported = detectUnsupportedRichFeatures(doc)
+    val context = parseBlockStyleContext(doc)
     val blocks = mutableListOf<NovelRichContentBlock>()
 
     val blockRoots = body.children().ifEmpty {
@@ -17,7 +18,7 @@ internal fun parseNovelRichContent(rawHtml: String): NovelRichContentParseResult
     }
 
     blockRoots.forEach { element ->
-        blocks += parseBlockElement(element)
+        blocks += parseBlockElement(element, context)
     }
 
     if (blocks.isEmpty()) {
@@ -33,12 +34,16 @@ internal fun parseNovelRichContent(rawHtml: String): NovelRichContentParseResult
     )
 }
 
-private fun parseBlockElement(element: Element): List<NovelRichContentBlock> {
+private fun parseBlockElement(
+    element: Element,
+    context: NovelRichParseContext,
+): List<NovelRichContentBlock> {
     val tag = element.tagName().lowercase(Locale.US)
     return when (tag) {
         "p", "div", "article", "section", "main" -> {
-            parseParagraphLikeOrContainerBlocks(element, tag)
+            parseParagraphLikeOrContainerBlocks(element, tag, context)
         }
+        "script", "style", "head", "meta", "link", "noscript" -> emptyList()
         "h1", "h2", "h3", "h4", "h5", "h6" -> {
             val segments = parseInlineSegments(element)
             if (segments.isEmpty()) {
@@ -69,16 +74,16 @@ private fun parseBlockElement(element: Element): List<NovelRichContentBlock> {
         }
         "hr" -> listOf(NovelRichContentBlock.HorizontalRule)
         "img" -> {
-            val src = element.attr("src").trim()
-            if (src.isBlank()) {
+            val imageUrl = parseImageUrlFromElement(element)
+            if (imageUrl.isNullOrBlank()) {
                 emptyList()
             } else {
-                listOf(NovelRichContentBlock.Image(url = src, alt = element.attr("alt").ifBlank { null }))
+                listOf(NovelRichContentBlock.Image(url = imageUrl, alt = element.attr("alt").ifBlank { null }))
             }
         }
         else -> {
             // Try block-like descendants first (e.g. body/html wrappers), else flatten text.
-            val childBlocks = element.children().flatMap(::parseBlockElement)
+            val childBlocks = element.children().flatMap { parseBlockElement(it, context) }
             if (childBlocks.isNotEmpty()) {
                 childBlocks
             } else {
@@ -92,17 +97,31 @@ private fun parseBlockElement(element: Element): List<NovelRichContentBlock> {
 private fun parseParagraphLikeOrContainerBlocks(
     element: Element,
     tag: String,
+    context: NovelRichParseContext,
 ): List<NovelRichContentBlock> {
     val blocks = mutableListOf<NovelRichContentBlock>()
     val pendingSegments = mutableListOf<NovelRichTextSegment>()
-    val blockTextAlign = parseBlockTextAlign(element.attr("style"))
+    val blockStyleFromContext = resolveParagraphLikeStyleFromContext(
+        element = element,
+        context = context,
+        tag = tag,
+    )
+    val blockTextAlign = parseBlockTextAlign(element.attr("style")) ?: blockStyleFromContext.textAlign
+    val blockFirstLineIndentEm =
+        parseBlockFirstLineIndentEm(element.attr("style")) ?: blockStyleFromContext.firstLineIndentEm
 
     fun flushParagraph() {
         val merged = mergeAdjacentRichSegments(pendingSegments)
         if (merged.isNotEmpty()) {
+            val inferredLeadingIndent = if (blockFirstLineIndentEm == null) {
+                inferParagraphLeadingIndentFromSegments(merged)
+            } else {
+                null
+            }
             blocks += NovelRichContentBlock.Paragraph(
-                segments = merged,
+                segments = inferredLeadingIndent?.segments ?: merged,
                 textAlign = blockTextAlign,
+                firstLineIndentEm = blockFirstLineIndentEm ?: inferredLeadingIndent?.indentEm,
             )
         }
         pendingSegments.clear()
@@ -114,10 +133,10 @@ private fun parseParagraphLikeOrContainerBlocks(
                 val childTag = node.tagName().lowercase(Locale.US)
                 if (childTag == "img") {
                     flushParagraph()
-                    val src = node.attr("src").trim()
-                    if (src.isNotBlank()) {
+                    val imageUrl = parseImageUrlFromElement(node)
+                    if (!imageUrl.isNullOrBlank()) {
                         blocks += NovelRichContentBlock.Image(
-                            url = src,
+                            url = imageUrl,
                             alt = node.attr("alt").ifBlank { null },
                         )
                     }
@@ -127,7 +146,7 @@ private fun parseParagraphLikeOrContainerBlocks(
                 // Container-like nodes should preserve nested block ordering instead of flattening.
                 if (tag != "p" && childTag in richContainerBlockTags) {
                     flushParagraph()
-                    blocks += parseBlockElement(node)
+                    blocks += parseBlockElement(node, context)
                     return@forEach
                 }
             }
@@ -158,13 +177,134 @@ private fun parseInlineSegments(root: Element): List<NovelRichTextSegment> {
 
 private fun parseBlockTextAlign(inlineStyle: String): NovelRichBlockTextAlign? {
     if (inlineStyle.isBlank()) return null
-    return when (parseInlineCssMap(inlineStyle)["text-align"]?.trim()?.lowercase(Locale.US)) {
+    return parseCssTextAlign(parseInlineCssMap(inlineStyle)["text-align"])
+}
+
+private fun parseCssTextAlign(raw: String?): NovelRichBlockTextAlign? {
+    return when (raw?.trim()?.lowercase(Locale.US)) {
         "left", "start" -> NovelRichBlockTextAlign.LEFT
         "center" -> NovelRichBlockTextAlign.CENTER
         "justify" -> NovelRichBlockTextAlign.JUSTIFY
         "right", "end" -> NovelRichBlockTextAlign.RIGHT
         else -> null
     }
+}
+
+private fun parseBlockFirstLineIndentEm(inlineStyle: String): Float? {
+    if (inlineStyle.isBlank()) return null
+    val raw = parseInlineCssMap(inlineStyle)["text-indent"] ?: return null
+    return parseCssLengthAsEm(raw)
+}
+
+private fun parseCssLengthAsEm(raw: String): Float? {
+    val normalized = raw.trim().lowercase(Locale.US).replace("!important", "").trim()
+    if (normalized.isBlank() || normalized == "0" || normalized == "0.0") return 0f
+    return when {
+        normalized.endsWith("em") -> normalized.removeSuffix("em").trim().toFloatOrNull()
+        normalized.endsWith("rem") -> normalized.removeSuffix("rem").trim().toFloatOrNull()
+        normalized.endsWith("px") -> normalized.removeSuffix("px").trim().toFloatOrNull()?.div(16f)
+        normalized.endsWith("pt") -> normalized.removeSuffix("pt").trim().toFloatOrNull()?.div(12f)
+        normalized.endsWith("%") -> normalized.removeSuffix("%").trim().toFloatOrNull()?.div(100f)
+        else -> null
+    }
+}
+
+private fun parseBlockStyleContext(doc: Element): NovelRichParseContext {
+    val cssText = doc.select("style").joinToString(separator = "\n") { it.data() + "\n" + it.wholeText() }
+    if (cssText.isBlank()) {
+        return NovelRichParseContext(selectors = emptyList())
+    }
+    val selectors = mutableListOf<NovelRichSelectorStyle>()
+    val cssRuleRegex = Regex("""(?is)([^{}]+)\{([^}]*)\}""")
+    val textIndentRegex = Regex("""(?is)\btext-indent\s*:\s*([^;}]*)""")
+    val textAlignRegex = Regex("""(?is)\btext-align\s*:\s*([^;}]*)""")
+    cssRuleRegex.findAll(cssText).forEach { rule ->
+        val selectorsRaw = rule.groupValues.getOrNull(1).orEmpty()
+        val declarations = rule.groupValues.getOrNull(2).orEmpty()
+        val rawIndent = textIndentRegex.find(declarations)?.groupValues?.getOrNull(1)?.trim()
+        val rawAlign = textAlignRegex.find(declarations)?.groupValues?.getOrNull(1)?.trim()
+        val style = NovelRichBlockStyle(
+            textAlign = parseCssTextAlign(rawAlign),
+            firstLineIndentEm = rawIndent?.let(::parseCssLengthAsEm),
+        )
+        if (style.textAlign == null && style.firstLineIndentEm == null) return@forEach
+
+        selectorsRaw.split(',')
+            .map { it.trim().lowercase(Locale.US) }
+            .filter { it.isNotBlank() }
+            .forEach { selector ->
+                parseTrailingBlockSelector(selector)?.let { parsed ->
+                    selectors += NovelRichSelectorStyle(
+                        tag = parsed.tag,
+                        className = parsed.className,
+                        style = style,
+                    )
+                }
+            }
+    }
+
+    return NovelRichParseContext(selectors = selectors)
+}
+
+private fun resolveParagraphLikeStyleFromContext(
+    element: Element,
+    context: NovelRichParseContext,
+    tag: String,
+): NovelRichBlockStyle {
+    if (tag !in paragraphLikeStyleTags) return NovelRichBlockStyle()
+
+    val elementClasses = element.classNames().map { it.lowercase(Locale.US) }.toSet()
+    var resolved = NovelRichBlockStyle()
+    context.selectors.forEach { selector ->
+        if (selector.tag != null && selector.tag != tag) return@forEach
+        if (selector.className != null && selector.className !in elementClasses) return@forEach
+        resolved = resolved.merge(selector.style)
+    }
+    return resolved
+}
+
+private fun parseTrailingBlockSelector(selector: String): ParsedRichBlockSelector? {
+    val trailing = selector
+        .split(Regex("""\s*[>+~]\s*|\s+"""))
+        .lastOrNull()
+        ?.trim()
+        ?.lowercase(Locale.US)
+        ?: return null
+    if (trailing.isBlank()) return null
+
+    val cleaned = trailing
+        .replace(Regex("""\[[^\]]*]"""), "")
+        .substringBefore(':')
+        .trim()
+    if (cleaned.isBlank()) return null
+
+    val classOnlyMatch = Regex("""^\.([a-z0-9_-]+)$""").matchEntire(cleaned)
+    if (classOnlyMatch != null) {
+        return ParsedRichBlockSelector(
+            tag = null,
+            className = classOnlyMatch.groupValues[1],
+        )
+    }
+
+    val tagAndClassMatch = Regex("""^([a-z0-9_-]+)(?:\.([a-z0-9_-]+))?$""").matchEntire(cleaned)
+    if (tagAndClassMatch != null) {
+        val tag = tagAndClassMatch.groupValues[1]
+        if (tag !in paragraphLikeStyleTags) return null
+        val className = tagAndClassMatch.groupValues.getOrNull(2)?.ifBlank { null }
+        return ParsedRichBlockSelector(
+            tag = tag,
+            className = className,
+        )
+    }
+
+    return null
+}
+
+private fun NovelRichBlockStyle.merge(other: NovelRichBlockStyle): NovelRichBlockStyle {
+    return copy(
+        textAlign = other.textAlign ?: textAlign,
+        firstLineIndentEm = other.firstLineIndentEm ?: firstLineIndentEm,
+    )
 }
 
 private fun parseInlineNode(
@@ -175,7 +315,7 @@ private fun parseInlineNode(
 ) {
     when (node) {
         is TextNode -> {
-            val text = node.text()
+            val text = resolveTextNodeText(node)
             if (text.isEmpty() || text.isBlank()) return
             out += NovelRichTextSegment(
                 text = text,
@@ -202,6 +342,41 @@ private fun parseInlineNode(
             }
         }
     }
+}
+
+private fun resolveTextNodeText(node: TextNode): String {
+    val whole = node.wholeText
+    if (whole.any(::isRichIndentSpaceChar)) {
+        return whole
+    }
+    return node.text()
+}
+
+private fun parseImageUrlFromElement(element: Element): String? {
+    val candidates = listOf(
+        element.attr("src"),
+        element.attr("data-src"),
+        element.attr("data-original"),
+        element.attr("data-lazy-src"),
+        element.attr("data-url"),
+    )
+    candidates
+        .asSequence()
+        .map { it.trim() }
+        .firstOrNull { it.isNotBlank() }
+        ?.let { return it }
+
+    val srcSet = element.attr("srcset")
+        .ifBlank { element.attr("data-srcset") }
+        .trim()
+    if (srcSet.isBlank()) return null
+    return srcSet
+        .split(',')
+        .asSequence()
+        .map { it.trim() }
+        .firstOrNull { it.isNotBlank() }
+        ?.substringBefore(' ')
+        ?.trim()
 }
 
 private fun applyRichStyleTagAndInlineCss(
@@ -292,4 +467,99 @@ private val richContainerBlockTags = setOf(
     "h6",
     "blockquote",
     "hr",
+)
+
+private val paragraphLikeStyleTags = setOf(
+    "p",
+    "div",
+    "article",
+    "section",
+    "main",
+)
+
+private fun inferParagraphLeadingIndentFromSegments(
+    segments: List<NovelRichTextSegment>,
+): InferredParagraphIndent? {
+    if (segments.isEmpty()) return null
+    val first = segments.first()
+    val (indentEm, consumedChars) = parseLeadingWhitespaceIndentEm(first.text) ?: return null
+    val strippedFirstText = first.text.drop(consumedChars)
+    val updatedSegments = segments.toMutableList()
+    if (strippedFirstText.isEmpty()) {
+        updatedSegments.removeAt(0)
+    } else {
+        updatedSegments[0] = first.copy(text = strippedFirstText)
+    }
+    if (updatedSegments.isEmpty()) return null
+    return InferredParagraphIndent(
+        indentEm = indentEm,
+        segments = updatedSegments,
+    )
+}
+
+private fun parseLeadingWhitespaceIndentEm(text: String): Pair<Float, Int>? {
+    if (text.isEmpty()) return null
+    var index = 0
+    while (index < text.length && isHtmlFormattingWhitespace(text[index])) {
+        index++
+    }
+    val markerStart = index
+    var indentEm = 0f
+    while (index < text.length) {
+        val char = text[index]
+        val charIndent = richIndentSpaceEm(char) ?: break
+        indentEm += charIndent
+        index++
+    }
+    if (index == markerStart || indentEm < 0.5f) return null
+    return indentEm to index
+}
+
+private fun isHtmlFormattingWhitespace(char: Char): Boolean {
+    return char == ' ' || char == '\t' || char == '\n' || char == '\r'
+}
+
+private fun isRichIndentSpaceChar(char: Char): Boolean {
+    return richIndentSpaceEm(char) != null
+}
+
+private fun richIndentSpaceEm(char: Char): Float? {
+    return when (char) {
+        '\u3000' -> 1f // Ideographic space.
+        '\u2001', '\u2003' -> 1f // Em quad / em space.
+        '\u2000', '\u2002' -> 0.5f // En quad / en space.
+        '\u2004' -> 0.333f // Three-per-em space.
+        '\u2005', '\u2008', '\u00A0' -> 0.25f // Four-per-em / punctuation / nbsp.
+        '\u2006' -> 0.167f // Six-per-em space.
+        '\u2007' -> 0.5f // Figure space (digit width; approximate as half-em).
+        '\u2009' -> 0.2f // Thin space.
+        '\u200A' -> 0.1f // Hair space.
+        '\u205F' -> 0.222f // Medium mathematical space.
+        else -> null
+    }
+}
+
+private data class NovelRichParseContext(
+    val selectors: List<NovelRichSelectorStyle>,
+)
+
+private data class NovelRichSelectorStyle(
+    val tag: String?,
+    val className: String?,
+    val style: NovelRichBlockStyle,
+)
+
+private data class NovelRichBlockStyle(
+    val textAlign: NovelRichBlockTextAlign? = null,
+    val firstLineIndentEm: Float? = null,
+)
+
+private data class ParsedRichBlockSelector(
+    val tag: String?,
+    val className: String?,
+)
+
+private data class InferredParagraphIndent(
+    val indentEm: Float,
+    val segments: List<NovelRichTextSegment>,
 )

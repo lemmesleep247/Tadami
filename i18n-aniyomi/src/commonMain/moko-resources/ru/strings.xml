@@ -274,10 +274,13 @@
 
     <!-- Text Align -->
     <string name="novel_reader_text_align">Выравнивание текста</string>
+    <string name="novel_reader_text_align_source">Источник (отключено)</string>
     <string name="novel_reader_text_align_left">По левому краю</string>
     <string name="novel_reader_text_align_center">По центру</string>
     <string name="novel_reader_text_align_justify">По ширине</string>
     <string name="novel_reader_text_align_right">По правому краю</string>
+    <string name="novel_reader_force_paragraph_indent">Принудительная красная строка для абзацев</string>
+    <string name="novel_reader_force_paragraph_indent_summary">Добавлять фиксированный отступ первой строки для каждого абзаца в режиме чтения</string>
     <string name="novel_reader_preserve_source_text_align_native">Сохранять выравнивание источника в нативном ридере</string>
     <string name="novel_reader_preserve_source_text_align_native_summary">Не применять глобальное выравнивание в нативном режиме и сохранять выравнивание источника, где поддерживается</string>
 

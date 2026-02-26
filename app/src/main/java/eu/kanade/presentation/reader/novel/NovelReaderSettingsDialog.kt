@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
 import androidx.compose.material.icons.automirrored.filled.FormatAlignRight
 import androidx.compose.material.icons.filled.FormatAlignCenter
 import androidx.compose.material.icons.filled.FormatAlignJustify
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -404,6 +405,18 @@ private fun ReadingTab(
                 update(align, { o, v -> o.copy(textAlign = v) }, { preferences.textAlign().set(it) })
             },
         )
+        SwitchPreferenceWidget(
+            title = stringResource(AYMR.strings.novel_reader_force_paragraph_indent),
+            subtitle = stringResource(AYMR.strings.novel_reader_force_paragraph_indent_summary),
+            checked = settings.forceParagraphIndent,
+            onCheckedChanged = {
+                update(
+                    it,
+                    { o, v -> o.copy(forceParagraphIndent = v) },
+                    { preferences.forceParagraphIndent().set(it) },
+                )
+            },
+        )
 
         FontExamplesRow(
             selected = settings.fontFamily,
@@ -549,6 +562,11 @@ private fun AlignButtonsRow(
     onSelect: (TextAlign) -> Unit,
 ) {
     val options = listOf(
+        Triple(
+            TextAlign.SOURCE,
+            Icons.Outlined.Public,
+            stringResource(AYMR.strings.novel_reader_text_align_source),
+        ),
         Triple(
             TextAlign.LEFT,
             Icons.AutoMirrored.Filled.FormatAlignLeft,

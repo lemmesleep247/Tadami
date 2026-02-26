@@ -110,6 +110,7 @@ class NovelEpubStyleBuilderTest {
             lineHeight = lineHeight,
             margin = margin,
             textAlign = textAlign,
+            forceParagraphIndent = false,
             preserveSourceTextAlignInNative = true,
             fontFamily = fontFamily,
             theme = theme,

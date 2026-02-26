@@ -20,6 +20,7 @@ data class NovelReaderSettings(
     val lineHeight: Float,
     val margin: Int,
     val textAlign: TextAlign,
+    val forceParagraphIndent: Boolean,
     val preserveSourceTextAlignInNative: Boolean,
     val fontFamily: String,
 
@@ -63,6 +64,7 @@ enum class NovelReaderTheme {
 }
 
 enum class TextAlign {
+    SOURCE,
     LEFT,
     CENTER,
     JUSTIFY,
@@ -82,6 +84,7 @@ data class NovelReaderOverride(
     val lineHeight: Float? = null,
     val margin: Int? = null,
     val textAlign: TextAlign? = null,
+    val forceParagraphIndent: Boolean? = null,
     val preserveSourceTextAlignInNative: Boolean? = null,
     val fontFamily: String? = null,
 
@@ -129,7 +132,9 @@ class NovelReaderPreferences(
 
     fun margin() = preferenceStore.getInt("novel_reader_margins", DEFAULT_MARGIN)
 
-    fun textAlign() = preferenceStore.getEnum("novel_reader_text_align", TextAlign.LEFT)
+    fun textAlign() = preferenceStore.getEnum("novel_reader_text_align", TextAlign.SOURCE)
+
+    fun forceParagraphIndent() = preferenceStore.getBoolean("novel_reader_force_paragraph_indent", true)
 
     fun fontFamily() = preferenceStore.getString("novel_reader_font_family", "")
 
@@ -178,7 +183,7 @@ class NovelReaderPreferences(
 
     fun prefetchNextChapter() = preferenceStore.getBoolean("novel_reader_prefetch_next_chapter", false)
 
-    fun cacheReadChapters() = preferenceStore.getBoolean("novel_reader_cache_read_chapters", false)
+    fun cacheReadChapters() = preferenceStore.getBoolean("novel_reader_cache_read_chapters", true)
 
     fun cacheReadChaptersUnlimited() = preferenceStore.getBoolean("novel_reader_cache_read_chapters_unlimited", false)
 
@@ -238,6 +243,7 @@ class NovelReaderPreferences(
                 lineHeight = lineHeight().get(),
                 margin = margin().get(),
                 textAlign = textAlign().get(),
+                forceParagraphIndent = forceParagraphIndent().get(),
                 preserveSourceTextAlignInNative = preserveSourceTextAlignInNative().get(),
                 fontFamily = fontFamily().get(),
                 theme = theme().get(),
@@ -283,6 +289,7 @@ class NovelReaderPreferences(
             lineHeight = override?.lineHeight ?: lineHeight().get(),
             margin = override?.margin ?: margin().get(),
             textAlign = override?.textAlign ?: textAlign().get(),
+            forceParagraphIndent = override?.forceParagraphIndent ?: forceParagraphIndent().get(),
             preserveSourceTextAlignInNative =
             override?.preserveSourceTextAlignInNative ?: preserveSourceTextAlignInNative().get(),
             fontFamily = override?.fontFamily ?: fontFamily().get(),
@@ -322,6 +329,7 @@ class NovelReaderPreferences(
             lineHeight().changes(),
             margin().changes(),
             textAlign().changes(),
+            forceParagraphIndent().changes(),
             preserveSourceTextAlignInNative().changes(),
             fontFamily().changes(),
         ) { values: Array<Any?> ->
@@ -331,7 +339,8 @@ class NovelReaderPreferences(
                 values[2] as Int,
                 values[3] as TextAlign,
                 values[4] as Boolean,
-                values[5] as String,
+                values[5] as Boolean,
+                values[6] as String,
             )
         }
 
@@ -425,6 +434,7 @@ class NovelReaderPreferences(
                 lineHeight = override?.lineHeight ?: display.lineHeight,
                 margin = override?.margin ?: display.margin,
                 textAlign = override?.textAlign ?: display.textAlign,
+                forceParagraphIndent = override?.forceParagraphIndent ?: display.forceParagraphIndent,
                 preserveSourceTextAlignInNative =
                 override?.preserveSourceTextAlignInNative ?: display.preserveSourceTextAlignInNative,
                 fontFamily = override?.fontFamily ?: display.fontFamily,
@@ -463,6 +473,7 @@ class NovelReaderPreferences(
         val lineHeight: Float,
         val margin: Int,
         val textAlign: TextAlign,
+        val forceParagraphIndent: Boolean,
         val preserveSourceTextAlignInNative: Boolean,
         val fontFamily: String,
     )

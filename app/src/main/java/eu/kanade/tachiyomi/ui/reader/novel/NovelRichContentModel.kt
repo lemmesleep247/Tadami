@@ -16,6 +16,7 @@ sealed interface NovelRichContentBlock {
     data class Paragraph(
         val segments: List<NovelRichTextSegment>,
         val textAlign: NovelRichBlockTextAlign? = null,
+        val firstLineIndentEm: Float? = null,
     ) : NovelRichContentBlock
 
     data class Heading(

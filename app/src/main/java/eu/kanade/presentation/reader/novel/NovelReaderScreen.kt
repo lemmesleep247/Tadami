@@ -97,6 +97,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -105,6 +106,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -302,6 +304,7 @@ fun NovelReaderScreen(
         state.readerSettings.lineHeight,
         state.readerSettings.margin,
         state.readerSettings.textAlign,
+        state.readerSettings.forceParagraphIndent,
         composeTypeface,
         pageViewportSize,
         contentPaddingPx,
@@ -352,7 +355,14 @@ fun NovelReaderScreen(
         if (!shouldPaginateRichForPageReader) {
             emptyList()
         } else {
-            val richChapterText = buildRichPageReaderChapterAnnotatedText(state.richContentBlocks)
+            val richChapterText = buildRichPageReaderChapterAnnotatedText(
+                richBlocks = state.richContentBlocks,
+                forcedParagraphFirstLineIndentEm = if (state.readerSettings.forceParagraphIndent) {
+                    FORCED_PARAGRAPH_FIRST_LINE_INDENT_EM
+                } else {
+                    null
+                },
+            )
             if (richChapterText.text.isBlank()) {
                 emptyList()
             } else {
@@ -894,6 +904,7 @@ fun NovelReaderScreen(
                                     lineHeight = state.readerSettings.lineHeight,
                                     composeFontFamily = composeFontFamily,
                                     textAlign = state.readerSettings.textAlign,
+                                    forceParagraphIndent = state.readerSettings.forceParagraphIndent,
                                     preserveSourceTextAlignInNative =
                                     state.readerSettings.preserveSourceTextAlignInNative,
                                 )
@@ -934,6 +945,12 @@ fun NovelReaderScreen(
                                                     preserveSourceTextAlignInNative =
                                                     state.readerSettings.preserveSourceTextAlignInNative,
                                                 ),
+                                            ).withOptionalFirstLineIndentEm(
+                                                if (state.readerSettings.forceParagraphIndent && !isChapterTitle) {
+                                                    FORCED_PARAGRAPH_FIRST_LINE_INDENT_EM
+                                                } else {
+                                                    null
+                                                },
                                             ),
                                             modifier = Modifier.padding(
                                                 top = if (index == 0) statusBarTopPadding else 0.dp,
@@ -1029,6 +1046,9 @@ fun NovelReaderScreen(
                 )
                 val initialPaddingHorizontal = state.readerSettings.margin
                 val initialCssTextAlign = resolveWebViewTextAlignCss(state.readerSettings.textAlign)
+                val initialCssFirstLineIndent = resolveWebViewFirstLineIndentCss(
+                    forceParagraphIndent = state.readerSettings.forceParagraphIndent,
+                )
                 val initialSelectedFontFamily = state.readerSettings.fontFamily.takeIf { it.isNotBlank() }
                 val initialFontAssetFile = novelReaderFonts
                     .firstOrNull { it.id == state.readerSettings.fontFamily }
@@ -1052,6 +1072,7 @@ fun NovelReaderScreen(
                     fontSizePx = state.readerSettings.fontSize,
                     lineHeightMultiplier = state.readerSettings.lineHeight,
                     textAlignCss = initialCssTextAlign,
+                    firstLineIndentCss = initialCssFirstLineIndent,
                     textColorHex = colorToCssHex(textColor),
                     backgroundHex = colorToCssHex(textBackground),
                     fontFamilyName = initialSelectedFontFamily,
@@ -1228,6 +1249,9 @@ fun NovelReaderScreen(
                         )
                         val paddingHorizontal = state.readerSettings.margin
                         val cssTextAlign = resolveWebViewTextAlignCss(state.readerSettings.textAlign)
+                        val cssFirstLineIndent = resolveWebViewFirstLineIndentCss(
+                            forceParagraphIndent = state.readerSettings.forceParagraphIndent,
+                        )
                         val selectedFontFamily = state.readerSettings.fontFamily.takeIf { it.isNotBlank() }
                         val fontAssetFile = novelReaderFonts
                             .firstOrNull { it.id == state.readerSettings.fontFamily }
@@ -1251,6 +1275,7 @@ fun NovelReaderScreen(
                             fontSizePx = state.readerSettings.fontSize,
                             lineHeightMultiplier = state.readerSettings.lineHeight,
                             textAlignCss = cssTextAlign,
+                            firstLineIndentCss = cssFirstLineIndent,
                             textColorHex = colorToCssHex(textColor),
                             backgroundHex = colorToCssHex(textBackground),
                             fontFamilyName = selectedFontFamily,
@@ -1272,6 +1297,7 @@ fun NovelReaderScreen(
                             fontSizePx = currentFontSize,
                             lineHeightMultiplier = currentLineHeight,
                             textAlignCss = cssTextAlign,
+                            firstLineIndentCss = cssFirstLineIndent,
                             textColorHex = currentTextColorCss,
                             backgroundHex = currentBackgroundCss,
                             fontFamilyName = selectedFontFamily,
@@ -1319,6 +1345,7 @@ fun NovelReaderScreen(
                                     fontSizePx = currentFontSize,
                                     lineHeightMultiplier = currentLineHeight,
                                     textAlignCss = cssTextAlign,
+                                    firstLineIndentCss = cssFirstLineIndent,
                                     textColorHex = currentTextColorCss,
                                     backgroundHex = currentBackgroundCss,
                                     fontFamilyName = selectedFontFamily,
@@ -1392,6 +1419,7 @@ fun NovelReaderScreen(
                                 fontSizePx = state.readerSettings.fontSize,
                                 lineHeightMultiplier = state.readerSettings.lineHeight,
                                 textAlignCss = cssTextAlign,
+                                firstLineIndentCss = cssFirstLineIndent,
                                 textColorHex = colorToCssHex(textColor),
                                 backgroundHex = colorToCssHex(textBackground),
                                 fontFamilyName = selectedFontFamily,
@@ -1844,6 +1872,7 @@ private fun buildWebReaderBootstrapCss(): String {
     return "html, body { visibility: hidden !important; }"
 }
 
+private const val FORCED_PARAGRAPH_FIRST_LINE_INDENT_EM = 2f
 private const val EARLY_WEBVIEW_REVEAL_IMAGE_THRESHOLD = 6
 private val webViewHtmlImageTagRegex = Regex("<img\\b", RegexOption.IGNORE_CASE)
 private val hexNovelsPluginImageUrlRegex = Regex("""(?:novelimg|heximg)://hexnovels\b""", RegexOption.IGNORE_CASE)
@@ -1886,6 +1915,7 @@ internal fun buildWebReaderCssText(
     fontSizePx: Int,
     lineHeightMultiplier: Float,
     textAlignCss: String?,
+    firstLineIndentCss: String?,
     textColorHex: String,
     backgroundHex: String,
     fontFamilyName: String?,
@@ -1904,6 +1934,9 @@ internal fun buildWebReaderCssText(
         append("  --an-reader-fg: $textColorHex;\n")
         if (!textAlignCss.isNullOrBlank()) {
             append("  --an-reader-align: $textAlignCss;\n")
+        }
+        if (!firstLineIndentCss.isNullOrBlank()) {
+            append("  --an-reader-first-line-indent: $firstLineIndentCss;\n")
         }
         append("  --an-reader-size: ${fontSizePx}px;\n")
         append("  --an-reader-line-height: ${lineHeightMultiplier.coerceAtLeast(1f)};\n")
@@ -2002,6 +2035,15 @@ internal fun buildWebReaderCssText(
             append("  font-family: var(--an-reader-font) !important;\n")
         }
         append("}\n")
+        if (!firstLineIndentCss.isNullOrBlank()) {
+            append("body p, body div, body article, body section {\n")
+            append("  text-indent: var(--an-reader-first-line-indent) !important;\n")
+            append("}\n")
+            append("body .an-reader-chapter-title,\n")
+            append("body h1, body h2, body h3, body h4, body h5, body h6 {\n")
+            append("  text-indent: 0 !important;\n")
+            append("}\n")
+        }
         append(customCss)
     }
 }
@@ -2014,6 +2056,7 @@ private fun WebView.applyReaderCss(
     fontSizePx: Int,
     lineHeightMultiplier: Float,
     textAlignCss: String?,
+    firstLineIndentCss: String?,
     textColorHex: String,
     backgroundHex: String,
     fontFamilyName: String?,
@@ -2027,6 +2070,7 @@ private fun WebView.applyReaderCss(
         fontSizePx = fontSizePx,
         lineHeightMultiplier = lineHeightMultiplier,
         textAlignCss = textAlignCss,
+        firstLineIndentCss = firstLineIndentCss,
         textColorHex = textColorHex,
         backgroundHex = backgroundHex,
         fontFamilyName = fontFamilyName,
@@ -2039,6 +2083,7 @@ private fun WebView.applyReaderCss(
     val quotedCss = JSONObject.quote(css)
     val fontFlag = if (shouldForceFontFamily) "true" else "false"
     val alignFlag = if (textAlignCss.isNullOrBlank()) "false" else "true"
+    val firstLineIndentFlag = if (firstLineIndentCss.isNullOrBlank()) "false" else "true"
     evaluateJavascript(
         """
         (function() {
@@ -2053,6 +2098,8 @@ private fun WebView.applyReaderCss(
 
             const shouldForceFont = $fontFlag;
             const shouldForceAlign = $alignFlag;
+            const shouldForceFirstLineIndent = $firstLineIndentFlag;
+            const firstLineIndentTags = new Set(['p', 'div', 'article', 'section']);
             const root = document.body;
             if (!root) return;
             const nodes = root.querySelectorAll('*');
@@ -2076,6 +2123,11 @@ private fun WebView.applyReaderCss(
                     node.style.setProperty('text-align', 'var(--an-reader-align)', 'important');
                 } else if (node.style.getPropertyValue('text-align').includes('--an-reader-align')) {
                     node.style.removeProperty('text-align');
+                }
+                if (shouldForceFirstLineIndent && firstLineIndentTags.has(tag)) {
+                    node.style.setProperty('text-indent', 'var(--an-reader-first-line-indent)', 'important');
+                } else if (node.style.getPropertyValue('text-indent').includes('--an-reader-first-line-indent')) {
+                    node.style.removeProperty('text-indent');
                 }
                 node.style.setProperty('line-height', 'var(--an-reader-line-height)', 'important');
                 if (shouldForceFont) {
@@ -2284,6 +2336,7 @@ internal fun resolvePageReaderBlocks(
 
 internal fun buildRichPageReaderChapterAnnotatedText(
     richBlocks: List<NovelRichContentBlock>,
+    forcedParagraphFirstLineIndentEm: Float? = null,
 ): AnnotatedString {
     if (richBlocks.isEmpty()) return AnnotatedString("")
 
@@ -2299,7 +2352,21 @@ internal fun buildRichPageReaderChapterAnnotatedText(
             }
             if (blockText.text.isBlank()) return@forEach
             if (appendedAny) append("\n\n")
+            val start = length
             append(blockText)
+            val end = length
+            if (block is NovelRichContentBlock.Paragraph) {
+                val firstLineIndentEm = forcedParagraphFirstLineIndentEm ?: block.firstLineIndentEm
+                firstLineIndentEm?.let { indentEm ->
+                    addStyle(
+                        style = ParagraphStyle(
+                            textIndent = TextIndent(firstLine = indentEm.em),
+                        ),
+                        start = start,
+                        end = end,
+                    )
+                }
+            }
             appendedAny = true
         }
     }
@@ -2329,6 +2396,7 @@ internal fun buildWebReaderCssFingerprint(
     fontSizePx: Int,
     lineHeightMultiplier: Float,
     textAlignCss: String?,
+    firstLineIndentCss: String?,
     textColorHex: String,
     backgroundHex: String,
     fontFamilyName: String?,
@@ -2342,6 +2410,7 @@ internal fun buildWebReaderCssFingerprint(
         append('|').append(fontSizePx)
         append('|').append(lineHeightMultiplier)
         append('|').append(textAlignCss ?: "<site>")
+        append('|').append(firstLineIndentCss ?: "<site>")
         append('|').append(textColorHex)
         append('|').append(backgroundHex)
         append('|').append(fontFamilyName.orEmpty())
@@ -2460,10 +2529,21 @@ internal fun resolveWebViewTextAlignCss(
     textAlign: ReaderTextAlign,
 ): String? {
     return when (textAlign) {
-        ReaderTextAlign.LEFT -> null
+        ReaderTextAlign.SOURCE -> null
+        ReaderTextAlign.LEFT -> "left"
         ReaderTextAlign.CENTER -> "center"
         ReaderTextAlign.JUSTIFY -> "justify"
         ReaderTextAlign.RIGHT -> "right"
+    }
+}
+
+internal fun resolveWebViewFirstLineIndentCss(
+    forceParagraphIndent: Boolean,
+): String? {
+    return if (forceParagraphIndent) {
+        "${FORCED_PARAGRAPH_FIRST_LINE_INDENT_EM}em"
+    } else {
+        null
     }
 }
 
@@ -2483,6 +2563,7 @@ private fun NovelRichNativeScrollItem(
     lineHeight: Float,
     composeFontFamily: FontFamily?,
     textAlign: ReaderTextAlign,
+    forceParagraphIndent: Boolean,
     preserveSourceTextAlignInNative: Boolean,
 ) {
     val context = LocalContext.current
@@ -2520,6 +2601,11 @@ private fun NovelRichNativeScrollItem(
                         globalTextAlign = textAlign,
                         preserveSourceTextAlignInNative = preserveSourceTextAlignInNative,
                         sourceTextAlign = block.textAlign,
+                    ),
+                ).withOptionalFirstLineIndentEm(
+                    resolveNativeFirstLineIndentEm(
+                        forceParagraphIndent = forceParagraphIndent && !isChapterTitle,
+                        sourceFirstLineIndentEm = block.firstLineIndentEm,
                     ),
                 ),
                 modifier = Modifier.padding(
@@ -2651,8 +2737,9 @@ private fun NovelRichAnnotatedText(
     )
 }
 
-private fun novelReaderTextAlign(textAlign: ReaderTextAlign): TextAlign {
+private fun novelReaderTextAlign(textAlign: ReaderTextAlign): TextAlign? {
     return when (textAlign) {
+        ReaderTextAlign.SOURCE -> null
         ReaderTextAlign.LEFT -> TextAlign.Start
         ReaderTextAlign.CENTER -> TextAlign.Center
         ReaderTextAlign.JUSTIFY -> TextAlign.Justify
@@ -2664,12 +2751,23 @@ private fun TextStyle.withOptionalTextAlign(textAlign: TextAlign?): TextStyle {
     return if (textAlign == null) this else copy(textAlign = textAlign)
 }
 
+private fun TextStyle.withOptionalFirstLineIndentEm(firstLineIndentEm: Float?): TextStyle {
+    return if (firstLineIndentEm == null) {
+        this
+    } else {
+        copy(textIndent = TextIndent(firstLine = firstLineIndentEm.em))
+    }
+}
+
 internal fun resolvePageReaderLayoutTextAlign(
     globalTextAlign: ReaderTextAlign,
     preserveSourceTextAlignInNative: Boolean,
 ): ReaderTextAlign {
     return if (preserveSourceTextAlignInNative) {
         // Page mode uses a flattened text layout, so keep layout stable and avoid forcing justify.
+        ReaderTextAlign.LEFT
+    } else if (globalTextAlign == ReaderTextAlign.SOURCE) {
+        // Page mode always needs a deterministic alignment for layout and pagination.
         ReaderTextAlign.LEFT
     } else {
         globalTextAlign
@@ -2690,6 +2788,17 @@ internal fun resolveNativeTextAlign(
         NovelRichBlockTextAlign.JUSTIFY -> TextAlign.Justify
         NovelRichBlockTextAlign.RIGHT -> TextAlign.End
         null -> null
+    }
+}
+
+internal fun resolveNativeFirstLineIndentEm(
+    forceParagraphIndent: Boolean,
+    sourceFirstLineIndentEm: Float?,
+): Float? {
+    return if (forceParagraphIndent) {
+        FORCED_PARAGRAPH_FIRST_LINE_INDENT_EM
+    } else {
+        sourceFirstLineIndentEm
     }
 }
 
@@ -3033,6 +3142,7 @@ private fun trimTextRange(
 
 private fun ReaderTextAlign.toLayoutAlignment(): Layout.Alignment {
     return when (this) {
+        ReaderTextAlign.SOURCE -> Layout.Alignment.ALIGN_NORMAL
         ReaderTextAlign.LEFT -> Layout.Alignment.ALIGN_NORMAL
         ReaderTextAlign.CENTER -> Layout.Alignment.ALIGN_CENTER
         ReaderTextAlign.JUSTIFY -> Layout.Alignment.ALIGN_NORMAL

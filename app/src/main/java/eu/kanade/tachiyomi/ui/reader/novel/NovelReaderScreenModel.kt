@@ -280,7 +280,18 @@ class NovelReaderScreenModel(
                 .map { it.text }
                 .also { parsedTextBlocks = it }
         val richContentResult = parsedRichContentResult
-            ?: parseNovelRichContent(html).also { parsedRichContentResult = it }
+            ?: parseNovelRichContent(content)
+                .let { parsed ->
+                    parsed.copy(
+                        blocks = resolveRichContentBlocks(
+                            blocks = parsed.blocks,
+                            chapterWebUrl = chapterWebUrl,
+                            novelUrl = novel.url,
+                            pluginSite = pluginSite,
+                        ),
+                    )
+                }
+                .also { parsedRichContentResult = it }
         mutableState.value = State.Success(
             novel = novel,
             chapter = chapter,
@@ -306,7 +317,7 @@ class NovelReaderScreenModel(
         novelUrl: String,
         pluginSite: String?,
     ) {
-        val (blocks, richContentResult) = withContext(Dispatchers.Default) {
+        val blocks = withContext(Dispatchers.Default) {
             val extractedBlocks = extractContentBlocks(
                 rawHtml = rawHtml,
                 chapterWebUrl = chapterWebUrl,
@@ -315,13 +326,13 @@ class NovelReaderScreenModel(
             ).ifEmpty {
                 extractTextBlocks(rawHtml).map(ContentBlock::Text)
             }
-            extractedBlocks to parseNovelRichContent(rawHtml)
+            extractedBlocks
         }
         parsedContentBlocks = blocks
         parsedTextBlocks = blocks
             .filterIsInstance<ContentBlock.Text>()
             .map { it.text }
-        parsedRichContentResult = richContentResult
+        parsedRichContentResult = null
     }
 
     private suspend fun resolveChapterWebUrl(
@@ -685,6 +696,28 @@ class NovelReaderScreenModel(
             pluginSite = pluginSite,
             novelUrl = novelUrl,
         )
+    }
+
+    private fun resolveRichContentBlocks(
+        blocks: List<NovelRichContentBlock>,
+        chapterWebUrl: String?,
+        novelUrl: String,
+        pluginSite: String?,
+    ): List<NovelRichContentBlock> {
+        return blocks.map { block ->
+            when (block) {
+                is NovelRichContentBlock.Image -> {
+                    val resolvedUrl = resolveContentResourceUrl(
+                        rawUrl = block.url,
+                        chapterWebUrl = chapterWebUrl,
+                        novelUrl = novelUrl,
+                        pluginSite = pluginSite,
+                    ) ?: block.url
+                    block.copy(url = resolvedUrl)
+                }
+                else -> block
+            }
+        }
     }
 
     private fun normalizeHtml(
