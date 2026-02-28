@@ -460,6 +460,17 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
+    fun `auto-scroll step resolver accumulates remainder until full pixel`() {
+        val first = resolveAutoScrollStep(frameStepPx = 0.4f, previousRemainderPx = 0f)
+        assertTrue(first.stepPx == 0)
+        assertTrue(kotlin.math.abs(first.remainderPx - 0.4f) < 0.0001f)
+
+        val second = resolveAutoScrollStep(frameStepPx = 0.7f, previousRemainderPx = first.remainderPx)
+        assertTrue(second.stepPx == 1)
+        assertTrue(kotlin.math.abs(second.remainderPx - 0.1f) < 0.0001f)
+    }
+
+    @Test
     fun `page pagination splits long text and keeps order`() {
         val text = buildString {
             repeat(120) { append("Paragraph $it line of text.\n\n") }

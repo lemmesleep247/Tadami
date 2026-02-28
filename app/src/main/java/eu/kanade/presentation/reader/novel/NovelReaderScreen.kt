@@ -664,11 +664,11 @@ fun NovelReaderScreen(
     ) {
         if (!autoScrollEnabled) return@LaunchedEffect
         var previousFrameNanos: Long? = null
-        var webViewStepRemainderPx = 0f
+        var stepRemainderPx = 0f
         while (isActive && autoScrollEnabled) {
             if (showReaderUI) {
                 previousFrameNanos = null
-                webViewStepRemainderPx = 0f
+                stepRemainderPx = 0f
                 delay(120)
                 continue
             }
@@ -676,7 +676,7 @@ fun NovelReaderScreen(
                 val webView = webViewInstance
                 if (webView == null) {
                     previousFrameNanos = null
-                    webViewStepRemainderPx = 0f
+                    stepRemainderPx = 0f
                     delay(120)
                     continue
                 }
@@ -689,11 +689,12 @@ fun NovelReaderScreen(
                     speed = autoScrollSpeed,
                     frameDeltaNanos = frameDeltaNanos,
                 )
-                val totalStep = frameStepPx + webViewStepRemainderPx
-                val stepPx = totalStep.toInt()
-                webViewStepRemainderPx = totalStep - stepPx
+                val resolvedStep = resolveAutoScrollStep(frameStepPx, stepRemainderPx)
+                val stepPx = resolvedStep.stepPx
+                stepRemainderPx = resolvedStep.remainderPx
+                if (stepPx == 0) continue
                 val canScrollBefore = webView.canScrollVertically(1)
-                if (canScrollBefore && stepPx > 0) {
+                if (canScrollBefore) {
                     webView.scrollBy(0, stepPx)
                 }
                 val reachedEnd = !webView.canScrollVertically(1)
@@ -707,7 +708,7 @@ fun NovelReaderScreen(
             }
             if (usePageReader) {
                 previousFrameNanos = null
-                webViewStepRemainderPx = 0f
+                stepRemainderPx = 0f
                 delay(autoScrollPageDelayMs(autoScrollSpeed))
                 if (showReaderUI || showWebView || !autoScrollEnabled) continue
                 val currentPage = pagerState.currentPage
@@ -725,11 +726,15 @@ fun NovelReaderScreen(
                 previousFrameNanos = frameTimeNanos
                 if (previousNanos == null) continue
                 val frameDeltaNanos = (frameTimeNanos - previousNanos).coerceAtLeast(1L)
-                val scrollOffset = autoScrollFrameStepPx(
+                val frameStepPx = autoScrollFrameStepPx(
                     speed = autoScrollSpeed,
                     frameDeltaNanos = frameDeltaNanos,
                 )
-                val consumed = textListState.scrollBy(scrollOffset)
+                val resolvedStep = resolveAutoScrollStep(frameStepPx, stepRemainderPx)
+                val stepPx = resolvedStep.stepPx
+                stepRemainderPx = resolvedStep.remainderPx
+                if (stepPx == 0) continue
+                val consumed = textListState.scrollBy(stepPx.toFloat())
                 val reachedEnd = consumed == 0f || !textListState.canScrollForward
                 if (reachedEnd && state.readerSettings.swipeToNextChapter && state.nextChapterId != null) {
                     autoScrollEnabled = false
@@ -4973,6 +4978,23 @@ internal fun autoScrollFrameStepPx(
     val baseStepPx = autoScrollScrollStepPx(speed)
     val normalizedDelta = frameDeltaNanos.coerceIn(1L, 250_000_000L).toFloat() / 16_000_000f
     return (baseStepPx * normalizedDelta).coerceAtLeast(0.05f)
+}
+
+internal data class AutoScrollStepResult(
+    val stepPx: Int,
+    val remainderPx: Float,
+)
+
+internal fun resolveAutoScrollStep(
+    frameStepPx: Float,
+    previousRemainderPx: Float,
+): AutoScrollStepResult {
+    val totalStep = frameStepPx.coerceAtLeast(0f) + previousRemainderPx.coerceAtLeast(0f)
+    val stepPx = totalStep.toInt().coerceAtLeast(0)
+    return AutoScrollStepResult(
+        stepPx = stepPx,
+        remainderPx = totalStep - stepPx,
+    )
 }
 
 internal data class TextPageRange(
