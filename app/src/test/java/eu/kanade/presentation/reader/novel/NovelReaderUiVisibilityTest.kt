@@ -425,6 +425,29 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
+    fun `auto-scroll frame step keeps 60hz baseline speed`() {
+        val speed = 55
+        val baseline = autoScrollScrollStepPx(speed)
+        val frameStep = autoScrollFrameStepPx(speed = speed, frameDeltaNanos = 16_000_000L)
+
+        assertTrue(kotlin.math.abs(frameStep - baseline) < 0.0001f)
+    }
+
+    @Test
+    fun `auto-scroll frame step scales with frame delta and stays positive`() {
+        val speed = 55
+        val baseline = autoScrollScrollStepPx(speed)
+
+        val halfFrame = autoScrollFrameStepPx(speed = speed, frameDeltaNanos = 8_000_000L)
+        val doubleFrame = autoScrollFrameStepPx(speed = speed, frameDeltaNanos = 32_000_000L)
+        val tinyFrame = autoScrollFrameStepPx(speed = speed, frameDeltaNanos = 1L)
+
+        assertTrue(kotlin.math.abs(halfFrame - baseline * 0.5f) < 0.0001f)
+        assertTrue(kotlin.math.abs(doubleFrame - baseline * 2f) < 0.0001f)
+        assertTrue(tinyFrame > 0f)
+    }
+
+    @Test
     fun `page pagination splits long text and keeps order`() {
         val text = buildString {
             repeat(120) { append("Paragraph $it line of text.\n\n") }

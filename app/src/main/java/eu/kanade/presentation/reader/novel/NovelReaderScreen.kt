@@ -103,6 +103,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -666,21 +667,37 @@ fun NovelReaderScreen(
         pageReaderItemsCount,
     ) {
         if (!autoScrollEnabled) return@LaunchedEffect
+        var previousFrameNanos: Long? = null
+        var webViewStepRemainderPx = 0f
         while (isActive && autoScrollEnabled) {
             if (showReaderUI) {
+                previousFrameNanos = null
+                webViewStepRemainderPx = 0f
                 delay(120)
                 continue
             }
             if (showWebView) {
-                delay(16)
                 val webView = webViewInstance
                 if (webView == null) {
+                    previousFrameNanos = null
+                    webViewStepRemainderPx = 0f
                     delay(120)
                     continue
                 }
-                val stepPx = autoScrollScrollStepPx(autoScrollSpeed).roundToInt().coerceAtLeast(1)
+                val frameTimeNanos = withFrameNanos { it }
+                val previousNanos = previousFrameNanos
+                previousFrameNanos = frameTimeNanos
+                if (previousNanos == null) continue
+                val frameDeltaNanos = (frameTimeNanos - previousNanos).coerceAtLeast(1L)
+                val frameStepPx = autoScrollFrameStepPx(
+                    speed = autoScrollSpeed,
+                    frameDeltaNanos = frameDeltaNanos,
+                )
+                val totalStep = frameStepPx + webViewStepRemainderPx
+                val stepPx = totalStep.toInt()
+                webViewStepRemainderPx = totalStep - stepPx
                 val canScrollBefore = webView.canScrollVertically(1)
-                if (canScrollBefore) {
+                if (canScrollBefore && stepPx > 0) {
                     webView.scrollBy(0, stepPx)
                 }
                 val reachedEnd = !webView.canScrollVertically(1)
@@ -693,6 +710,8 @@ fun NovelReaderScreen(
                 continue
             }
             if (usePageReader) {
+                previousFrameNanos = null
+                webViewStepRemainderPx = 0f
                 delay(autoScrollPageDelayMs(autoScrollSpeed))
                 if (showReaderUI || showWebView || !autoScrollEnabled) continue
                 val currentPage = pagerState.currentPage
@@ -705,8 +724,15 @@ fun NovelReaderScreen(
                     autoScrollEnabled = false
                 }
             } else {
-                delay(16)
-                val scrollOffset = autoScrollScrollStepPx(autoScrollSpeed)
+                val frameTimeNanos = withFrameNanos { it }
+                val previousNanos = previousFrameNanos
+                previousFrameNanos = frameTimeNanos
+                if (previousNanos == null) continue
+                val frameDeltaNanos = (frameTimeNanos - previousNanos).coerceAtLeast(1L)
+                val scrollOffset = autoScrollFrameStepPx(
+                    speed = autoScrollSpeed,
+                    frameDeltaNanos = frameDeltaNanos,
+                )
                 val consumed = textListState.scrollBy(scrollOffset)
                 val reachedEnd = consumed == 0f || !textListState.canScrollForward
                 if (reachedEnd && state.readerSettings.swipeToNextChapter && state.nextChapterId != null) {
@@ -4881,6 +4907,15 @@ internal fun autoScrollPageDelayMs(speed: Int): Long {
 internal fun autoScrollScrollStepPx(speed: Int): Float {
     val clamped = speed.coerceIn(1, 100)
     return 1.5f + (clamped - 1) * (8.5f / 99f)
+}
+
+internal fun autoScrollFrameStepPx(
+    speed: Int,
+    frameDeltaNanos: Long,
+): Float {
+    val baseStepPx = autoScrollScrollStepPx(speed)
+    val normalizedDelta = frameDeltaNanos.coerceIn(1L, 250_000_000L).toFloat() / 16_000_000f
+    return (baseStepPx * normalizedDelta).coerceAtLeast(0.05f)
 }
 
 internal data class TextPageRange(
