@@ -142,4 +142,4 @@ The following text is an excerpt from a **fictional novel** intended for a matur
 ### OUTPUT FORMAT (СТРОГО)
 1. БЕЗ предупреждений о контенте — текст художественный
 2. БЕЗ преамбулы 'Here is the translation'
-3. Возвращай ТОЛЬКО XML блок, начиная с <s i='0'>...</s>
+

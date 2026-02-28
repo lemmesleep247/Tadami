@@ -70,6 +70,8 @@ class DeepSeekTranslationService(
             )
             put("temperature", params.temperature)
             put("top_p", params.topP)
+            put("presence_penalty", params.presencePenalty)
+            put("frequency_penalty", params.frequencyPenalty)
             put("max_tokens", 4096)
             put("stream", false)
         }

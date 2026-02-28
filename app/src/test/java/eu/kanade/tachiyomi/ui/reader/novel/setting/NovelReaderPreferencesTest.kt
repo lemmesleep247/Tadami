@@ -27,8 +27,14 @@ class NovelReaderPreferencesTest {
         prefs.richNativeRendererExperimental().get() shouldBe true
         prefs.forceParagraphIndent().get() shouldBe true
         prefs.preserveSourceTextAlignInNative().get() shouldBe true
+        prefs.paragraphSpacing().get() shouldBe NovelReaderParagraphSpacing.NORMAL
         prefs.showScrollPercentage().get() shouldBe true
         prefs.showBatteryAndTime().get() shouldBe false
+        prefs.showKindleInfoBlock().get() shouldBe true
+        prefs.showTimeToEnd().get() shouldBe true
+        prefs.showWordCount().get() shouldBe true
+        prefs.backgroundTexture().get() shouldBe NovelReaderBackgroundTexture.PAPER_GRAIN
+        prefs.oledEdgeGradient().get() shouldBe false
         prefs.verticalSeekbar().get() shouldBe true
         prefs.swipeToNextChapter().get() shouldBe false
         prefs.swipeToPrevChapter().get() shouldBe false
@@ -52,6 +58,7 @@ class NovelReaderPreferencesTest {
         prefs.geminiTopK().get() shouldBe 40
         prefs.geminiAutoTranslateEnglishSource().get() shouldBe false
         prefs.geminiPrefetchNextChapterTranslation().get() shouldBe false
+        prefs.geminiStylePreset().get() shouldBe NovelTranslationStylePreset.PROFESSIONAL
         prefs.translationProvider().get() shouldBe NovelTranslationProvider.GEMINI
         prefs.airforceBaseUrl().get() shouldBe "https://api.airforce"
         prefs.airforceApiKey().get() shouldBe ""
@@ -71,10 +78,16 @@ class NovelReaderPreferencesTest {
 
         prefs.showScrollPercentage().set(false)
         prefs.showBatteryAndTime().set(true)
+        prefs.showKindleInfoBlock().set(false)
+        prefs.showTimeToEnd().set(false)
+        prefs.showWordCount().set(false)
+        prefs.backgroundTexture().set(NovelReaderBackgroundTexture.PARCHMENT)
+        prefs.oledEdgeGradient().set(false)
         prefs.preferWebViewRenderer().set(false)
         prefs.richNativeRendererExperimental().set(true)
         prefs.forceParagraphIndent().set(true)
         prefs.preserveSourceTextAlignInNative().set(false)
+        prefs.paragraphSpacing().set(NovelReaderParagraphSpacing.SPACIOUS)
         prefs.verticalSeekbar().set(false)
         prefs.swipeToNextChapter().set(true)
         prefs.swipeToPrevChapter().set(true)
@@ -98,6 +111,7 @@ class NovelReaderPreferencesTest {
         prefs.geminiSourceLang().set("English")
         prefs.geminiTargetLang().set("Russian")
         prefs.geminiPromptMode().set(GeminiPromptMode.ADULT_18)
+        prefs.geminiStylePreset().set(NovelTranslationStylePreset.LITERARY)
         prefs.geminiPromptModifiers().set("modifiers")
         prefs.geminiAutoTranslateEnglishSource().set(true)
         prefs.geminiPrefetchNextChapterTranslation().set(true)
@@ -122,10 +136,16 @@ class NovelReaderPreferencesTest {
 
         override?.showScrollPercentage shouldBe false
         override?.showBatteryAndTime shouldBe true
+        override?.showKindleInfoBlock shouldBe false
+        override?.showTimeToEnd shouldBe false
+        override?.showWordCount shouldBe false
+        override?.backgroundTexture shouldBe NovelReaderBackgroundTexture.PARCHMENT
+        override?.oledEdgeGradient shouldBe false
         override?.preferWebViewRenderer shouldBe false
         override?.richNativeRendererExperimental shouldBe true
         override?.forceParagraphIndent shouldBe true
         override?.preserveSourceTextAlignInNative shouldBe false
+        override?.paragraphSpacing shouldBe NovelReaderParagraphSpacing.SPACIOUS
         override?.verticalSeekbar shouldBe false
         override?.swipeToNextChapter shouldBe true
         override?.swipeToPrevChapter shouldBe true
@@ -149,6 +169,7 @@ class NovelReaderPreferencesTest {
         override?.geminiSourceLang shouldBe "English"
         override?.geminiTargetLang shouldBe "Russian"
         override?.geminiPromptMode shouldBe GeminiPromptMode.ADULT_18
+        override?.geminiStylePreset shouldBe NovelTranslationStylePreset.LITERARY
         override?.geminiPromptModifiers shouldBe "modifiers"
         override?.geminiAutoTranslateEnglishSource shouldBe true
         override?.geminiPrefetchNextChapterTranslation shouldBe true
@@ -174,10 +195,16 @@ class NovelReaderPreferencesTest {
 
         prefs.showScrollPercentage().set(true)
         prefs.showBatteryAndTime().set(false)
+        prefs.showKindleInfoBlock().set(true)
+        prefs.showTimeToEnd().set(true)
+        prefs.showWordCount().set(true)
+        prefs.backgroundTexture().set(NovelReaderBackgroundTexture.PAPER_GRAIN)
+        prefs.oledEdgeGradient().set(true)
         prefs.preferWebViewRenderer().set(true)
         prefs.richNativeRendererExperimental().set(false)
         prefs.forceParagraphIndent().set(true)
         prefs.preserveSourceTextAlignInNative().set(true)
+        prefs.paragraphSpacing().set(NovelReaderParagraphSpacing.NORMAL)
         prefs.verticalSeekbar().set(true)
         prefs.swipeToNextChapter().set(false)
         prefs.swipeToPrevChapter().set(false)
@@ -201,6 +228,7 @@ class NovelReaderPreferencesTest {
         prefs.geminiSourceLang().set("English")
         prefs.geminiTargetLang().set("Russian")
         prefs.geminiPromptMode().set(GeminiPromptMode.CLASSIC)
+        prefs.geminiStylePreset().set(NovelTranslationStylePreset.MINIMAL)
         prefs.geminiPromptModifiers().set("")
         prefs.geminiAutoTranslateEnglishSource().set(false)
         prefs.geminiPrefetchNextChapterTranslation().set(false)
@@ -225,10 +253,16 @@ class NovelReaderPreferencesTest {
             NovelReaderOverride(
                 showScrollPercentage = false,
                 showBatteryAndTime = true,
+                showKindleInfoBlock = false,
+                showTimeToEnd = false,
+                showWordCount = false,
+                backgroundTexture = NovelReaderBackgroundTexture.LINEN,
+                oledEdgeGradient = false,
                 preferWebViewRenderer = false,
                 richNativeRendererExperimental = true,
                 forceParagraphIndent = false,
                 preserveSourceTextAlignInNative = false,
+                paragraphSpacing = NovelReaderParagraphSpacing.COMPACT,
                 verticalSeekbar = false,
                 swipeToNextChapter = true,
                 swipeToPrevChapter = true,
@@ -252,6 +286,7 @@ class NovelReaderPreferencesTest {
                 geminiSourceLang = "Japanese",
                 geminiTargetLang = "Russian",
                 geminiPromptMode = GeminiPromptMode.ADULT_18,
+                geminiStylePreset = NovelTranslationStylePreset.VULGAR_18,
                 geminiPromptModifiers = "override-mod",
                 geminiAutoTranslateEnglishSource = true,
                 geminiPrefetchNextChapterTranslation = true,
@@ -275,10 +310,16 @@ class NovelReaderPreferencesTest {
 
         settings.showScrollPercentage shouldBe false
         settings.showBatteryAndTime shouldBe true
+        settings.showKindleInfoBlock shouldBe false
+        settings.showTimeToEnd shouldBe false
+        settings.showWordCount shouldBe false
+        settings.backgroundTexture shouldBe NovelReaderBackgroundTexture.LINEN
+        settings.oledEdgeGradient shouldBe false
         settings.preferWebViewRenderer shouldBe false
         settings.richNativeRendererExperimental shouldBe true
         settings.forceParagraphIndent shouldBe false
         settings.preserveSourceTextAlignInNative shouldBe false
+        settings.paragraphSpacing shouldBe NovelReaderParagraphSpacing.COMPACT
         settings.verticalSeekbar shouldBe false
         settings.swipeToNextChapter shouldBe true
         settings.swipeToPrevChapter shouldBe true
@@ -302,6 +343,7 @@ class NovelReaderPreferencesTest {
         settings.geminiSourceLang shouldBe "Japanese"
         settings.geminiTargetLang shouldBe "Russian"
         settings.geminiPromptMode shouldBe GeminiPromptMode.ADULT_18
+        settings.geminiStylePreset shouldBe NovelTranslationStylePreset.VULGAR_18
         settings.geminiPromptModifiers shouldBe "override-mod"
         settings.geminiAutoTranslateEnglishSource shouldBe true
         settings.geminiPrefetchNextChapterTranslation shouldBe true

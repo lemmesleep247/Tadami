@@ -43,8 +43,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import eu.kanade.presentation.components.TabbedDialog
 import eu.kanade.presentation.more.settings.widget.EditTextPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundTexture
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderColorTheme
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderOverride
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderParagraphSpacing
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderTheme
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationProvider
@@ -320,6 +322,30 @@ private fun GeneralTab(
             },
         )
         SwitchPreferenceWidget(
+            title = stringResource(AYMR.strings.novel_reader_show_kindle_info_block),
+            subtitle = stringResource(AYMR.strings.novel_reader_show_kindle_info_block_summary),
+            checked = settings.showKindleInfoBlock,
+            onCheckedChanged = {
+                update(it, { o, v -> o.copy(showKindleInfoBlock = v) }, { preferences.showKindleInfoBlock().set(it) })
+            },
+        )
+        SwitchPreferenceWidget(
+            title = stringResource(AYMR.strings.novel_reader_show_time_to_end),
+            checked = settings.showTimeToEnd,
+            onCheckedChanged = {
+                if (!settings.showKindleInfoBlock) return@SwitchPreferenceWidget
+                update(it, { o, v -> o.copy(showTimeToEnd = v) }, { preferences.showTimeToEnd().set(it) })
+            },
+        )
+        SwitchPreferenceWidget(
+            title = stringResource(AYMR.strings.novel_reader_show_word_count),
+            checked = settings.showWordCount,
+            onCheckedChanged = {
+                if (!settings.showKindleInfoBlock) return@SwitchPreferenceWidget
+                update(it, { o, v -> o.copy(showWordCount = v) }, { preferences.showWordCount().set(it) })
+            },
+        )
+        SwitchPreferenceWidget(
             title = stringResource(AYMR.strings.novel_reader_bionic_reading),
             checked = settings.bionicReading,
             onCheckedChanged = {
@@ -576,6 +602,43 @@ private fun ReadingTab(
             steps = 7,
             onChange = { update(it, { o, v -> o.copy(lineHeight = v) }, { preferences.lineHeight().set(it) }) },
         )
+        Text(
+            text = stringResource(AYMR.strings.novel_reader_paragraph_spacing),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(NovelReaderParagraphSpacing.entries) { option ->
+                val selected = settings.paragraphSpacing == option
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+                    modifier = Modifier.clickable {
+                        update(
+                            option,
+                            { o, v -> o.copy(paragraphSpacing = v) },
+                            { preferences.paragraphSpacing().set(it) },
+                        )
+                    },
+                ) {
+                    Text(
+                        text = when (option) {
+                            NovelReaderParagraphSpacing.COMPACT ->
+                                stringResource(AYMR.strings.novel_reader_paragraph_spacing_compact)
+                            NovelReaderParagraphSpacing.NORMAL ->
+                                stringResource(AYMR.strings.novel_reader_paragraph_spacing_normal)
+                            NovelReaderParagraphSpacing.SPACIOUS ->
+                                stringResource(AYMR.strings.novel_reader_paragraph_spacing_spacious)
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
+        }
         LnReaderSliderRow(
             label = stringResource(AYMR.strings.novel_reader_margins),
             valueText = "${settings.margin}dp",
@@ -614,6 +677,53 @@ private fun ReadingTab(
         ThemeModeRow(
             selected = settings.theme,
             onSelect = { mode -> update(mode, { o, v -> o.copy(theme = v) }, { preferences.theme().set(it) }) },
+        )
+        Text(
+            text = stringResource(AYMR.strings.novel_reader_background_texture),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(NovelReaderBackgroundTexture.entries) { option ->
+                val selected = settings.backgroundTexture == option
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+                    modifier = Modifier.clickable {
+                        update(
+                            option,
+                            { o, v -> o.copy(backgroundTexture = v) },
+                            { preferences.backgroundTexture().set(it) },
+                        )
+                    },
+                ) {
+                    Text(
+                        text = when (option) {
+                            NovelReaderBackgroundTexture.NONE ->
+                                stringResource(AYMR.strings.novel_reader_background_texture_none)
+                            NovelReaderBackgroundTexture.PAPER_GRAIN ->
+                                stringResource(AYMR.strings.novel_reader_background_texture_paper_grain)
+                            NovelReaderBackgroundTexture.LINEN ->
+                                stringResource(AYMR.strings.novel_reader_background_texture_linen)
+                            NovelReaderBackgroundTexture.PARCHMENT ->
+                                stringResource(AYMR.strings.novel_reader_background_texture_parchment)
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
+        }
+        SwitchPreferenceWidget(
+            title = stringResource(AYMR.strings.novel_reader_oled_edge_gradient),
+            subtitle = stringResource(AYMR.strings.novel_reader_oled_edge_gradient_summary),
+            checked = settings.oledEdgeGradient,
+            onCheckedChanged = {
+                update(it, { o, v -> o.copy(oledEdgeGradient = v) }, { preferences.oledEdgeGradient().set(it) })
+            },
         )
 
         Text(

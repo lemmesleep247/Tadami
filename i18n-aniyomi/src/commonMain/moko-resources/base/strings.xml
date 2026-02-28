@@ -400,6 +400,10 @@
     <string name="novel_reader_font_size">Font size</string>
     <string name="novel_reader_line_height">Line height</string>
     <string name="novel_reader_margins">Margins</string>
+    <string name="novel_reader_paragraph_spacing">Paragraph spacing</string>
+    <string name="novel_reader_paragraph_spacing_compact">Compact</string>
+    <string name="novel_reader_paragraph_spacing_normal">Normal</string>
+    <string name="novel_reader_paragraph_spacing_spacious">Spacious</string>
     <string name="novel_reader_theme">Theme</string>
     <string name="novel_reader_theme_system">System</string>
     <string name="novel_reader_theme_light">Light</string>
@@ -474,7 +478,21 @@
     <string name="novel_reader_keep_screen_on_summary">Prevent screen from turning off while reading</string>
     <string name="novel_reader_show_scroll_percentage">Show reading progress</string>
     <string name="novel_reader_show_battery_time">Show battery and time</string>
+    <string name="novel_reader_show_kindle_info_block">Show Kindle info block</string>
+    <string name="novel_reader_show_kindle_info_block_summary">Master switch for Time-to-end and Word counter</string>
+    <string name="novel_reader_show_time_to_end">Show time to chapter end</string>
+    <string name="novel_reader_show_word_count">Show word counter</string>
+    <string name="novel_reader_time_to_end_unknown">ETA: calculating…</string>
+    <string name="novel_reader_time_to_end_minutes">ETA: ~%1$d min</string>
+    <string name="novel_reader_words_progress">Words: %1$d/%2$d</string>
     <string name="novel_reader_bionic_reading">Bionic reading</string>
+    <string name="novel_reader_background_texture">Background texture</string>
+    <string name="novel_reader_background_texture_none">None</string>
+    <string name="novel_reader_background_texture_paper_grain">Paper grain</string>
+    <string name="novel_reader_background_texture_linen">Linen</string>
+    <string name="novel_reader_background_texture_parchment">Parchment</string>
+    <string name="novel_reader_oled_edge_gradient">OLED edge gradient</string>
+    <string name="novel_reader_oled_edge_gradient_summary">Use a deep edge darkening in dark theme for smoother OLED scrolling</string>
 
     <!-- Advanced -->
     <string name="novel_reader_custom_css">Custom CSS</string>

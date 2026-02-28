@@ -258,6 +258,10 @@
     <string name="novel_reader_font_size">Размер шрифта</string>
     <string name="novel_reader_line_height">Межстрочный интервал</string>
     <string name="novel_reader_margins">Поля</string>
+    <string name="novel_reader_paragraph_spacing">Интервал между абзацами</string>
+    <string name="novel_reader_paragraph_spacing_compact">Компактный</string>
+    <string name="novel_reader_paragraph_spacing_normal">Обычный</string>
+    <string name="novel_reader_paragraph_spacing_spacious">Просторный</string>
     <string name="novel_reader_theme">Тема</string>
     <string name="novel_reader_theme_system">Системная</string>
     <string name="novel_reader_theme_light">Светлая</string>
@@ -845,7 +849,7 @@
     <string name="aurora_greeting_nani">ОМАЕ ВА МО ШИНДЕИРУ! (Просто проверяем реакцию)</string>
     <string name="aurora_greeting_yare">Яре-яре дазе... Опять смотреть годноту</string>
     <string name="aurora_greeting_lets_go">Икузоооо! Погнали!</string>
-    <string name="aurora_greeting_anime_time">It&apos;s Anime Time! (читать самым эпичным голосом)</string>
+    <string name="aurora_greeting_anime_time">It&apos;s Anime Time!</string>
     <string name="aurora_greeting_main_character">Включай опенинг, пора почувствовать себя Главным Героем</string>
 
     <!-- Streak-based Greetings -->
@@ -920,7 +924,7 @@
     <string name="aurora_greeting_manga_black_and_white">Жизнь обретает смысл в чёрно-белых тонах 🖤🤍</string>
     <string name="aurora_greeting_novel_wall_of_text">Стена текста не пугает истинного культиватора! 🧘‍♂️</string>
     <string name="aurora_greeting_manga_left_to_right">Читаем справа налево, живём задом наперёд 📖</string>
-    <string name="aurora_greeting_trope_tsundere">Б-бака! Я вовсе не ждало твоего возвращения... просто мимо проходило! 😤</string>
+    <string name="aurora_greeting_trope_tsundere">Б-бака! Я вовсе не ждала твоего возвращения... просто мимо проходила! 😤</string>
     <string name="aurora_greeting_trope_yandere">Ты ведь будешь смотреть тайтлы только со мной, да? 🔪💕</string>
     <string name="aurora_greeting_trope_chuunibyou">Глаз Тёмного Властелина резонирует! Время пришло! 👁️🔥</string>
     <string name="aurora_greeting_trope_imouto">Онии-чан, пора смотреть аниме! 🎀</string>
@@ -1216,6 +1220,20 @@
     <string name="novel_reader_chapter_cache_size_summary_unlimited">%1$s • %2$s записей • без лимита</string>
     <string name="novel_reader_show_scroll_percentage">Показывать процент чтения</string>
     <string name="novel_reader_show_battery_time">Показывать батарею и время</string>
+    <string name="novel_reader_show_kindle_info_block">Показывать блок До конца и Слова</string>
+    <string name="novel_reader_show_kindle_info_block_summary">Главный переключатель для информеров времени и слов</string>
+    <string name="novel_reader_show_time_to_end">Показывать время до конца главы</string>
+    <string name="novel_reader_show_word_count">Показывать счетчик слов</string>
+    <string name="novel_reader_time_to_end_unknown">До конца: расчет…</string>
+    <string name="novel_reader_time_to_end_minutes">До конца: ~%1$d мин</string>
+    <string name="novel_reader_words_progress">Слова: %1$d/%2$d</string>
+    <string name="novel_reader_background_texture">Текстура фона</string>
+    <string name="novel_reader_background_texture_none">Без текстуры</string>
+    <string name="novel_reader_background_texture_paper_grain">Бумажное зерно</string>
+    <string name="novel_reader_background_texture_linen">Лен</string>
+    <string name="novel_reader_background_texture_parchment">Пергамент</string>
+    <string name="novel_reader_oled_edge_gradient">OLED-градиент по краям</string>
+    <string name="novel_reader_oled_edge_gradient_summary">Использовать мягкое затемнение краев в темной теме для более комфортной прокрутки на OLED</string>
     <string name="novel_reader_bionic_reading">Бионическое чтение</string>
     <string name="novel_reader_tab_general">Основные</string>
     <string name="novel_reader_tab_reading">Чтение</string>
@@ -1241,4 +1259,3 @@
     <string name="home_header_layout_editor_reset_confirm_message">Это восстановит стандартные позиции элементов шапки.</string>
     <string name="home_header_layout_editor_reset_confirm_action">Сбросить раскладку</string>
 </resources>
-

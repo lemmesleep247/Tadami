@@ -20,6 +20,7 @@ data class NovelReaderSettings(
     val lineHeight: Float,
     val margin: Int,
     val textAlign: TextAlign,
+    val paragraphSpacing: NovelReaderParagraphSpacing,
     val forceParagraphIndent: Boolean,
     val preserveSourceTextAlignInNative: Boolean,
     val fontFamily: String,
@@ -28,6 +29,8 @@ data class NovelReaderSettings(
     val theme: NovelReaderTheme,
     val backgroundColor: String?,
     val textColor: String?,
+    val backgroundTexture: NovelReaderBackgroundTexture,
+    val oledEdgeGradient: Boolean,
     val customThemes: List<NovelReaderColorTheme>,
 
     // Navigation
@@ -50,6 +53,9 @@ data class NovelReaderSettings(
     val keepScreenOn: Boolean,
     val showScrollPercentage: Boolean,
     val showBatteryAndTime: Boolean,
+    val showKindleInfoBlock: Boolean,
+    val showTimeToEnd: Boolean,
+    val showWordCount: Boolean,
     val bionicReading: Boolean,
 
     // Advanced
@@ -74,6 +80,7 @@ data class NovelReaderSettings(
     val geminiPromptMode: GeminiPromptMode = GeminiPromptMode.ADULT_18,
     val geminiEnabledPromptModifiers: List<String> = emptyList(),
     val geminiCustomPromptModifier: String = "",
+    val geminiStylePreset: NovelTranslationStylePreset = NovelTranslationStylePreset.PROFESSIONAL,
     val geminiPromptModifiers: String = "",
     val geminiAutoTranslateEnglishSource: Boolean = false,
     val geminiPrefetchNextChapterTranslation: Boolean = false,
@@ -95,6 +102,13 @@ enum class NovelReaderTheme {
     DARK,
 }
 
+enum class NovelReaderBackgroundTexture {
+    NONE,
+    PAPER_GRAIN,
+    LINEN,
+    PARCHMENT,
+}
+
 enum class TextAlign {
     SOURCE,
     LEFT,
@@ -103,9 +117,23 @@ enum class TextAlign {
     RIGHT,
 }
 
+enum class NovelReaderParagraphSpacing {
+    COMPACT,
+    NORMAL,
+    SPACIOUS,
+}
+
 enum class GeminiPromptMode {
     CLASSIC,
     ADULT_18,
+}
+
+enum class NovelTranslationStylePreset {
+    PROFESSIONAL,
+    LITERARY,
+    CONVERSATIONAL,
+    VULGAR_18,
+    MINIMAL,
 }
 
 enum class NovelTranslationProvider {
@@ -128,6 +156,7 @@ data class NovelReaderOverride(
     val lineHeight: Float? = null,
     val margin: Int? = null,
     val textAlign: TextAlign? = null,
+    val paragraphSpacing: NovelReaderParagraphSpacing? = null,
     val forceParagraphIndent: Boolean? = null,
     val preserveSourceTextAlignInNative: Boolean? = null,
     val fontFamily: String? = null,
@@ -136,6 +165,8 @@ data class NovelReaderOverride(
     val theme: NovelReaderTheme? = null,
     val backgroundColor: String? = null,
     val textColor: String? = null,
+    val backgroundTexture: NovelReaderBackgroundTexture? = null,
+    val oledEdgeGradient: Boolean? = null,
     val customThemes: List<NovelReaderColorTheme>? = null,
 
     // Navigation
@@ -158,6 +189,9 @@ data class NovelReaderOverride(
     val keepScreenOn: Boolean? = null,
     val showScrollPercentage: Boolean? = null,
     val showBatteryAndTime: Boolean? = null,
+    val showKindleInfoBlock: Boolean? = null,
+    val showTimeToEnd: Boolean? = null,
+    val showWordCount: Boolean? = null,
     val bionicReading: Boolean? = null,
 
     // Advanced
@@ -182,6 +216,7 @@ data class NovelReaderOverride(
     val geminiPromptMode: GeminiPromptMode? = null,
     val geminiEnabledPromptModifiers: List<String>? = null,
     val geminiCustomPromptModifier: String? = null,
+    val geminiStylePreset: NovelTranslationStylePreset? = null,
     val geminiPromptModifiers: String? = null,
     val geminiAutoTranslateEnglishSource: Boolean? = null,
     val geminiPrefetchNextChapterTranslation: Boolean? = null,
@@ -210,6 +245,9 @@ class NovelReaderPreferences(
 
     fun textAlign() = preferenceStore.getEnum("novel_reader_text_align", TextAlign.SOURCE)
 
+    fun paragraphSpacing() =
+        preferenceStore.getEnum("novel_reader_paragraph_spacing", NovelReaderParagraphSpacing.NORMAL)
+
     fun forceParagraphIndent() = preferenceStore.getBoolean("novel_reader_force_paragraph_indent", true)
 
     fun fontFamily() = preferenceStore.getString("novel_reader_font_family", "")
@@ -220,6 +258,11 @@ class NovelReaderPreferences(
     fun backgroundColor() = preferenceStore.getString("novel_reader_bg_color", "")
 
     fun textColor() = preferenceStore.getString("novel_reader_text_color", "")
+
+    fun backgroundTexture() =
+        preferenceStore.getEnum("novel_reader_background_texture", NovelReaderBackgroundTexture.PAPER_GRAIN)
+
+    fun oledEdgeGradient() = preferenceStore.getBoolean("novel_reader_oled_edge_gradient", false)
 
     fun customThemes() = preferenceStore.getObject(
         "novel_reader_custom_themes",
@@ -275,6 +318,12 @@ class NovelReaderPreferences(
 
     fun showBatteryAndTime() = preferenceStore.getBoolean("novel_reader_show_battery_time", false)
 
+    fun showKindleInfoBlock() = preferenceStore.getBoolean("novel_reader_show_kindle_info_block", true)
+
+    fun showTimeToEnd() = preferenceStore.getBoolean("novel_reader_show_time_to_end", true)
+
+    fun showWordCount() = preferenceStore.getBoolean("novel_reader_show_word_count", true)
+
     fun bionicReading() = preferenceStore.getBoolean("novel_reader_bionic_reading", false)
 
     // Advanced
@@ -321,6 +370,9 @@ class NovelReaderPreferences(
     )
 
     fun geminiCustomPromptModifier() = preferenceStore.getString("novel_reader_gemini_custom_prompt_modifier", "")
+
+    fun geminiStylePreset() =
+        preferenceStore.getEnum("novel_reader_gemini_style_preset", NovelTranslationStylePreset.PROFESSIONAL)
 
     fun geminiPromptModifiers() = preferenceStore.getString("novel_reader_gemini_prompt_modifiers", "")
 
@@ -391,12 +443,15 @@ class NovelReaderPreferences(
                 lineHeight = lineHeight().get(),
                 margin = margin().get(),
                 textAlign = textAlign().get(),
+                paragraphSpacing = paragraphSpacing().get(),
                 forceParagraphIndent = forceParagraphIndent().get(),
                 preserveSourceTextAlignInNative = preserveSourceTextAlignInNative().get(),
                 fontFamily = fontFamily().get(),
                 theme = theme().get(),
                 backgroundColor = backgroundColor().get(),
                 textColor = textColor().get(),
+                backgroundTexture = backgroundTexture().get(),
+                oledEdgeGradient = oledEdgeGradient().get(),
                 customThemes = customThemes().get(),
                 useVolumeButtons = useVolumeButtons().get(),
                 swipeGestures = swipeGestures().get(),
@@ -415,6 +470,9 @@ class NovelReaderPreferences(
                 keepScreenOn = keepScreenOn().get(),
                 showScrollPercentage = showScrollPercentage().get(),
                 showBatteryAndTime = showBatteryAndTime().get(),
+                showKindleInfoBlock = showKindleInfoBlock().get(),
+                showTimeToEnd = showTimeToEnd().get(),
+                showWordCount = showWordCount().get(),
                 bionicReading = bionicReading().get(),
                 customCSS = customCSS().get(),
                 customJS = customJS().get(),
@@ -434,6 +492,7 @@ class NovelReaderPreferences(
                 geminiPromptMode = geminiPromptMode().get(),
                 geminiEnabledPromptModifiers = geminiEnabledPromptModifiers().get(),
                 geminiCustomPromptModifier = geminiCustomPromptModifier().get(),
+                geminiStylePreset = geminiStylePreset().get(),
                 geminiPromptModifiers = geminiPromptModifiers().get(),
                 geminiAutoTranslateEnglishSource = geminiAutoTranslateEnglishSource().get(),
                 geminiPrefetchNextChapterTranslation = geminiPrefetchNextChapterTranslation().get(),
@@ -466,6 +525,7 @@ class NovelReaderPreferences(
             lineHeight = override?.lineHeight ?: lineHeight().get(),
             margin = override?.margin ?: margin().get(),
             textAlign = override?.textAlign ?: textAlign().get(),
+            paragraphSpacing = override?.paragraphSpacing ?: paragraphSpacing().get(),
             forceParagraphIndent = override?.forceParagraphIndent ?: forceParagraphIndent().get(),
             preserveSourceTextAlignInNative =
             override?.preserveSourceTextAlignInNative ?: preserveSourceTextAlignInNative().get(),
@@ -473,6 +533,8 @@ class NovelReaderPreferences(
             theme = override?.theme ?: theme().get(),
             backgroundColor = override?.backgroundColor ?: backgroundColor().get(),
             textColor = override?.textColor ?: textColor().get(),
+            backgroundTexture = override?.backgroundTexture ?: backgroundTexture().get(),
+            oledEdgeGradient = override?.oledEdgeGradient ?: oledEdgeGradient().get(),
             customThemes = override?.customThemes ?: customThemes().get(),
             useVolumeButtons = override?.useVolumeButtons ?: useVolumeButtons().get(),
             swipeGestures = override?.swipeGestures ?: swipeGestures().get(),
@@ -492,6 +554,9 @@ class NovelReaderPreferences(
             keepScreenOn = override?.keepScreenOn ?: keepScreenOn().get(),
             showScrollPercentage = override?.showScrollPercentage ?: showScrollPercentage().get(),
             showBatteryAndTime = override?.showBatteryAndTime ?: showBatteryAndTime().get(),
+            showKindleInfoBlock = override?.showKindleInfoBlock ?: showKindleInfoBlock().get(),
+            showTimeToEnd = override?.showTimeToEnd ?: showTimeToEnd().get(),
+            showWordCount = override?.showWordCount ?: showWordCount().get(),
             bionicReading = override?.bionicReading ?: bionicReading().get(),
             customCSS = override?.customCSS ?: customCSS().get(),
             customJS = override?.customJS ?: customJS().get(),
@@ -513,6 +578,7 @@ class NovelReaderPreferences(
             geminiEnabledPromptModifiers =
             override?.geminiEnabledPromptModifiers ?: geminiEnabledPromptModifiers().get(),
             geminiCustomPromptModifier = override?.geminiCustomPromptModifier ?: geminiCustomPromptModifier().get(),
+            geminiStylePreset = override?.geminiStylePreset ?: geminiStylePreset().get(),
             geminiPromptModifiers = override?.geminiPromptModifiers ?: geminiPromptModifiers().get(),
             geminiAutoTranslateEnglishSource =
             override?.geminiAutoTranslateEnglishSource ?: geminiAutoTranslateEnglishSource().get(),
@@ -539,6 +605,7 @@ class NovelReaderPreferences(
             lineHeight().changes(),
             margin().changes(),
             textAlign().changes(),
+            paragraphSpacing().changes(),
             forceParagraphIndent().changes(),
             preserveSourceTextAlignInNative().changes(),
             fontFamily().changes(),
@@ -548,9 +615,10 @@ class NovelReaderPreferences(
                 values[1] as Float,
                 values[2] as Int,
                 values[3] as TextAlign,
-                values[4] as Boolean,
+                values[4] as NovelReaderParagraphSpacing,
                 values[5] as Boolean,
-                values[6] as String,
+                values[6] as Boolean,
+                values[7] as String,
             )
         }
 
@@ -558,13 +626,17 @@ class NovelReaderPreferences(
             theme().changes(),
             backgroundColor().changes(),
             textColor().changes(),
+            backgroundTexture().changes(),
+            oledEdgeGradient().changes(),
             customThemes().changes(),
         ) { values: Array<Any?> ->
             ThemeSettings(
                 values[0] as NovelReaderTheme,
                 values[1] as String,
                 values[2] as String,
-                values[3] as List<NovelReaderColorTheme>,
+                values[3] as NovelReaderBackgroundTexture,
+                values[4] as Boolean,
+                values[5] as List<NovelReaderColorTheme>,
             )
         }
 
@@ -605,6 +677,9 @@ class NovelReaderPreferences(
             keepScreenOn().changes(),
             showScrollPercentage().changes(),
             showBatteryAndTime().changes(),
+            showKindleInfoBlock().changes(),
+            showTimeToEnd().changes(),
+            showWordCount().changes(),
             bionicReading().changes(),
         ) { values: Array<Any?> ->
             AccessibilitySettings(
@@ -612,7 +687,10 @@ class NovelReaderPreferences(
                 keepScreenOn = values[1] as Boolean,
                 showScrollPercentage = values[2] as Boolean,
                 showBatteryAndTime = values[3] as Boolean,
-                bionicReading = values[4] as Boolean,
+                showKindleInfoBlock = values[4] as Boolean,
+                showTimeToEnd = values[5] as Boolean,
+                showWordCount = values[6] as Boolean,
+                bionicReading = values[7] as Boolean,
             )
         }
 
@@ -641,6 +719,7 @@ class NovelReaderPreferences(
             geminiPromptMode().changes(),
             geminiEnabledPromptModifiers().changes(),
             geminiCustomPromptModifier().changes(),
+            geminiStylePreset().changes(),
             geminiPromptModifiers().changes(),
             geminiAutoTranslateEnglishSource().changes(),
             geminiPrefetchNextChapterTranslation().changes(),
@@ -673,19 +752,20 @@ class NovelReaderPreferences(
                 promptMode = values[14] as GeminiPromptMode,
                 enabledPromptModifiers = values[15] as List<String>,
                 customPromptModifier = values[16] as String,
-                promptModifiers = values[17] as String,
-                autoTranslateEnglishSource = values[18] as Boolean,
-                prefetchNextChapterTranslation = values[19] as Boolean,
-                translationProvider = values[20] as NovelTranslationProvider,
-                airforceBaseUrl = values[21] as String,
-                airforceApiKey = values[22] as String,
-                airforceModel = values[23] as String,
-                openRouterBaseUrl = values[24] as String,
-                openRouterApiKey = values[25] as String,
-                openRouterModel = values[26] as String,
-                deepSeekBaseUrl = values[27] as String,
-                deepSeekApiKey = values[28] as String,
-                deepSeekModel = values[29] as String,
+                stylePreset = values[17] as NovelTranslationStylePreset,
+                promptModifiers = values[18] as String,
+                autoTranslateEnglishSource = values[19] as Boolean,
+                prefetchNextChapterTranslation = values[20] as Boolean,
+                translationProvider = values[21] as NovelTranslationProvider,
+                airforceBaseUrl = values[22] as String,
+                airforceApiKey = values[23] as String,
+                airforceModel = values[24] as String,
+                openRouterBaseUrl = values[25] as String,
+                openRouterApiKey = values[26] as String,
+                openRouterModel = values[27] as String,
+                deepSeekBaseUrl = values[28] as String,
+                deepSeekApiKey = values[29] as String,
+                deepSeekModel = values[30] as String,
             )
         }
 
@@ -712,6 +792,7 @@ class NovelReaderPreferences(
                 lineHeight = override?.lineHeight ?: display.lineHeight,
                 margin = override?.margin ?: display.margin,
                 textAlign = override?.textAlign ?: display.textAlign,
+                paragraphSpacing = override?.paragraphSpacing ?: display.paragraphSpacing,
                 forceParagraphIndent = override?.forceParagraphIndent ?: display.forceParagraphIndent,
                 preserveSourceTextAlignInNative =
                 override?.preserveSourceTextAlignInNative ?: display.preserveSourceTextAlignInNative,
@@ -719,6 +800,8 @@ class NovelReaderPreferences(
                 theme = override?.theme ?: theme.theme,
                 backgroundColor = override?.backgroundColor ?: theme.backgroundColor,
                 textColor = override?.textColor ?: theme.textColor,
+                backgroundTexture = override?.backgroundTexture ?: theme.backgroundTexture,
+                oledEdgeGradient = override?.oledEdgeGradient ?: theme.oledEdgeGradient,
                 customThemes = override?.customThemes ?: theme.customThemes,
                 useVolumeButtons = override?.useVolumeButtons ?: navigation.useVolumeButtons,
                 swipeGestures = override?.swipeGestures ?: navigation.swipeGestures,
@@ -738,6 +821,9 @@ class NovelReaderPreferences(
                 keepScreenOn = override?.keepScreenOn ?: accessibility.keepScreenOn,
                 showScrollPercentage = override?.showScrollPercentage ?: accessibility.showScrollPercentage,
                 showBatteryAndTime = override?.showBatteryAndTime ?: accessibility.showBatteryAndTime,
+                showKindleInfoBlock = override?.showKindleInfoBlock ?: accessibility.showKindleInfoBlock,
+                showTimeToEnd = override?.showTimeToEnd ?: accessibility.showTimeToEnd,
+                showWordCount = override?.showWordCount ?: accessibility.showWordCount,
                 bionicReading = override?.bionicReading ?: accessibility.bionicReading,
                 customCSS = override?.customCSS ?: advanced.customCSS,
                 customJS = override?.customJS ?: advanced.customJS,
@@ -758,6 +844,7 @@ class NovelReaderPreferences(
                 geminiPromptMode = override?.geminiPromptMode ?: gemini.promptMode,
                 geminiEnabledPromptModifiers = override?.geminiEnabledPromptModifiers ?: gemini.enabledPromptModifiers,
                 geminiCustomPromptModifier = override?.geminiCustomPromptModifier ?: gemini.customPromptModifier,
+                geminiStylePreset = override?.geminiStylePreset ?: gemini.stylePreset,
                 geminiPromptModifiers = override?.geminiPromptModifiers ?: gemini.promptModifiers,
                 geminiAutoTranslateEnglishSource =
                 override?.geminiAutoTranslateEnglishSource ?: gemini.autoTranslateEnglishSource,
@@ -783,6 +870,7 @@ class NovelReaderPreferences(
         val lineHeight: Float,
         val margin: Int,
         val textAlign: TextAlign,
+        val paragraphSpacing: NovelReaderParagraphSpacing,
         val forceParagraphIndent: Boolean,
         val preserveSourceTextAlignInNative: Boolean,
         val fontFamily: String,
@@ -792,6 +880,8 @@ class NovelReaderPreferences(
         val theme: NovelReaderTheme,
         val backgroundColor: String,
         val textColor: String,
+        val backgroundTexture: NovelReaderBackgroundTexture,
+        val oledEdgeGradient: Boolean,
         val customThemes: List<NovelReaderColorTheme>,
     )
 
@@ -816,6 +906,9 @@ class NovelReaderPreferences(
         val keepScreenOn: Boolean,
         val showScrollPercentage: Boolean,
         val showBatteryAndTime: Boolean,
+        val showKindleInfoBlock: Boolean,
+        val showTimeToEnd: Boolean,
+        val showWordCount: Boolean,
         val bionicReading: Boolean,
     )
 
@@ -842,6 +935,7 @@ class NovelReaderPreferences(
         val promptMode: GeminiPromptMode,
         val enabledPromptModifiers: List<String>,
         val customPromptModifier: String,
+        val stylePreset: NovelTranslationStylePreset,
         val promptModifiers: String,
         val autoTranslateEnglishSource: Boolean,
         val prefetchNextChapterTranslation: Boolean,

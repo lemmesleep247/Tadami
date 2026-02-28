@@ -12,6 +12,8 @@ import eu.kanade.tachiyomi.ui.reader.novel.NovelRichBlockTextAlign
 import eu.kanade.tachiyomi.ui.reader.novel.NovelRichContentBlock
 import eu.kanade.tachiyomi.ui.reader.novel.NovelRichTextSegment
 import eu.kanade.tachiyomi.ui.reader.novel.NovelRichTextStyle
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderParagraphSpacing
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundTexture
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -25,6 +27,9 @@ class NovelReaderUiVisibilityTest {
         val visible = shouldShowBottomInfoOverlay(
             showReaderUi = false,
             showBatteryAndTime = true,
+            showKindleInfoBlock = true,
+            showTimeToEnd = true,
+            showWordCount = true,
         )
 
         assertFalse(visible)
@@ -35,6 +40,9 @@ class NovelReaderUiVisibilityTest {
         val visible = shouldShowBottomInfoOverlay(
             showReaderUi = true,
             showBatteryAndTime = false,
+            showKindleInfoBlock = true,
+            showTimeToEnd = false,
+            showWordCount = false,
         )
 
         assertFalse(visible)
@@ -45,9 +53,120 @@ class NovelReaderUiVisibilityTest {
         val visible = shouldShowBottomInfoOverlay(
             showReaderUi = true,
             showBatteryAndTime = true,
+            showKindleInfoBlock = true,
+            showTimeToEnd = false,
+            showWordCount = false,
         )
 
         assertTrue(visible)
+    }
+
+    @Test
+    fun `bottom overlay stays visible for kindle informers`() {
+        assertTrue(
+            shouldShowBottomInfoOverlay(
+                showReaderUi = true,
+                showBatteryAndTime = false,
+                showKindleInfoBlock = true,
+                showTimeToEnd = true,
+                showWordCount = false,
+            ),
+        )
+        assertTrue(
+            shouldShowBottomInfoOverlay(
+                showReaderUi = true,
+                showBatteryAndTime = false,
+                showKindleInfoBlock = true,
+                showTimeToEnd = false,
+                showWordCount = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `bottom overlay hides kindle informers when kindle block is disabled`() {
+        val visible = shouldShowBottomInfoOverlay(
+            showReaderUi = true,
+            showBatteryAndTime = false,
+            showKindleInfoBlock = false,
+            showTimeToEnd = true,
+            showWordCount = true,
+        )
+
+        assertFalse(visible)
+    }
+
+    @Test
+    fun `persistent progress line is visible only in fullscreen reading mode`() {
+        assertTrue(shouldShowPersistentProgressLine(showReaderUi = false))
+        assertFalse(shouldShowPersistentProgressLine(showReaderUi = true))
+    }
+
+    @Test
+    fun `paragraph spacing presets resolve to expected dp values`() {
+        assertTrue(resolveParagraphSpacingDp(NovelReaderParagraphSpacing.COMPACT).value == 8f)
+        assertTrue(resolveParagraphSpacingDp(NovelReaderParagraphSpacing.NORMAL).value == 12f)
+        assertTrue(resolveParagraphSpacingDp(NovelReaderParagraphSpacing.SPACIOUS).value == 16f)
+    }
+
+    @Test
+    fun `word counter handles punctuation and unicode`() {
+        val words = countNovelWords(
+            listOf(
+                "Hello, world!",
+                "Привет, ранобэ: 123",
+                "can't won't",
+            ),
+        )
+
+        assertTrue(words == 7)
+    }
+
+    @Test
+    fun `read words are derived from chapter progress`() {
+        val readWords = estimateNovelReadWords(
+            totalWords = 2000,
+            readingProgressPercent = 25,
+        )
+
+        assertTrue(readWords == 500)
+    }
+
+    @Test
+    fun `time to end is unknown before reading pace is collected`() {
+        val minutes = estimateNovelReaderRemainingMinutes(
+            paceState = NovelReaderReadingPaceState(),
+            readingProgressPercent = 35,
+        )
+
+        assertTrue(minutes == null)
+    }
+
+    @Test
+    fun `time to end follows measured progress pace`() {
+        var paceState = NovelReaderReadingPaceState()
+        paceState = updateNovelReaderReadingPace(
+            paceState = paceState,
+            readingProgressPercent = 0,
+            timestampMs = 0L,
+        )
+        paceState = updateNovelReaderReadingPace(
+            paceState = paceState,
+            readingProgressPercent = 10,
+            timestampMs = 60_000L,
+        )
+        paceState = updateNovelReaderReadingPace(
+            paceState = paceState,
+            readingProgressPercent = 40,
+            timestampMs = 240_000L,
+        )
+
+        val minutes = estimateNovelReaderRemainingMinutes(
+            paceState = paceState,
+            readingProgressPercent = 40,
+        )
+
+        assertTrue(minutes == 6)
     }
 
     @Test
@@ -820,6 +939,8 @@ class NovelReaderUiVisibilityTest {
             firstLineIndentCss = "2em",
             textColorHex = "#111111",
             backgroundHex = "#FFFFFF",
+            backgroundTexture = NovelReaderBackgroundTexture.PAPER_GRAIN,
+            oledEdgeGradient = false,
             fontFamilyName = null,
             customCss = "",
         )

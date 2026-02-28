@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.reader.novel.translation
 
 import eu.kanade.tachiyomi.ui.reader.novel.setting.GeminiPromptMode
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationStylePreset
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationProvider
 
 data class GeminiTranslationParams(
@@ -25,6 +26,7 @@ internal data class GeminiTranslationCacheEntry(
     val sourceLang: String,
     val targetLang: String,
     val promptMode: GeminiPromptMode,
+    val stylePreset: NovelTranslationStylePreset = NovelTranslationStylePreset.PROFESSIONAL,
 )
 
 data class AirforceTranslationParams(
@@ -61,4 +63,6 @@ data class DeepSeekTranslationParams(
     val promptModifiers: String,
     val temperature: Float,
     val topP: Float,
+    val presencePenalty: Float = 0.15f,
+    val frequencyPenalty: Float = 0.15f,
 )

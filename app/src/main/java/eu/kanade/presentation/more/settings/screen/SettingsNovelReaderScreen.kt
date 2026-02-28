@@ -38,7 +38,9 @@ import eu.kanade.presentation.reader.novel.novelReaderPresetThemes
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderChapterDiskCache
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderChapterDiskCacheStore
 import eu.kanade.tachiyomi.ui.reader.novel.setting.GeminiPromptMode
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundTexture
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderColorTheme
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderParagraphSpacing
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderTheme
 import eu.kanade.tachiyomi.ui.reader.novel.setting.TextAlign
@@ -139,6 +141,18 @@ object SettingsNovelReaderScreen : SearchableSettings {
                         .toImmutableMap(),
                     title = stringResource(AYMR.strings.novel_reader_text_align),
                 ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = prefs.paragraphSpacing(),
+                    entries = persistentMapOf(
+                        NovelReaderParagraphSpacing.COMPACT to
+                            stringResource(AYMR.strings.novel_reader_paragraph_spacing_compact),
+                        NovelReaderParagraphSpacing.NORMAL to
+                            stringResource(AYMR.strings.novel_reader_paragraph_spacing_normal),
+                        NovelReaderParagraphSpacing.SPACIOUS to
+                            stringResource(AYMR.strings.novel_reader_paragraph_spacing_spacious),
+                    ),
+                    title = stringResource(AYMR.strings.novel_reader_paragraph_spacing),
+                ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = prefs.forceParagraphIndent(),
                     title = stringResource(AYMR.strings.novel_reader_force_paragraph_indent),
@@ -188,6 +202,25 @@ object SettingsNovelReaderScreen : SearchableSettings {
                     NovelReaderTheme.DARK to stringResource(AYMR.strings.novel_reader_theme_dark),
                 ),
                 title = stringResource(AYMR.strings.novel_reader_theme),
+            ),
+            Preference.PreferenceItem.ListPreference(
+                preference = prefs.backgroundTexture(),
+                entries = persistentMapOf(
+                    NovelReaderBackgroundTexture.NONE to
+                        stringResource(AYMR.strings.novel_reader_background_texture_none),
+                    NovelReaderBackgroundTexture.PAPER_GRAIN to
+                        stringResource(AYMR.strings.novel_reader_background_texture_paper_grain),
+                    NovelReaderBackgroundTexture.LINEN to
+                        stringResource(AYMR.strings.novel_reader_background_texture_linen),
+                    NovelReaderBackgroundTexture.PARCHMENT to
+                        stringResource(AYMR.strings.novel_reader_background_texture_parchment),
+                ),
+                title = stringResource(AYMR.strings.novel_reader_background_texture),
+            ),
+            Preference.PreferenceItem.SwitchPreference(
+                preference = prefs.oledEdgeGradient(),
+                title = stringResource(AYMR.strings.novel_reader_oled_edge_gradient),
+                subtitle = stringResource(AYMR.strings.novel_reader_oled_edge_gradient_summary),
             ),
             Preference.PreferenceItem.CustomPreference(
                 title = stringResource(AYMR.strings.novel_reader_theme_presets),
@@ -405,6 +438,8 @@ object SettingsNovelReaderScreen : SearchableSettings {
 
     @Composable
     private fun getAccessibilityGroup(prefs: NovelReaderPreferences): Preference.PreferenceGroup {
+        val showKindleInfoBlockPref = prefs.showKindleInfoBlock()
+        val showKindleInfoBlock by showKindleInfoBlockPref.collectAsState()
         return Preference.PreferenceGroup(
             title = stringResource(AYMR.strings.novel_reader_accessibility),
             preferenceItems = persistentListOf(
@@ -425,6 +460,21 @@ object SettingsNovelReaderScreen : SearchableSettings {
                 Preference.PreferenceItem.SwitchPreference(
                     preference = prefs.showBatteryAndTime(),
                     title = stringResource(AYMR.strings.novel_reader_show_battery_time),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = showKindleInfoBlockPref,
+                    title = stringResource(AYMR.strings.novel_reader_show_kindle_info_block),
+                    subtitle = stringResource(AYMR.strings.novel_reader_show_kindle_info_block_summary),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = prefs.showTimeToEnd(),
+                    title = stringResource(AYMR.strings.novel_reader_show_time_to_end),
+                    enabled = showKindleInfoBlock,
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = prefs.showWordCount(),
+                    title = stringResource(AYMR.strings.novel_reader_show_word_count),
+                    enabled = showKindleInfoBlock,
                 ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = prefs.bionicReading(),

@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderOverride
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderSettings
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderTheme
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationStylePreset
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationProvider
 import eu.kanade.tachiyomi.ui.reader.novel.translation.AirforceModelsService
 import eu.kanade.tachiyomi.ui.reader.novel.translation.AirforceTranslationParams
@@ -29,6 +30,7 @@ import eu.kanade.tachiyomi.ui.reader.novel.translation.GeminiTranslationCacheEnt
 import eu.kanade.tachiyomi.ui.reader.novel.translation.GeminiTranslationParams
 import eu.kanade.tachiyomi.ui.reader.novel.translation.GeminiTranslationService
 import eu.kanade.tachiyomi.ui.reader.novel.translation.NovelReaderTranslationDiskCacheStore
+import eu.kanade.tachiyomi.ui.reader.novel.translation.NovelTranslationStylePresets
 import eu.kanade.tachiyomi.ui.reader.novel.translation.OpenRouterModelsService
 import eu.kanade.tachiyomi.ui.reader.novel.translation.OpenRouterTranslationParams
 import eu.kanade.tachiyomi.ui.reader.novel.translation.OpenRouterTranslationService
@@ -74,6 +76,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.Date
 import java.util.LinkedHashMap
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class NovelReaderScreenModel(
@@ -739,6 +742,7 @@ class NovelReaderScreenModel(
                 val chunks = nextTextBlocks.chunked(chunkSize)
                 val semaphore = Semaphore(settings.translationConcurrencyLimit())
                 val translated = mutableMapOf<Int, String>()
+                addGeminiLog("⏭️ ${settings.translationRequestConfigLog()} (prefetch)")
 
                 coroutineScope {
                     chunks.mapIndexed { chunkIndex, chunk ->
@@ -778,6 +782,7 @@ class NovelReaderScreenModel(
                         sourceLang = settings.geminiSourceLang,
                         targetLang = settings.geminiTargetLang,
                         promptMode = settings.geminiPromptMode,
+                        stylePreset = settings.geminiStylePreset,
                     ),
                 )
                 addGeminiLog("⏭️ Cached ${settings.translationProvider} translation for next chapter ${nextChapter.id}")
@@ -798,7 +803,8 @@ class NovelReaderScreenModel(
             cached.model == settings.translationCacheModelId() &&
             cached.sourceLang == settings.geminiSourceLang &&
             cached.targetLang == settings.geminiTargetLang &&
-            cached.promptMode == settings.geminiPromptMode
+            cached.promptMode == settings.geminiPromptMode &&
+            cached.stylePreset == settings.geminiStylePreset
     }
 
     private fun applyLocalChapterProgress(
@@ -957,6 +963,11 @@ class NovelReaderScreenModel(
     fun setGeminiPromptMode(value: GeminiPromptMode) = updateGeminiSetting(
         setGlobal = { novelReaderPreferences.geminiPromptMode().set(value) },
         setOverride = { it.copy(geminiPromptMode = value) },
+    )
+
+    fun setGeminiStylePreset(value: NovelTranslationStylePreset) = updateGeminiSetting(
+        setGlobal = { novelReaderPreferences.geminiStylePreset().set(value) },
+        setOverride = { it.copy(geminiStylePreset = value) },
     )
 
     fun setGeminiEnabledPromptModifiers(value: List<String>) = updateGeminiSetting(
@@ -1245,6 +1256,7 @@ class NovelReaderScreenModel(
         isGeminiTranslating = true
         geminiTranslationProgress = 0
         addGeminiLog("🎯 ${settings.translationProvider} start. Model: ${settings.translationCacheModelId()}")
+        addGeminiLog("🧾 ${settings.translationRequestConfigLog()}")
         updateContent(settings)
 
         geminiTranslationJob?.cancel()
@@ -1324,6 +1336,7 @@ class NovelReaderScreenModel(
                                 sourceLang = settings.geminiSourceLang,
                                 targetLang = settings.geminiTargetLang,
                                 promptMode = settings.geminiPromptMode,
+                                stylePreset = settings.geminiStylePreset,
                             ),
                         )
                         addGeminiLog("💾 Cache saved for chapter ${chapter.id}")
@@ -1406,7 +1419,8 @@ class NovelReaderScreenModel(
             cached.model == settings.translationCacheModelId() &&
             cached.sourceLang == settings.geminiSourceLang &&
             cached.targetLang == settings.geminiTargetLang &&
-            cached.promptMode == settings.geminiPromptMode
+            cached.promptMode == settings.geminiPromptMode &&
+            cached.stylePreset == settings.geminiStylePreset
         if (!settingsMatch || cached.translatedByIndex.isEmpty()) {
             hasGeminiTranslationCache = false
             return
@@ -1488,16 +1502,21 @@ class NovelReaderScreenModel(
         }
     }
 
-    private fun NovelReaderSettings.toGeminiTranslationParams(): GeminiTranslationParams {
+    private fun NovelReaderSettings.resolveTranslationPromptModifiers(): String {
         val modifierText = GeminiPromptModifiers.buildPromptText(
             enabledIds = geminiEnabledPromptModifiers,
             customModifier = geminiCustomPromptModifier,
         )
-        val finalPromptModifiers = listOf(
+        val styleDirective = NovelTranslationStylePresets.promptDirective(geminiStylePreset).trim()
+        return listOf(
+            styleDirective,
             modifierText,
             geminiPromptModifiers.trim(),
         ).filter { it.isNotBlank() }
             .joinToString("\n\n")
+    }
+
+    private fun NovelReaderSettings.toGeminiTranslationParams(): GeminiTranslationParams {
         return GeminiTranslationParams(
             apiKey = geminiApiKey,
             model = geminiModel.normalizeGeminiModelId(),
@@ -1509,20 +1528,11 @@ class NovelReaderScreenModel(
             topP = geminiTopP,
             topK = geminiTopK,
             promptMode = geminiPromptMode,
-            promptModifiers = finalPromptModifiers,
+            promptModifiers = resolveTranslationPromptModifiers(),
         )
     }
 
     private fun NovelReaderSettings.toAirforceTranslationParams(): AirforceTranslationParams {
-        val modifierText = GeminiPromptModifiers.buildPromptText(
-            enabledIds = geminiEnabledPromptModifiers,
-            customModifier = geminiCustomPromptModifier,
-        )
-        val finalPromptModifiers = listOf(
-            modifierText,
-            geminiPromptModifiers.trim(),
-        ).filter { it.isNotBlank() }
-            .joinToString("\n\n")
         return AirforceTranslationParams(
             baseUrl = airforceBaseUrl,
             apiKey = airforceApiKey,
@@ -1530,22 +1540,13 @@ class NovelReaderScreenModel(
             sourceLang = geminiSourceLang,
             targetLang = geminiTargetLang,
             promptMode = geminiPromptMode,
-            promptModifiers = finalPromptModifiers,
+            promptModifiers = resolveTranslationPromptModifiers(),
             temperature = geminiTemperature,
             topP = geminiTopP,
         )
     }
 
     private fun NovelReaderSettings.toOpenRouterTranslationParams(): OpenRouterTranslationParams {
-        val modifierText = GeminiPromptModifiers.buildPromptText(
-            enabledIds = geminiEnabledPromptModifiers,
-            customModifier = geminiCustomPromptModifier,
-        )
-        val finalPromptModifiers = listOf(
-            modifierText,
-            geminiPromptModifiers.trim(),
-        ).filter { it.isNotBlank() }
-            .joinToString("\n\n")
         return OpenRouterTranslationParams(
             baseUrl = openRouterBaseUrl,
             apiKey = openRouterApiKey,
@@ -1553,22 +1554,13 @@ class NovelReaderScreenModel(
             sourceLang = geminiSourceLang,
             targetLang = geminiTargetLang,
             promptMode = geminiPromptMode,
-            promptModifiers = finalPromptModifiers,
+            promptModifiers = resolveTranslationPromptModifiers(),
             temperature = geminiTemperature,
             topP = geminiTopP,
         )
     }
 
     private fun NovelReaderSettings.toDeepSeekTranslationParams(): DeepSeekTranslationParams {
-        val modifierText = GeminiPromptModifiers.buildPromptText(
-            enabledIds = geminiEnabledPromptModifiers,
-            customModifier = geminiCustomPromptModifier,
-        )
-        val finalPromptModifiers = listOf(
-            modifierText,
-            geminiPromptModifiers.trim(),
-        ).filter { it.isNotBlank() }
-            .joinToString("\n\n")
         return DeepSeekTranslationParams(
             baseUrl = deepSeekBaseUrl,
             apiKey = deepSeekApiKey,
@@ -1576,11 +1568,50 @@ class NovelReaderScreenModel(
             sourceLang = geminiSourceLang,
             targetLang = geminiTargetLang,
             promptMode = geminiPromptMode,
-            promptModifiers = finalPromptModifiers,
-            temperature = geminiTemperature,
-            topP = geminiTopP,
+            promptModifiers = resolveTranslationPromptModifiers(),
+            temperature = geminiTemperature.coerceIn(DEEPSEEK_TEMPERATURE_MIN, DEEPSEEK_TEMPERATURE_MAX),
+            topP = geminiTopP.coerceIn(DEEPSEEK_TOP_P_MIN, DEEPSEEK_TOP_P_MAX),
+            presencePenalty = DEEPSEEK_DEFAULT_PRESENCE_PENALTY,
+            frequencyPenalty = DEEPSEEK_DEFAULT_FREQUENCY_PENALTY,
         )
     }
+
+    private fun NovelReaderSettings.translationRequestConfigLog(): String {
+        val common = buildString {
+            append("provider=").append(translationProvider.name)
+            append(", model=").append(translationCacheModelId())
+            append(", lang=").append(geminiSourceLang).append("->").append(geminiTargetLang)
+            append(", prompt=").append(geminiPromptMode.name)
+            append(", style=").append(geminiStylePreset.name)
+            append(", batch=").append(geminiBatchSize.coerceIn(1, 80))
+            append(", concurrency=").append(translationConcurrencyLimit())
+            append(", relaxed=").append(geminiRelaxedMode)
+            append(", cache=").append(!geminiDisableCache)
+        }
+
+        val sampling = when (translationProvider) {
+            NovelTranslationProvider.GEMINI -> {
+                "temp=${geminiTemperature.toLogFloat()}, topP=${geminiTopP.toLogFloat()}, topK=$geminiTopK, " +
+                    "reasoning=$geminiReasoningEffort, budgetTokens=$geminiBudgetTokens"
+            }
+            NovelTranslationProvider.AIRFORCE -> {
+                "baseUrl=${airforceBaseUrl.trim()}, temp=${geminiTemperature.toLogFloat()}, topP=${geminiTopP.toLogFloat()}"
+            }
+            NovelTranslationProvider.OPENROUTER -> {
+                "baseUrl=${openRouterBaseUrl.trim()}, temp=${geminiTemperature.toLogFloat()}, topP=${geminiTopP.toLogFloat()}, " +
+                    "freeModel=${openRouterModel.trim().endsWith(":free", ignoreCase = true)}"
+            }
+            NovelTranslationProvider.DEEPSEEK -> {
+                val params = toDeepSeekTranslationParams()
+                "baseUrl=${params.baseUrl.trim()}, temp=${params.temperature.toLogFloat()}, topP=${params.topP.toLogFloat()}, " +
+                    "presencePenalty=${params.presencePenalty.toLogFloat()}, frequencyPenalty=${params.frequencyPenalty.toLogFloat()}, " +
+                    "stream=false"
+            }
+        }
+        return "$common, $sampling"
+    }
+
+    private fun Float.toLogFloat(): String = String.format(Locale.US, "%.3f", this)
 
     private suspend fun requestTranslationBatch(
         segments: List<String>,
@@ -2475,6 +2506,12 @@ class NovelReaderScreenModel(
 
     companion object {
         private const val MAX_DEEPSEEK_CONCURRENCY = 32
+        private const val DEEPSEEK_TEMPERATURE_MIN = 1.3f
+        private const val DEEPSEEK_TEMPERATURE_MAX = 1.5f
+        private const val DEEPSEEK_TOP_P_MIN = 0.9f
+        private const val DEEPSEEK_TOP_P_MAX = 0.95f
+        private const val DEEPSEEK_DEFAULT_PRESENCE_PENALTY = 0.15f
+        private const val DEEPSEEK_DEFAULT_FREQUENCY_PENALTY = 0.15f
 
         private val STRUCTURED_NODE_TYPES = setOf(
             "doc",

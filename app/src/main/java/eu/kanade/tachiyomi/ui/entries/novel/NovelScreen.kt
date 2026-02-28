@@ -581,8 +581,8 @@ internal fun NovelBatchDownloadDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp),
-            shape = RoundedCornerShape(28.dp),
+                .padding(horizontal = 16.dp),
+            shape = RoundedCornerShape(24.dp),
             color = colorScheme.surfaceContainerHigh,
         ) {
             Box(
@@ -596,13 +596,13 @@ internal fun NovelBatchDownloadDialog(
                             radius = 900f,
                         ),
                     )
-                    .padding(horizontal = 16.dp, vertical = 18.dp),
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = stringResource(AYMR.strings.novel_batch_download_title),
                         color = colorScheme.onSurface,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         textAlign = TextAlign.Center,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.fillMaxWidth(),
@@ -649,12 +649,12 @@ internal fun NovelBatchDownloadDialog(
                         ),
                     )
 
-                    Column(modifier = Modifier.padding(top = 14.dp)) {
+                    Column(modifier = Modifier.padding(top = 10.dp)) {
                         actionItems.forEachIndexed { index, item ->
                             DownloadActionRow(item)
                             if (index != actionItems.lastIndex) {
                                 HorizontalDivider(
-                                    modifier = Modifier.padding(start = 38.dp),
+                                    modifier = Modifier.padding(start = 32.dp),
                                     color = colorScheme.outlineVariant.copy(alpha = 0.65f),
                                 )
                             }
@@ -664,8 +664,8 @@ internal fun NovelBatchDownloadDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            .padding(top = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         OutlinedTextField(
@@ -687,15 +687,16 @@ internal fun NovelBatchDownloadDialog(
                                 onActionSelected(NovelDownloadAction.NEXT, amount)
                             },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(22.dp),
+                            shape = RoundedCornerShape(18.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = accentColor,
                                 contentColor = onAccentColor,
                             ),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 14.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 10.dp),
                         ) {
                             Text(
                                 text = stringResource(MR.strings.manga_download),
+                                style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.SemiBold,
                             )
                         }
@@ -705,11 +706,12 @@ internal fun NovelBatchDownloadDialog(
                         onClick = onDismissRequest,
                         modifier = Modifier
                             .align(Alignment.CenterHorizontally)
-                            .padding(top = 8.dp),
+                            .padding(top = 4.dp),
                     ) {
                         Text(
                             text = stringResource(MR.strings.action_cancel),
                             color = accentColor,
+                            style = MaterialTheme.typography.bodyMedium,
                         )
                     }
                 }
@@ -734,8 +736,8 @@ internal fun NovelTranslatedDownloadDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp),
-            shape = RoundedCornerShape(28.dp),
+                .padding(horizontal = 16.dp),
+            shape = RoundedCornerShape(24.dp),
             color = colorScheme.surfaceContainerHigh,
         ) {
             Box(
@@ -749,13 +751,13 @@ internal fun NovelTranslatedDownloadDialog(
                             radius = 900f,
                         ),
                     )
-                    .padding(horizontal = 16.dp, vertical = 18.dp),
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = stringResource(AYMR.strings.novel_translated_download_title),
                         color = colorScheme.onSurface,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         textAlign = TextAlign.Center,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.fillMaxWidth(),
@@ -764,12 +766,12 @@ internal fun NovelTranslatedDownloadDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 14.dp)
+                            .padding(top = 10.dp)
                             .background(
                                 color = colorScheme.surfaceVariant.copy(alpha = 0.75f),
                                 shape = RoundedCornerShape(12.dp),
                             )
-                            .padding(3.dp),
+                            .padding(2.dp),
                     ) {
                         val selectedColor = accentColor
                         val unselectedColor = Color.Transparent
@@ -785,7 +787,7 @@ internal fun NovelTranslatedDownloadDialog(
                                     colorScheme.onSurface
                                 },
                             ),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 10.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp),
                         ) {
                             Text(
                                 text = if (format == NovelTranslatedDownloadFormat.TXT) {
@@ -793,6 +795,7 @@ internal fun NovelTranslatedDownloadDialog(
                                 } else {
                                     stringResource(AYMR.strings.novel_translated_download_format_txt)
                                 },
+                                style = MaterialTheme.typography.bodyMedium,
                             )
                         }
                         Button(
@@ -809,7 +812,7 @@ internal fun NovelTranslatedDownloadDialog(
                                     colorScheme.onSurface
                                 },
                             ),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 10.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp),
                         ) {
                             Text(
                                 text = if (format == NovelTranslatedDownloadFormat.DOCX) {
@@ -817,6 +820,7 @@ internal fun NovelTranslatedDownloadDialog(
                                 } else {
                                     stringResource(AYMR.strings.novel_translated_download_format_docx)
                                 },
+                                style = MaterialTheme.typography.bodyMedium,
                             )
                         }
                     }
@@ -862,12 +866,12 @@ internal fun NovelTranslatedDownloadDialog(
                         ),
                     )
 
-                    Column(modifier = Modifier.padding(top = 14.dp)) {
+                    Column(modifier = Modifier.padding(top = 10.dp)) {
                         actionItems.forEachIndexed { index, item ->
                             DownloadActionRow(item)
                             if (index != actionItems.lastIndex) {
                                 HorizontalDivider(
-                                    modifier = Modifier.padding(start = 38.dp),
+                                    modifier = Modifier.padding(start = 32.dp),
                                     color = colorScheme.outlineVariant.copy(alpha = 0.65f),
                                 )
                             }
@@ -877,8 +881,8 @@ internal fun NovelTranslatedDownloadDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            .padding(top = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         OutlinedTextField(
@@ -900,15 +904,16 @@ internal fun NovelTranslatedDownloadDialog(
                                 onActionSelected(NovelDownloadAction.NEXT, amount, format)
                             },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(22.dp),
+                            shape = RoundedCornerShape(18.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = accentColor,
                                 contentColor = onAccentColor,
                             ),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 14.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 10.dp),
                         ) {
                             Text(
                                 text = stringResource(MR.strings.manga_download),
+                                style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.SemiBold,
                             )
                         }
@@ -918,11 +923,12 @@ internal fun NovelTranslatedDownloadDialog(
                         onClick = onDismissRequest,
                         modifier = Modifier
                             .align(Alignment.CenterHorizontally)
-                            .padding(top = 8.dp),
+                            .padding(top = 4.dp),
                     ) {
                         Text(
                             text = stringResource(MR.strings.action_cancel),
                             color = accentColor,
+                            style = MaterialTheme.typography.bodyMedium,
                         )
                     }
                 }
@@ -945,20 +951,20 @@ private fun DownloadActionRow(item: DownloadActionItem) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = item.onClick)
-            .padding(vertical = 14.dp),
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = item.icon,
             contentDescription = null,
             tint = colorScheme.onSurface,
-            modifier = Modifier.size(21.dp),
+            modifier = Modifier.size(18.dp),
         )
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(10.dp))
         Text(
             text = item.label,
             color = colorScheme.onSurface,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f),
         )
         item.badgeText?.let { badge ->
@@ -968,9 +974,9 @@ private fun DownloadActionRow(item: DownloadActionItem) {
             ) {
                 Text(
                     text = badge,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp),
                 )
             }
         }

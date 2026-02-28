@@ -52,6 +52,7 @@ class NovelReaderScreen(
                 onSetGeminiTopP = screenModel::setGeminiTopP,
                 onSetGeminiTopK = screenModel::setGeminiTopK,
                 onSetGeminiPromptMode = screenModel::setGeminiPromptMode,
+                onSetGeminiStylePreset = screenModel::setGeminiStylePreset,
                 onSetGeminiEnabledPromptModifiers = screenModel::setGeminiEnabledPromptModifiers,
                 onSetGeminiCustomPromptModifier = screenModel::setGeminiCustomPromptModifier,
                 onSetGeminiAutoTranslateEnglishSource = screenModel::setGeminiAutoTranslateEnglishSource,
