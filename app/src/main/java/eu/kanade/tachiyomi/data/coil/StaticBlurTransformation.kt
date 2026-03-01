@@ -64,9 +64,9 @@ class StaticBlurTransformation(
             for (x in 0 until width) {
                 temp[row + x] =
                     ((a / div) shl 24) or
-                        ((r / div) shl 16) or
-                        ((g / div) shl 8) or
-                        (b / div)
+                    ((r / div) shl 16) or
+                    ((g / div) shl 8) or
+                    (b / div)
 
                 val removeX = (x - radius).coerceIn(0, width - 1)
                 val addX = (x + radius + 1).coerceIn(0, width - 1)
@@ -98,9 +98,9 @@ class StaticBlurTransformation(
             for (y in 0 until height) {
                 source[y * width + x] =
                     ((a / div) shl 24) or
-                        ((r / div) shl 16) or
-                        ((g / div) shl 8) or
-                        (b / div)
+                    ((r / div) shl 16) or
+                    ((g / div) shl 8) or
+                    (b / div)
 
                 val removeY = (y - radius).coerceIn(0, height - 1)
                 val addY = (y + radius + 1).coerceIn(0, height - 1)

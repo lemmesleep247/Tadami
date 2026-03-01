@@ -157,7 +157,10 @@ object NovelDownloadQueueManager {
             .asSequence()
             .filter { it.novel.id == novelId }
             .filter { it.type == NovelQueuedDownloadType.ORIGINAL }
-            .filter { it.status == NovelQueuedDownloadStatus.QUEUED || it.status == NovelQueuedDownloadStatus.DOWNLOADING }
+            .filter {
+                it.status == NovelQueuedDownloadStatus.QUEUED ||
+                    it.status == NovelQueuedDownloadStatus.DOWNLOADING
+            }
             .map { it.chapter.id }
             .toSet()
     }

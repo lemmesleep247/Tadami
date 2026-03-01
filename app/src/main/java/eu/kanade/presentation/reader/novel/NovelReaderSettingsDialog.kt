@@ -376,9 +376,12 @@ private fun GeneralTab(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(
-                    NovelTranslationProvider.GEMINI to stringResource(AYMR.strings.novel_reader_translation_provider_gemini),
-                    NovelTranslationProvider.OPENROUTER to stringResource(AYMR.strings.novel_reader_translation_provider_openrouter),
-                    NovelTranslationProvider.DEEPSEEK to stringResource(AYMR.strings.novel_reader_translation_provider_deepseek),
+                    NovelTranslationProvider.GEMINI to
+                        stringResource(AYMR.strings.novel_reader_translation_provider_gemini),
+                    NovelTranslationProvider.OPENROUTER to
+                        stringResource(AYMR.strings.novel_reader_translation_provider_openrouter),
+                    NovelTranslationProvider.DEEPSEEK to
+                        stringResource(AYMR.strings.novel_reader_translation_provider_deepseek),
                 ).forEach { option ->
                     val selected = settings.translationProvider == option.first
                     Surface(

@@ -12,11 +12,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -87,9 +87,9 @@ import tachiyomi.presentation.core.components.Pill
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.TabText
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.util.collectAsState as preferenceCollectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import tachiyomi.presentation.core.util.collectAsState as preferenceCollectAsState
 
 data object DownloadsTab : Tab {
 
@@ -309,8 +309,16 @@ data object DownloadsTab : Tab {
                                     }
                                 }
                             },
-                            containerColor = if (isAurora) auroraColors.accent else MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = if (isAurora) auroraColors.textOnAccent else MaterialTheme.colorScheme.onPrimaryContainer,
+                            containerColor = if (isAurora) {
+                                auroraColors.accent
+                            } else {
+                                MaterialTheme.colorScheme.primaryContainer
+                            },
+                            contentColor = if (isAurora) {
+                                auroraColors.textOnAccent
+                            } else {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            },
                             expanded = fabExpanded,
                         )
                     }

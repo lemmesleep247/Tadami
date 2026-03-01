@@ -80,8 +80,8 @@ import coil3.request.crossfade
 import eu.kanade.presentation.components.DropdownMenu
 import eu.kanade.presentation.entries.components.DotSeparatorText
 import eu.kanade.presentation.entries.components.ItemCover
-import eu.kanade.tachiyomi.data.coil.staticBlur
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.data.coil.staticBlur
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import tachiyomi.domain.entries.manga.model.Manga

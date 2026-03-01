@@ -68,7 +68,10 @@ internal class NovelDownloadNotifier(private val context: Context) {
                     }
                     ?: context.stringResource(AYMR.strings.novel_translated_download_title)
                 val withFailures = if (failedCount > 0) {
-                    "$progressText, ${context.stringResource(AYMR.strings.novel_download_queue_failed_count, failedCount)}"
+                    "$progressText, ${context.stringResource(
+                        AYMR.strings.novel_download_queue_failed_count,
+                        failedCount,
+                    )}"
                 } else {
                     progressText
                 }

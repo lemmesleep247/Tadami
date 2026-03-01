@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.ui.library.novel
 
 import android.content.Context
 import eu.kanade.domain.base.BasePreferences
+import eu.kanade.domain.entries.novel.interactor.UpdateNovel
 import eu.kanade.tachiyomi.source.model.SManga
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -26,7 +27,6 @@ import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.domain.category.novel.interactor.GetNovelCategories
 import tachiyomi.domain.category.novel.interactor.SetNovelCategories
 import tachiyomi.domain.category.novel.model.NovelCategory
-import eu.kanade.domain.entries.novel.interactor.UpdateNovel
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovel
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.items.novelchapter.model.NovelChapter

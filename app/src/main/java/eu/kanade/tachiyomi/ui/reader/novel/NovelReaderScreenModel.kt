@@ -15,8 +15,8 @@ import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderOverride
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderSettings
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderTheme
-import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationStylePreset
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationProvider
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationStylePreset
 import eu.kanade.tachiyomi.ui.reader.novel.translation.AirforceModelsService
 import eu.kanade.tachiyomi.ui.reader.novel.translation.AirforceTranslationParams
 import eu.kanade.tachiyomi.ui.reader.novel.translation.AirforceTranslationService
@@ -1598,13 +1598,17 @@ class NovelReaderScreenModel(
                 "baseUrl=${airforceBaseUrl.trim()}, temp=${geminiTemperature.toLogFloat()}, topP=${geminiTopP.toLogFloat()}"
             }
             NovelTranslationProvider.OPENROUTER -> {
-                "baseUrl=${openRouterBaseUrl.trim()}, temp=${geminiTemperature.toLogFloat()}, topP=${geminiTopP.toLogFloat()}, " +
-                    "freeModel=${openRouterModel.trim().endsWith(":free", ignoreCase = true)}"
+                val isFreeModel = openRouterModel.trim().endsWith(":free", ignoreCase = true)
+                "baseUrl=${openRouterBaseUrl.trim()}, temp=${geminiTemperature.toLogFloat()}, " +
+                    "topP=${geminiTopP.toLogFloat()}, freeModel=$isFreeModel"
             }
             NovelTranslationProvider.DEEPSEEK -> {
                 val params = toDeepSeekTranslationParams()
-                "baseUrl=${params.baseUrl.trim()}, temp=${params.temperature.toLogFloat()}, topP=${params.topP.toLogFloat()}, " +
-                    "presencePenalty=${params.presencePenalty.toLogFloat()}, frequencyPenalty=${params.frequencyPenalty.toLogFloat()}, " +
+                val presencePenalty = params.presencePenalty.toLogFloat()
+                val frequencyPenalty = params.frequencyPenalty.toLogFloat()
+                "baseUrl=${params.baseUrl.trim()}, temp=${params.temperature.toLogFloat()}, " +
+                    "topP=${params.topP.toLogFloat()}, " +
+                    "presencePenalty=$presencePenalty, frequencyPenalty=$frequencyPenalty, " +
                     "stream=false"
             }
         }

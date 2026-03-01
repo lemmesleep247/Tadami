@@ -78,8 +78,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -2717,7 +2717,7 @@ private fun GreetingStyleDialog(
                 )
 
                 Text(
-                    text = stringResource(AYMR.strings.aurora_greeting_alpha, "${alpha}%"),
+                    text = stringResource(AYMR.strings.aurora_greeting_alpha, "$alpha%"),
                     style = MaterialTheme.typography.bodySmall,
                     color = AuroraTheme.colors.textSecondary,
                 )

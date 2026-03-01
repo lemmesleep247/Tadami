@@ -21,16 +21,16 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -39,8 +39,8 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -140,8 +140,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.res.ResourcesCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -163,8 +163,8 @@ import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderParagraphSpacing
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderSettings
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderTheme
-import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationStylePreset
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationProvider
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationStylePreset
 import eu.kanade.tachiyomi.ui.reader.novel.translation.GeminiPromptModifiers
 import eu.kanade.tachiyomi.ui.reader.novel.translation.NovelTranslationStylePresets
 import eu.kanade.tachiyomi.ui.webview.WebViewActivity
@@ -1110,7 +1110,11 @@ fun NovelReaderScreen(
                                             Column(
                                                 modifier = Modifier.padding(
                                                     top = statusBarTopPadding + 10.dp,
-                                                    bottom = if (index == scrollContentBlocks.lastIndex) 0.dp else 18.dp,
+                                                    bottom = if (index == scrollContentBlocks.lastIndex) {
+                                                        0.dp
+                                                    } else {
+                                                        18.dp
+                                                    },
                                                 ),
                                             ) {
                                                 Text(
@@ -1124,7 +1128,9 @@ fun NovelReaderScreen(
                                                         .padding(top = 8.dp)
                                                         .fillMaxWidth(0.72f)
                                                         .height(1.dp)
-                                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+                                                        .background(
+                                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+                                                        ),
                                                 )
                                             }
                                         } else {
@@ -2309,7 +2315,9 @@ private fun GeminiTranslationDialog(
     var tempTopP by remember(readerSettings.geminiTopP) { mutableStateOf(readerSettings.geminiTopP.toString()) }
     var tempTopK by remember(readerSettings.geminiTopK) { mutableStateOf(readerSettings.geminiTopK.toString()) }
     var tempPromptMode by remember(readerSettings.geminiPromptMode) { mutableStateOf(readerSettings.geminiPromptMode) }
-    var tempStylePreset by remember(readerSettings.geminiStylePreset) { mutableStateOf(readerSettings.geminiStylePreset) }
+    var tempStylePreset by remember(readerSettings.geminiStylePreset) {
+        mutableStateOf(readerSettings.geminiStylePreset)
+    }
     var tempEnabledModifiers by remember(readerSettings.geminiEnabledPromptModifiers) {
         mutableStateOf(readerSettings.geminiEnabledPromptModifiers.toSet())
     }
@@ -3096,7 +3104,11 @@ private fun GeminiTranslationDialog(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 TextButton(
-                                    onClick = if (isOpenRouterSelected) onTestOpenRouterConnection else onTestDeepSeekConnection,
+                                    onClick = if (isOpenRouterSelected) {
+                                        onTestOpenRouterConnection
+                                    } else {
+                                        onTestDeepSeekConnection
+                                    },
                                     enabled = if (isOpenRouterSelected) {
                                         !isTestingOpenRouterConnection
                                     } else {
@@ -3109,10 +3121,20 @@ private fun GeminiTranslationDialog(
                                     } else {
                                         isTestingDeepSeekConnection
                                     }
-                                    Text(if (isTesting) "Проверка..." else "Тест подключения")
+                                    Text(
+                                        if (isTesting) {
+                                            "Проверка..."
+                                        } else {
+                                            "Тест подключения"
+                                        },
+                                    )
                                 }
                                 TextButton(
-                                    onClick = if (isOpenRouterSelected) onRefreshOpenRouterModels else onRefreshDeepSeekModels,
+                                    onClick = if (isOpenRouterSelected) {
+                                        onRefreshOpenRouterModels
+                                    } else {
+                                        onRefreshDeepSeekModels
+                                    },
                                     enabled = if (isOpenRouterSelected) {
                                         !isOpenRouterModelsLoading
                                     } else {
@@ -3125,7 +3147,13 @@ private fun GeminiTranslationDialog(
                                     } else {
                                         isDeepSeekModelsLoading
                                     }
-                                    Text(if (isLoading) "Обновление..." else "Обновить модели")
+                                    Text(
+                                        if (isLoading) {
+                                            "Обновление..."
+                                        } else {
+                                            "Обновить модели"
+                                        },
+                                    )
                                 }
                             }
                         }
@@ -3293,7 +3321,8 @@ private fun GeminiTranslationDialog(
                         }
                         if (isDeepSeekSelected) {
                             Text(
-                                text = "Для DeepSeek используется диапазон Temperature 1.3-1.5 и TopP 0.9-0.95. TopK не применяется.",
+                                text = "Для DeepSeek используется диапазон Temperature 1.3-1.5 " +
+                                    "и TopP 0.9-0.95. TopK не применяется.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -3310,7 +3339,7 @@ private fun GeminiTranslationDialog(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = "Логи (${logs.size})",
@@ -3998,29 +4027,29 @@ private fun ReaderAtmosphereBackground(
             .fillMaxSize()
             .background(backgroundColor),
     ) {
-        if (backgroundTexture == NovelReaderBackgroundTexture.PAPER_GRAIN || 
-            backgroundTexture == NovelReaderBackgroundTexture.LINEN) {
-            
+        if (backgroundTexture == NovelReaderBackgroundTexture.PAPER_GRAIN ||
+            backgroundTexture == NovelReaderBackgroundTexture.LINEN
+        ) {
             val imageRes = if (backgroundTexture == NovelReaderBackgroundTexture.PAPER_GRAIN) {
                 R.drawable.texture_paper
             } else {
                 R.drawable.texture_linen
             }
-            
+
             val imageBitmap = ImageBitmap.imageResource(id = imageRes)
             val brush = remember(imageBitmap) {
                 ShaderBrush(
                     ImageShader(
                         image = imageBitmap,
                         tileModeX = TileMode.Repeated,
-                        tileModeY = TileMode.Repeated
-                    )
+                        tileModeY = TileMode.Repeated,
+                    ),
                 )
             }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(brush = brush)
+                    .background(brush = brush),
             )
         }
 
@@ -5197,7 +5226,7 @@ private fun SystemUIController(
     defaultLightStatusBars: Boolean,
 ) {
     val view = LocalView.current
-    
+
     val capturedSystemBarsState = remember(view) { mutableStateOf<ReaderSystemBarsState?>(null) }
     DisposableEffect(view) {
         val activity = view.context.findActivity()
@@ -5320,5 +5349,3 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is ContextWrapper -> baseContext.findActivity()
     else -> null
 }
-
-

@@ -221,23 +221,23 @@ fun NovelLibraryAuroraContent(
                         showLanguageBadge = showLanguageBadge,
                         sourceLanguage = sourceLanguageByNovelId[item.novel.id].orEmpty(),
                     )
-                        NovelLibraryAuroraCard(
-                            item = item,
-                            context = context,
-                            badgeState = badgeState,
-                            showMetadata = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .auroraCenteredMaxWidth(auroraAdaptiveSpec.listMaxWidthDp)
-                                .aspectRatio(2.2f),
-                            coverHeightFraction = 0.62f,
-                            onNovelClicked = { onClickNovelItem(item) },
-                            onLongClick = onLongClickNovelItem?.let { { it(item) } },
-                            onClickContinueReading = onContinueReadingClicked,
-                            isSelected = selection.fastAny { it.id == item.id },
-                        )
-                    }
+                    NovelLibraryAuroraCard(
+                        item = item,
+                        context = context,
+                        badgeState = badgeState,
+                        showMetadata = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .auroraCenteredMaxWidth(auroraAdaptiveSpec.listMaxWidthDp)
+                            .aspectRatio(2.2f),
+                        coverHeightFraction = 0.62f,
+                        onNovelClicked = { onClickNovelItem(item) },
+                        onLongClick = onLongClickNovelItem?.let { { it(item) } },
+                        onClickContinueReading = onContinueReadingClicked,
+                        isSelected = selection.fastAny { it.id == item.id },
+                    )
                 }
+            }
         } else {
             LazyLibraryGrid(
                 modifier = Modifier

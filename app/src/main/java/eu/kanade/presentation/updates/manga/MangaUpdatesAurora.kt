@@ -303,7 +303,7 @@ fun AniviewMangaUpdateCard(
             .fillMaxWidth()
             .clickable { onMangaClick(item.update.mangaId) }
             .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         // Left: Thumbnail (60x90dp portrait)

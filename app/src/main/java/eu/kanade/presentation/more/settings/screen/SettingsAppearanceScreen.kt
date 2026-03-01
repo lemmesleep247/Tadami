@@ -176,7 +176,7 @@ object SettingsAppearanceScreen : SearchableSettings {
                 ),
                 Preference.PreferenceItem.SliderPreference(
                     value = greetingAlpha.coerceIn(10, 100),
-                    title = stringResource(AYMR.strings.aurora_greeting_alpha, "${greetingAlpha}%"),
+                    title = stringResource(AYMR.strings.aurora_greeting_alpha, "$greetingAlpha%"),
                     valueRange = 10..100,
                     steps = 89,
                     onValueChanged = {

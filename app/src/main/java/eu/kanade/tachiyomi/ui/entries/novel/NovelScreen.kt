@@ -55,12 +55,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -70,7 +71,6 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.entries.novel.NovelChapterSettingsDialog
 import eu.kanade.presentation.entries.novel.NovelScreen
-import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.download.novel.NovelTranslatedDownloadFormat
 import eu.kanade.tachiyomi.extension.novel.runtime.resolveUrl
 import eu.kanade.tachiyomi.novelsource.ConfigurableNovelSource
@@ -95,13 +95,11 @@ import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.presentation.core.util.collectAsState
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import tachiyomi.core.common.i18n.stringResource as contextStringResource
 import tachiyomi.domain.entries.novel.model.Novel as DomainNovel
 import tachiyomi.domain.items.novelchapter.model.NovelChapter as DomainNovelChapter
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.graphics.vector.ImageVector
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 class NovelScreen(
     private val novelId: Long,
@@ -366,7 +364,9 @@ class NovelScreen(
                         onlyNotDownloaded = true,
                     )
                     if (candidates.isEmpty()) {
-                        context.toast(context.contextStringResource(AYMR.strings.novel_translated_download_no_available))
+                        context.toast(
+                            context.contextStringResource(AYMR.strings.novel_translated_download_no_available),
+                        )
                         return@NovelTranslatedDownloadDialog
                     }
                     translatedPickerChapters = candidates
@@ -380,7 +380,9 @@ class NovelScreen(
                         format = format,
                     )
                     if (added == 0) {
-                        context.toast(context.contextStringResource(AYMR.strings.novel_translated_download_no_available))
+                        context.toast(
+                            context.contextStringResource(AYMR.strings.novel_translated_download_no_available),
+                        )
                     }
                     showTranslatedDownloadDialog = false
                 },
@@ -398,7 +400,9 @@ class NovelScreen(
                         format = translatedPickerFormat,
                     )
                     if (added == 0) {
-                        context.toast(context.contextStringResource(AYMR.strings.novel_translated_download_no_available))
+                        context.toast(
+                            context.contextStringResource(AYMR.strings.novel_translated_download_no_available),
+                        )
                     }
                     showTranslatedChapterPickerDialog = false
                 },
@@ -780,7 +784,13 @@ internal fun NovelTranslatedDownloadDialog(
                             onClick = { format = NovelTranslatedDownloadFormat.TXT },
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (format == NovelTranslatedDownloadFormat.TXT) selectedColor else unselectedColor,
+                                containerColor = if (format ==
+                                    NovelTranslatedDownloadFormat.TXT
+                                ) {
+                                    selectedColor
+                                } else {
+                                    unselectedColor
+                                },
                                 contentColor = if (format == NovelTranslatedDownloadFormat.TXT) {
                                     onAccentColor
                                 } else {
@@ -805,7 +815,13 @@ internal fun NovelTranslatedDownloadDialog(
                             onClick = { format = NovelTranslatedDownloadFormat.DOCX },
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (format == NovelTranslatedDownloadFormat.DOCX) selectedColor else unselectedColor,
+                                containerColor = if (format ==
+                                    NovelTranslatedDownloadFormat.DOCX
+                                ) {
+                                    selectedColor
+                                } else {
+                                    unselectedColor
+                                },
                                 contentColor = if (format == NovelTranslatedDownloadFormat.DOCX) {
                                     onAccentColor
                                 } else {

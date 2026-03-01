@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.ui.reader.novel.translation
 
 import eu.kanade.tachiyomi.ui.reader.novel.setting.GeminiPromptMode
-import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationStylePreset
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationProvider
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationStylePreset
 
 data class GeminiTranslationParams(
     val apiKey: String,

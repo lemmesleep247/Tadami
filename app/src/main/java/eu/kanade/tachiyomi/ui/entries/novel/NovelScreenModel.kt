@@ -1,7 +1,8 @@
 package eu.kanade.tachiyomi.ui.entries.novel
 
-import androidx.compose.material3.SnackbarHostState
+import android.app.Application
 import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
@@ -18,8 +19,8 @@ import eu.kanade.domain.items.novelchapter.interactor.GetNovelScanlatorChapterCo
 import eu.kanade.domain.items.novelchapter.interactor.SyncNovelChaptersWithSource
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadManager
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadQueueManager
-import eu.kanade.tachiyomi.data.download.novel.NovelQueuedDownloadType
 import eu.kanade.tachiyomi.data.download.novel.NovelQueuedDownloadStatus
+import eu.kanade.tachiyomi.data.download.novel.NovelQueuedDownloadType
 import eu.kanade.tachiyomi.data.download.novel.NovelTranslatedDownloadFormat
 import eu.kanade.tachiyomi.data.download.novel.NovelTranslatedDownloadManager
 import eu.kanade.tachiyomi.data.export.novel.NovelEpubExportOptions
@@ -41,6 +42,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.supervisorScope
 import logcat.LogPriority
+import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
@@ -65,11 +67,9 @@ import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.domain.track.novel.interactor.GetNovelTracks
 import tachiyomi.domain.track.novel.model.NovelTrack
+import tachiyomi.i18n.aniyomi.AYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import android.app.Application
-import tachiyomi.core.common.i18n.stringResource
-import tachiyomi.i18n.aniyomi.AYMR
 import java.io.File
 import java.time.Instant
 import java.util.LinkedHashMap
@@ -250,8 +250,10 @@ class NovelScreenModel(
                         .filter { task ->
                             task.novel.id == current.novel.id &&
                                 task.type == NovelQueuedDownloadType.ORIGINAL &&
-                                (task.status == NovelQueuedDownloadStatus.QUEUED ||
-                                    task.status == NovelQueuedDownloadStatus.DOWNLOADING)
+                                (
+                                    task.status == NovelQueuedDownloadStatus.QUEUED ||
+                                        task.status == NovelQueuedDownloadStatus.DOWNLOADING
+                                    )
                         }
                         .map { it.chapter.id }
                         .toSet()
@@ -263,7 +265,10 @@ class NovelScreenModel(
                     )
                     maybeNotifyQueueState(queueSummary)
 
-                    val downloadedChapterIds = novelDownloadManager.getDownloadedChapterIds(current.novel, current.chapters)
+                    val downloadedChapterIds = novelDownloadManager.getDownloadedChapterIds(
+                        current.novel,
+                        current.chapters,
+                    )
                     if (activeChapterIds == current.downloadingChapterIds &&
                         downloadedChapterIds == current.downloadedChapterIds
                     ) {
@@ -927,8 +932,8 @@ class NovelScreenModel(
         val chaptersWithCache = state.chapters
             .sortedWith(Comparator(getNovelChapterSort(state.novel)))
             .filter { chapter ->
-            novelTranslatedDownloadManager.hasTranslationCache(chapter.id)
-        }
+                novelTranslatedDownloadManager.hasTranslationCache(chapter.id)
+            }
         if (chaptersWithCache.isEmpty()) return 0
 
         val downloadedTranslatedChapterIds = chaptersWithCache

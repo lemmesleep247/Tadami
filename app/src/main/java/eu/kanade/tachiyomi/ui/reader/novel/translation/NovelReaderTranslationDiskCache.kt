@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.ui.reader.novel.translation
 
 import android.app.Application
 import eu.kanade.tachiyomi.ui.reader.novel.setting.GeminiPromptMode
-import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationStylePreset
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationProvider
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationStylePreset
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString

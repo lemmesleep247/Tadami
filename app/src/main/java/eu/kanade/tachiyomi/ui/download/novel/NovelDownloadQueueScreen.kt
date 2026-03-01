@@ -32,9 +32,9 @@ import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
-import tachiyomi.presentation.core.util.collectAsState as preferenceCollectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import tachiyomi.presentation.core.util.collectAsState as preferenceCollectAsState
 
 @Composable
 fun NovelDownloadQueueScreen(
@@ -102,7 +102,9 @@ fun NovelDownloadQueueScreen(
                             color = auroraColors.textSecondary,
                         )
                         Text(
-                            text = "${stringResource(AYMR.strings.novel_downloads_saved_on_device)}: ${state.downloadCount}",
+                            text = "${stringResource(
+                                AYMR.strings.novel_downloads_saved_on_device,
+                            )}: ${state.downloadCount}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = auroraColors.textPrimary,
                         )

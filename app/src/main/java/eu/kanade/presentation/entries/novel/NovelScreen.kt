@@ -67,9 +67,9 @@ import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.presentation.entries.manga.components.ScanlatorBranchSelector
 import eu.kanade.presentation.theme.AuroraTheme
 import eu.kanade.presentation.util.formatChapterNumber
+import eu.kanade.tachiyomi.data.coil.staticBlur
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.ui.entries.novel.NovelScreenModel
-import eu.kanade.tachiyomi.data.coil.staticBlur
 import me.saket.swipe.SwipeableActionsBox
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR

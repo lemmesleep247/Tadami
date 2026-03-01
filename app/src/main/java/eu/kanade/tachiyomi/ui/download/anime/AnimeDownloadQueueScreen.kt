@@ -26,10 +26,10 @@ import tachiyomi.core.common.util.lang.launchUI
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.screens.EmptyScreen
-import tachiyomi.presentation.core.util.collectAsState as preferenceCollectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import kotlin.math.roundToInt
+import tachiyomi.presentation.core.util.collectAsState as preferenceCollectAsState
 
 @Composable
 fun AnimeDownloadQueueScreen(

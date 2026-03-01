@@ -85,8 +85,8 @@ import eu.kanade.presentation.components.DropdownMenu
 import eu.kanade.presentation.entries.components.DotSeparatorText
 import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.data.coil.staticBlur
 import eu.kanade.tachiyomi.animesource.model.SAnime
+import eu.kanade.tachiyomi.data.coil.staticBlur
 import eu.kanade.tachiyomi.data.coil.useBackground
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import tachiyomi.domain.entries.anime.model.Anime

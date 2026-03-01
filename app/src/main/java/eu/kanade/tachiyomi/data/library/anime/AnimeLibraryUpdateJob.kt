@@ -2,19 +2,12 @@ package eu.kanade.tachiyomi.data.library.anime
 
 import android.content.Context
 import android.content.pm.ServiceInfo
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.os.Build
 import androidx.core.content.ContextCompat
-import androidx.work.BackoffPolicy
-import androidx.work.Constraints
 import androidx.work.CoroutineWorker
-import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
-import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkQuery
 import androidx.work.WorkerParameters
@@ -57,8 +50,6 @@ import tachiyomi.domain.items.episode.model.NoEpisodesException
 import tachiyomi.domain.items.season.interactor.GetAnimeSeasonsByParentId
 import tachiyomi.domain.library.anime.LibraryAnime
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_CHARGING
-import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_NETWORK_NOT_METERED
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_ONLY_ON_WIFI
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.ENTRY_HAS_UNVIEWED
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.ENTRY_NON_COMPLETED
@@ -74,7 +65,6 @@ import java.io.File
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -512,4 +502,3 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         }
     }
 }
-

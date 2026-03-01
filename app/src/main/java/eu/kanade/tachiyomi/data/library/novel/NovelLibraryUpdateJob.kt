@@ -2,19 +2,12 @@ package eu.kanade.tachiyomi.data.library.novel
 
 import android.content.Context
 import android.content.pm.ServiceInfo
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.os.Build
 import androidx.core.content.ContextCompat
-import androidx.work.BackoffPolicy
-import androidx.work.Constraints
 import androidx.work.CoroutineWorker
-import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
-import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkQuery
 import androidx.work.WorkerParameters
@@ -60,7 +53,6 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.time.ZonedDateTime
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class NovelLibraryUpdateJob(
@@ -470,4 +462,3 @@ internal fun isNovelEligibleForAutoUpdate(
         fetchWindowUpperBound = fetchWindowUpperBound,
     ) == null
 }
-

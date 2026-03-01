@@ -12,8 +12,8 @@ import eu.kanade.tachiyomi.ui.reader.novel.NovelRichBlockTextAlign
 import eu.kanade.tachiyomi.ui.reader.novel.NovelRichContentBlock
 import eu.kanade.tachiyomi.ui.reader.novel.NovelRichTextSegment
 import eu.kanade.tachiyomi.ui.reader.novel.NovelRichTextStyle
-import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderParagraphSpacing
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundTexture
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderParagraphSpacing
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue

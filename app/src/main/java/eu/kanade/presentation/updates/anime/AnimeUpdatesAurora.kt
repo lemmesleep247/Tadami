@@ -303,7 +303,7 @@ fun AuroraUpdateCard(
             .fillMaxWidth()
             .clickable { onAnimeClick(item.update.animeId) }
             .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         // Left: Thumbnail (60x90dp portrait)
