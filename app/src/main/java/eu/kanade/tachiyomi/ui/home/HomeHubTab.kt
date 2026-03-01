@@ -1827,18 +1827,36 @@ private fun HeroSection(
     val colors = AuroraTheme.colors
     val auroraAdaptiveSpec = rememberAuroraAdaptiveSpec()
     val contentMaxWidthDp = auroraAdaptiveSpec.updatesMaxWidthDp ?: auroraAdaptiveSpec.entryMaxWidthDp
+    val heroCardShape = RoundedCornerShape(24.dp)
     val overlayGradient = remember(colors) {
         Brush.verticalGradient(
-            listOf(Color.Transparent, colors.gradientEnd.copy(alpha = 0.8f)),
-            startY = 0f,
-            endY = 1000f,
+            colorStops = arrayOf(
+                0.00f to Color.Transparent,
+                0.46f to Color.Transparent,
+                0.72f to colors.background.copy(alpha = 0.34f),
+                0.90f to colors.background.copy(alpha = 0.72f),
+                1.00f to colors.background.copy(alpha = 0.93f),
+            ),
+        )
+    }
+    val rimLightBrush = remember {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.00f to Color.White.copy(alpha = 0.15f),
+                0.28f to Color.White.copy(alpha = 0.05f),
+                0.62f to Color.Transparent,
+                1.00f to Color.Transparent,
+            ),
         )
     }
 
     Box(
         modifier = Modifier.auroraCenteredMaxWidth(contentMaxWidthDp).height(
             440.dp,
-        ).padding(16.dp).clip(RoundedCornerShape(24.dp)).clickable(onClick = onEntryClick),
+        ).padding(16.dp)
+            .clip(heroCardShape)
+            .border(width = 1.dp, brush = rimLightBrush, shape = heroCardShape)
+            .clickable(onClick = onEntryClick),
     ) {
         AsyncImage(
             model = hero.coverData,
