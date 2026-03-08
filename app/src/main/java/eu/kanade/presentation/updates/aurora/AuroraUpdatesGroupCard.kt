@@ -29,6 +29,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import eu.kanade.presentation.components.rememberAuroraCoverPlaceholderPainter
+import eu.kanade.presentation.components.resolveAuroraCoverModel
 import eu.kanade.presentation.theme.AuroraTheme
 
 @Composable
@@ -41,6 +43,7 @@ fun AuroraUpdatesGroupCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = AuroraTheme.colors
+    val placeholderPainter = rememberAuroraCoverPlaceholderPainter()
 
     Card(
         onClick = onClick,
@@ -64,7 +67,7 @@ fun AuroraUpdatesGroupCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AsyncImage(
-                model = coverData,
+                model = resolveAuroraCoverModel(coverData),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -72,6 +75,8 @@ fun AuroraUpdatesGroupCard(
                     .height(72.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(colors.cardBackground),
+                error = placeholderPainter,
+                fallback = placeholderPainter,
             )
 
             Spacer(modifier = Modifier.width(12.dp))

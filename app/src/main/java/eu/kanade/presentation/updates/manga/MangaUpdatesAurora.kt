@@ -49,6 +49,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.components.relativeDateText
+import eu.kanade.presentation.components.rememberAuroraCoverPlaceholderPainter
+import eu.kanade.presentation.components.resolveAuroraCoverModel
 import eu.kanade.presentation.theme.AuroraTheme
 import eu.kanade.presentation.theme.aurora.adaptive.auroraCenteredMaxWidth
 import eu.kanade.presentation.theme.aurora.adaptive.rememberAuroraAdaptiveSpec
@@ -297,6 +299,7 @@ fun AniviewMangaUpdateCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = AuroraTheme.colors
+    val placeholderPainter = rememberAuroraCoverPlaceholderPainter()
 
     Row(
         modifier = modifier
@@ -315,10 +318,12 @@ fun AniviewMangaUpdateCard(
                 .background(Color.Gray.copy(alpha = 0.3f)),
         ) {
             AsyncImage(
-                model = item.update.coverData,
+                model = resolveAuroraCoverModel(item.update.coverData),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
+                error = placeholderPainter,
+                fallback = placeholderPainter,
             )
         }
 

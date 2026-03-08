@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -81,7 +82,9 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import eu.kanade.presentation.components.AuroraCoverPlaceholderVariant
 import eu.kanade.presentation.components.DropdownMenu
+import eu.kanade.presentation.components.rememberThemeAwareCoverErrorPainter
 import eu.kanade.presentation.entries.components.DotSeparatorText
 import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.tachiyomi.R
@@ -123,6 +126,7 @@ fun AnimeInfoBox(
             MaterialTheme.colorScheme.background,
         )
         val blurRadiusPx = with(LocalDensity.current) { 4.dp.roundToPx() }
+        val fallbackPainter = rememberThemeAwareCoverErrorPainter(variant = AuroraCoverPlaceholderVariant.Wide)
         if (resolvedCoverUrl != null) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
@@ -131,6 +135,8 @@ fun AnimeInfoBox(
                     .crossfade(true)
                     .staticBlur(blurRadiusPx, intensityFactor = 0.6f)
                     .build(),
+                error = fallbackPainter,
+                fallback = fallbackPainter,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -138,12 +144,12 @@ fun AnimeInfoBox(
                     .alpha(0.2f),
             )
         } else {
-            Box(
+            Image(
+                painter = fallbackPainter,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .matchParentSize()
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
-                    )
                     .alpha(0.2f),
             )
         }

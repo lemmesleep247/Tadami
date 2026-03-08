@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.MoreVert
@@ -49,7 +48,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -61,6 +59,8 @@ import coil3.request.ImageRequest
 import eu.kanade.presentation.components.AuroraCard
 import eu.kanade.presentation.components.AuroraTabRow
 import eu.kanade.presentation.components.LocalTabState
+import eu.kanade.presentation.components.rememberAuroraCoverPlaceholderPainter
+import eu.kanade.presentation.components.resolveAuroraCoverModel
 import eu.kanade.presentation.library.components.EntryCompactGridItem
 import eu.kanade.presentation.library.components.LanguageBadge
 import eu.kanade.presentation.library.components.LazyLibraryGrid
@@ -315,6 +315,8 @@ private fun NovelLibraryCompactGridItem(
     onLongClickNovel: ((LibraryNovel) -> Unit)?,
     onClickContinueReading: ((LibraryNovel) -> Unit)?,
 ) {
+    val placeholderPainter = rememberAuroraCoverPlaceholderPainter()
+
     EntryCompactGridItem(
         coverData = item.novel.asNovelCover(),
         title = item.novel.title,
@@ -326,6 +328,7 @@ private fun NovelLibraryCompactGridItem(
         } else {
             null
         },
+        errorPainter = placeholderPainter,
         coverBadgeStart = {
             if (badgeState.showDownloaded) {
                 Badge(
@@ -369,7 +372,7 @@ private fun NovelLibraryAuroraCard(
     }
     val coverRequest = remember(item.novel.id, item.novel.thumbnailUrl, item.novel.coverLastModified) {
         ImageRequest.Builder(context)
-            .data(item.novel.thumbnailUrl)
+            .data(resolveAuroraCoverModel(item.novel.thumbnailUrl))
             .placeholderMemoryCacheKey(item.novel.thumbnailUrl)
             .build()
     }
@@ -452,6 +455,7 @@ private fun NovelLibraryAuroraCoverOnlyCard(
     onLongClick: (() -> Unit)?,
 ) {
     val colors = AuroraTheme.colors
+    val placeholderPainter = rememberAuroraCoverPlaceholderPainter()
     Card(
         modifier = modifier.combinedClickable(
             onClick = onClick,
@@ -477,13 +481,14 @@ private fun NovelLibraryAuroraCoverOnlyCard(
                 .background(Color.Black.copy(alpha = 0.1f)),
         ) {
             AsyncImage(
-                model = coverData,
+                model = resolveAuroraCoverModel(coverData),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(RoundedCornerShape(12.dp)),
-                error = rememberVectorPainter(Icons.Filled.BrokenImage),
+                error = placeholderPainter,
+                fallback = placeholderPainter,
             )
 
             if (badgeState.hasBadge()) {

@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import eu.kanade.presentation.components.rememberAuroraCoverPlaceholderPainter
+import eu.kanade.presentation.components.resolveAuroraCoverModel
 import eu.kanade.presentation.theme.AuroraTheme
 import tachiyomi.domain.entries.manga.model.asMangaCover
 import tachiyomi.domain.library.manga.LibraryManga
@@ -39,6 +41,7 @@ fun AniviewMangaCard(
 ) {
     val colors = AuroraTheme.colors
     val context = LocalContext.current
+    val placeholderPainter = rememberAuroraCoverPlaceholderPainter()
 
     // Calculate progress (read chapters / total chapters)
     val progress = if (item.totalChapters > 0) {
@@ -62,10 +65,12 @@ fun AniviewMangaCard(
             AsyncImage(
                 model = remember(item.manga.id, item.manga.thumbnailUrl, item.manga.coverLastModified) {
                     ImageRequest.Builder(context)
-                        .data(item.manga.asMangaCover())
+                        .data(resolveAuroraCoverModel(item.manga.asMangaCover()))
                         .placeholderMemoryCacheKey(item.manga.thumbnailUrl)
                         .build()
                 },
+                error = placeholderPainter,
+                fallback = placeholderPainter,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

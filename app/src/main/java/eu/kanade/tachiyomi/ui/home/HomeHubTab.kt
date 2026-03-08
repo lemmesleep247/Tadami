@@ -87,14 +87,17 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -109,10 +112,12 @@ import eu.kanade.domain.ui.UserProfilePreferences
 import eu.kanade.domain.ui.model.HomeHeaderLayoutElement
 import eu.kanade.domain.ui.model.HomeHeaderLayoutSpec
 import eu.kanade.presentation.components.AuroraCard
+import eu.kanade.presentation.components.AuroraCoverPlaceholderVariant
 import eu.kanade.presentation.components.AuroraTabRow
 import eu.kanade.presentation.components.TabContent
 import eu.kanade.presentation.components.TabbedScreenAurora
 import eu.kanade.presentation.components.auroraMenuRimLightBrush
+import eu.kanade.presentation.components.rememberThemeAwareCoverErrorPainter
 import eu.kanade.presentation.more.settings.screen.browse.AnimeExtensionReposScreen
 import eu.kanade.presentation.more.settings.screen.browse.MangaExtensionReposScreen
 import eu.kanade.presentation.more.settings.screen.browse.NovelExtensionReposScreen
@@ -257,6 +262,42 @@ internal fun shouldFillNicknameRowSpace(showNameEditHint: Boolean): Boolean {
     return !showNameEditHint
 }
 
+private const val HOME_HEADER_CANVAS_HEIGHT_ONE_LINE_DP = 72
+private const val HOME_HEADER_CANVAS_HEIGHT_TWO_LINES_DP = 76
+private const val HOME_HEADER_CANVAS_HEIGHT_THREE_LINES_DP = 80
+private const val HOME_HEADER_CANVAS_HEIGHT_FOUR_LINES_DP = 88
+
+internal fun resolveGreetingLineLimit(measuredLineCount: Int): Int {
+    return measuredLineCount.coerceIn(1, 4)
+}
+
+internal fun resolveHomeHeaderCanvasHeightDp(lineLimit: Int): Int {
+    return when (lineLimit.coerceIn(1, 4)) {
+        1 -> HOME_HEADER_CANVAS_HEIGHT_ONE_LINE_DP
+        2 -> HOME_HEADER_CANVAS_HEIGHT_TWO_LINES_DP
+        3 -> HOME_HEADER_CANVAS_HEIGHT_THREE_LINES_DP
+        else -> HOME_HEADER_CANVAS_HEIGHT_FOUR_LINES_DP
+    }
+}
+
+internal fun resolveGreetingSlotHeightPx(lineLimit: Int): Float {
+    return when (lineLimit.coerceIn(1, 4)) {
+        1 -> 24f
+        2 -> 36f
+        3 -> 48f
+        else -> 56f
+    }
+}
+
+internal fun resolveNicknameYForGreetingOverlap(
+    nicknameY: Float,
+    greetingY: Float,
+    greetingHeight: Float,
+    minGap: Float = 2f,
+): Float {
+    return maxOf(nicknameY, greetingY + greetingHeight + minGap)
+}
+
 private val greetingDecorators = listOf("✦", "✧", "◆", "◇")
 
 internal enum class GreetingDecorationPreset(val key: String) {
@@ -374,6 +415,7 @@ private data class HomeHubUiState(
     val userName: String,
     val userAvatar: String,
     val greeting: dev.icerock.moko.resources.StringResource,
+    val greetingReady: Boolean,
     val isLoading: Boolean,
     val showWelcome: Boolean,
 )
@@ -520,6 +562,11 @@ object HomeHubTab : Tab {
             HomeHubSection.Anime -> Triple(animeState.userName, animeState.userAvatar, animeState.greeting)
             HomeHubSection.Manga -> Triple(mangaState.userName, mangaState.userAvatar, mangaState.greeting)
             HomeHubSection.Novel -> Triple(novelState.userName, novelState.userAvatar, novelState.greeting)
+        }
+        val headerGreetingReady = when (profileSection) {
+            HomeHubSection.Anime -> animeState.greetingReady
+            HomeHubSection.Manga -> mangaState.greetingReady
+            HomeHubSection.Novel -> novelState.greetingReady
         }
         val showNameEditHint = shouldShowNicknameEditHint(
             currentName = headerUserName,
@@ -712,7 +759,7 @@ object HomeHubTab : Tab {
                     userAvatar = headerUserAvatar,
                     nicknameStyle = nicknameStyle,
                     greetingStyle = greetingStyle,
-                    showGreeting = showHomeGreeting,
+                    showGreeting = showHomeGreeting && headerGreetingReady,
                     showNameEditHint = showNameEditHint,
                     currentStreak = currentStreak,
                     showStreak = showHomeStreak,
@@ -760,6 +807,7 @@ private fun HomeHubScreenModel.State.toUiState(): HomeHubUiState {
         userName = userName,
         userAvatar = userAvatar,
         greeting = greeting,
+        greetingReady = greetingReady,
         isLoading = isLoading,
         showWelcome = showWelcome,
     )
@@ -795,6 +843,7 @@ private fun MangaHomeHubScreenModel.State.toUiState(): HomeHubUiState {
         userName = userName,
         userAvatar = userAvatar,
         greeting = greeting,
+        greetingReady = greetingReady,
         isLoading = isLoading,
         showWelcome = showWelcome,
     )
@@ -829,6 +878,7 @@ private fun NovelHomeHubScreenModel.State.toUiState(): HomeHubUiState {
         userName = userName,
         userAvatar = userAvatar,
         greeting = greeting,
+        greetingReady = greetingReady,
         isLoading = isLoading,
         showWelcome = showWelcome,
     )
@@ -880,8 +930,8 @@ private fun HomeHubPinnedHeader(
                     .padding(horizontal = 16.dp),
             ) {
                 Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-                Spacer(Modifier.height(5.dp))
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(3.dp))
+                Spacer(Modifier.height(7.dp))
                 HomeHubProfileHeaderCanvas(
                     modifier = Modifier.fillMaxWidth(),
                     layoutSpec = homeHeaderLayout,
@@ -957,432 +1007,501 @@ private fun HomeHubProfileHeaderCanvas(
     val colors = AuroraTheme.colors
     val density = LocalDensity.current
     val fontScale = density.fontScale.coerceIn(1f, 1.6f)
-    val auroraAdaptiveSpec = rememberAuroraAdaptiveSpec()
     // Use the classic (phone) header layout on tablets too.
     val isTabletHeaderLayout = false
     val elementSizes = remember { defaultHomeHeaderElementPixelSizes() }
-
-    BoxWithConstraints(
-        modifier = modifier.height(72.dp),
+    val greetingFontFamily = greetingStyle.font.fontRes?.let { FontFamily(Font(it)) }
+    val decoratedGreetingText = remember(greetingText, greetingStyle.decoration) {
+        decorateGreetingText(greetingText, greetingStyle.decoration)
+    }
+    val greetingBaseTextStyle = MaterialTheme.typography.labelMedium
+    val greetingTextStyle = remember(
+        greetingBaseTextStyle,
+        greetingStyle.fontSize,
+        greetingStyle.italic,
+        greetingFontFamily,
     ) {
-        val widthPx = with(density) { maxWidth.toPx() }.coerceAtLeast(1f)
-        val heightPx = with(density) { maxHeight.toPx() }.coerceAtLeast(1f)
-        val designWidthPx = layoutSpec.canvas.width.coerceAtLeast(1f)
-        val designHeightPx = layoutSpec.canvas.height.coerceAtLeast(1f)
-        val scaleX = widthPx / designWidthPx
-        val scaleY = heightPx / designHeightPx
-        val defaultLayoutSpec = remember(layoutSpec.canvas) { HomeHeaderLayoutSpec.default(layoutSpec.canvas) }
+        greetingBaseTextStyle.copy(
+            fontSize = greetingStyle.fontSize.sp,
+            lineHeight = (greetingStyle.fontSize + 3).sp,
+            fontStyle = if (greetingStyle.italic) FontStyle.Italic else FontStyle.Normal,
+            fontFamily = greetingFontFamily,
+            lineBreak = LineBreak.Heading,
+        )
+    }
+    val textMeasurer = rememberTextMeasurer()
 
-        fun pointFor(spec: HomeHeaderLayoutSpec, element: HomeHeaderLayoutElement): HomeHeaderPixelPoint {
-            val size = elementSizes.getValue(element)
-            return clampHomeHeaderPixelPoint(
-                point = HomeHeaderPixelPoint(
-                    x = spec.positionOf(element).x,
-                    y = spec.positionOf(element).y,
-                ),
-                elementSize = size,
-                canvasWidth = designWidthPx,
-                canvasHeight = designHeightPx,
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val preMeasureWidthPx = with(density) { maxWidth.toPx() }.coerceAtLeast(1f)
+        val preMeasureScaleX = preMeasureWidthPx / layoutSpec.canvas.width.coerceAtLeast(1f)
+        val greetingBaseWidthPx = elementSizes.getValue(HomeHeaderLayoutElement.Greeting).width
+        val greetingMeasureWidthPx = (greetingBaseWidthPx * preMeasureScaleX).toInt().coerceAtLeast(1)
+        val preMeasuredGreetingLayout = remember(
+            decoratedGreetingText,
+            greetingTextStyle,
+            greetingMeasureWidthPx,
+        ) {
+            textMeasurer.measure(
+                text = AnnotatedString(decoratedGreetingText),
+                style = greetingTextStyle,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+                constraints = Constraints(maxWidth = greetingMeasureWidthPx),
             )
         }
-
-        fun basePointFor(
-            element: HomeHeaderLayoutElement,
-        ): HomeHeaderPixelPoint = pointFor(layoutSpec, element)
-
-        fun tabletCustomDeltaFor(
-            element: HomeHeaderLayoutElement,
-        ): Pair<androidx.compose.ui.unit.Dp, androidx.compose.ui.unit.Dp> {
-            val current = pointFor(layoutSpec, element)
-            val default = pointFor(defaultLayoutSpec, element)
-            return (current.x - default.x).dp to (current.y - default.y).dp
+        val measuredGreetingLineCount = if (showGreeting) {
+            if (preMeasuredGreetingLayout.hasVisualOverflow) {
+                4
+            } else {
+                preMeasuredGreetingLayout.lineCount.coerceAtLeast(1)
+            }
+        } else {
+            1
         }
+        val greetingLineLimit = resolveGreetingLineLimit(measuredGreetingLineCount)
+        val headerCanvasHeightDp = resolveHomeHeaderCanvasHeightDp(greetingLineLimit).dp
 
-        fun clampDpFramePosition(
-            x: androidx.compose.ui.unit.Dp,
-            y: androidx.compose.ui.unit.Dp,
-            width: androidx.compose.ui.unit.Dp,
-            height: androidx.compose.ui.unit.Dp,
-        ): Pair<androidx.compose.ui.unit.Dp, androidx.compose.ui.unit.Dp> {
-            val maxX = (maxWidth - width).coerceAtLeast(0.dp)
-            val maxY = (maxHeight - height).coerceAtLeast(0.dp)
-            return x.coerceIn(0.dp, maxX) to y.coerceIn(0.dp, maxY)
-        }
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(headerCanvasHeightDp),
+        ) {
+            val containerWidthPx = with(density) { maxWidth.toPx() }.coerceAtLeast(1f)
+            val containerHeightPx = with(density) { maxHeight.toPx() }.coerceAtLeast(1f)
+            val designWidthPx = layoutSpec.canvas.width.coerceAtLeast(1f)
+            val designHeightPx = resolveHomeHeaderCanvasHeightDp(greetingLineLimit).toFloat().coerceAtLeast(1f)
+            val scaleX = containerWidthPx / designWidthPx
+            val scaleY = containerHeightPx / designHeightPx
+            val defaultLayoutSpec = remember(layoutSpec.canvas) { HomeHeaderLayoutSpec.default(layoutSpec.canvas) }
 
-        fun frameFor(element: HomeHeaderLayoutElement): Pair<Modifier, Modifier> {
-            val size = elementSizes.getValue(element)
-            if (isTabletHeaderLayout) {
-                val greetingSize = elementSizes.getValue(HomeHeaderLayoutElement.Greeting)
-                val nicknameSize = elementSizes.getValue(HomeHeaderLayoutElement.Nickname)
-                val avatarSize = elementSizes.getValue(HomeHeaderLayoutElement.Avatar)
-                val streakSize = elementSizes.getValue(HomeHeaderLayoutElement.Streak)
-
-                val horizontalPadding = 8.dp
-                // Tablet preset tuned from the visual editor payload (720x72 baseline),
-                // while still allowing user layout deltas on top.
-                val tabletGreetingRightPadding = 102.5.dp
-                val tabletGreetingHeightBase = 39.5.dp
-                val tabletGreetingYBase = 30.6.dp
-                val tabletNicknameXBase = 0.dp
-                val tabletNicknameYBase = 37.6.dp
-                val tabletNicknameWidthBase = 270.5.dp
-                val tabletStreakXAdjust = (-2).dp
-                val avatarWidthDp = avatarSize.width.dp
-                val avatarHeightDp = avatarSize.height.dp
-                val streakWidthDp = streakSize.width.dp
-                val streakHeightDp = streakSize.height.dp
-                val nicknameHeightDp = if (isTabletHeaderLayout) {
-                    (nicknameSize.height.dp * fontScale.coerceIn(1f, 1.25f))
-                        .coerceAtLeast(nicknameSize.height.dp)
-                        .coerceAtMost(40.dp)
+            fun elementSizeFor(element: HomeHeaderLayoutElement): HomeHeaderPixelSize {
+                val baseSize = elementSizes.getValue(element)
+                return if (element == HomeHeaderLayoutElement.Greeting) {
+                    baseSize.copy(height = resolveGreetingSlotHeightPx(greetingLineLimit))
                 } else {
-                    nicknameSize.height.dp
+                    baseSize
                 }
-                val greetingHeightDp = if (isTabletHeaderLayout) {
-                    (tabletGreetingHeightBase * fontScale.coerceIn(1f, 1.4f))
-                        .coerceAtLeast(tabletGreetingHeightBase)
-                        .coerceAtMost(56.dp)
-                } else {
-                    greetingSize.height.dp
-                }
+            }
 
-                val baseAvatarXDp = (maxWidth - avatarWidthDp - horizontalPadding).coerceAtLeast(0.dp)
-                // Lift avatar slightly on tablets so it aligns better with nickname/greeting row.
-                val baseAvatarYDp = (maxHeight - avatarHeightDp - 4.dp).coerceAtLeast(0.dp)
-                val baseStreakXDp = ((baseAvatarXDp + (avatarWidthDp - streakWidthDp) / 2f) + tabletStreakXAdjust)
-                    .coerceAtLeast(0.dp)
-                // Keep the streak chip as high as possible on tablets to add separation from avatar.
-                val baseStreakYDp = 0.dp
-
-                val (avatarDeltaX, avatarDeltaY) = tabletCustomDeltaFor(HomeHeaderLayoutElement.Avatar)
-                val (streakDeltaX, streakDeltaY) = tabletCustomDeltaFor(HomeHeaderLayoutElement.Streak)
-                val (nicknameDeltaX, nicknameDeltaY) = tabletCustomDeltaFor(HomeHeaderLayoutElement.Nickname)
-                val (greetingDeltaX, greetingDeltaY) = tabletCustomDeltaFor(HomeHeaderLayoutElement.Greeting)
-
-                val (avatarXDp, avatarYDp) = clampDpFramePosition(
-                    x = baseAvatarXDp + avatarDeltaX,
-                    y = baseAvatarYDp + avatarDeltaY,
-                    width = avatarWidthDp,
-                    height = avatarHeightDp,
+            fun pointFor(spec: HomeHeaderLayoutSpec, element: HomeHeaderLayoutElement): HomeHeaderPixelPoint {
+                val size = elementSizeFor(element)
+                return clampHomeHeaderPixelPoint(
+                    point = HomeHeaderPixelPoint(
+                        x = spec.positionOf(element).x,
+                        y = spec.positionOf(element).y,
+                    ),
+                    elementSize = size,
+                    canvasWidth = designWidthPx,
+                    canvasHeight = designHeightPx,
                 )
-                val (streakXDp, streakYDp) = clampDpFramePosition(
-                    x = baseStreakXDp + streakDeltaX,
-                    y = baseStreakYDp + streakDeltaY,
-                    width = streakWidthDp,
-                    height = streakHeightDp,
-                )
+            }
 
-                val baseNicknameXDp = if (isTabletHeaderLayout) tabletNicknameXBase else horizontalPadding
-                val baseNicknameYDp = if (isTabletHeaderLayout) tabletNicknameYBase else 28.dp
-                val greetingWidthDp = if (isTabletHeaderLayout) {
-                    320.dp.coerceAtMost((maxWidth - horizontalPadding).coerceAtLeast(220.dp))
-                } else {
-                    (maxWidth - (horizontalPadding * 2)).coerceIn(220.dp, 520.dp)
-                }
-                val nicknameXDpRaw = baseNicknameXDp + nicknameDeltaX
-                val nicknameYDpRaw = baseNicknameYDp + nicknameDeltaY
-                val nicknameXDp = nicknameXDpRaw.coerceAtLeast(0.dp)
-                val nicknameYDp = nicknameYDpRaw.coerceIn(0.dp, (maxHeight - nicknameHeightDp).coerceAtLeast(0.dp))
-                val nicknameWidthDp = if (isTabletHeaderLayout) {
-                    tabletNicknameWidthBase
-                        .coerceAtMost((maxWidth - nicknameXDp).coerceAtLeast(160.dp))
-                        .coerceAtMost((avatarXDp - nicknameXDp - 12.dp).coerceAtLeast(160.dp))
-                        .coerceAtMost(greetingWidthDp)
-                        .coerceAtLeast(160.dp)
-                } else {
-                    (avatarXDp - nicknameXDp - 12.dp)
-                        .coerceIn(160.dp, 520.dp)
-                        .coerceAtMost((maxWidth - nicknameXDp).coerceAtLeast(160.dp))
-                        .coerceAtMost(520.dp)
-                }
-                val baseGreetingXDp = if (isTabletHeaderLayout) {
-                    (maxWidth - greetingWidthDp - tabletGreetingRightPadding).coerceAtLeast(0.dp)
-                } else {
-                    ((maxWidth - greetingWidthDp) / 2f).coerceAtLeast(0.dp)
-                }
-                val baseGreetingYDp = if (isTabletHeaderLayout) {
-                    tabletGreetingYBase.coerceIn(0.dp, (maxHeight - greetingHeightDp).coerceAtLeast(0.dp))
-                } else {
-                    (baseNicknameYDp + (nicknameHeightDp - greetingHeightDp) / 2f).coerceAtLeast(0.dp)
-                }
-                val (greetingXDp, greetingYDp) = clampDpFramePosition(
-                    x = baseGreetingXDp + greetingDeltaX,
-                    y = baseGreetingYDp + greetingDeltaY,
-                    width = greetingWidthDp,
-                    height = greetingHeightDp,
-                )
+            fun basePointFor(
+                element: HomeHeaderLayoutElement,
+            ): HomeHeaderPixelPoint = pointFor(layoutSpec, element)
 
-                val xDp: androidx.compose.ui.unit.Dp
-                val yDp: androidx.compose.ui.unit.Dp
-                val widthDp: androidx.compose.ui.unit.Dp
-                val heightDp: androidx.compose.ui.unit.Dp
-                when (element) {
-                    HomeHeaderLayoutElement.Greeting -> {
-                        xDp = greetingXDp
-                        yDp = greetingYDp
-                        widthDp = greetingWidthDp
-                        heightDp = greetingHeightDp
+            fun tabletCustomDeltaFor(
+                element: HomeHeaderLayoutElement,
+            ): Pair<androidx.compose.ui.unit.Dp, androidx.compose.ui.unit.Dp> {
+                val current = pointFor(layoutSpec, element)
+                val default = pointFor(defaultLayoutSpec, element)
+                return (current.x - default.x).dp to (current.y - default.y).dp
+            }
+
+            fun clampDpFramePosition(
+                x: androidx.compose.ui.unit.Dp,
+                y: androidx.compose.ui.unit.Dp,
+                width: androidx.compose.ui.unit.Dp,
+                height: androidx.compose.ui.unit.Dp,
+            ): Pair<androidx.compose.ui.unit.Dp, androidx.compose.ui.unit.Dp> {
+                val maxX = (maxWidth - width).coerceAtLeast(0.dp)
+                val maxY = (maxHeight - height).coerceAtLeast(0.dp)
+                return x.coerceIn(0.dp, maxX) to y.coerceIn(0.dp, maxY)
+            }
+
+            fun frameFor(element: HomeHeaderLayoutElement): Pair<Modifier, Modifier> {
+                val size = elementSizeFor(element)
+                if (isTabletHeaderLayout) {
+                    val greetingSize = elementSizeFor(HomeHeaderLayoutElement.Greeting)
+                    val nicknameSize = elementSizeFor(HomeHeaderLayoutElement.Nickname)
+                    val avatarSize = elementSizeFor(HomeHeaderLayoutElement.Avatar)
+                    val streakSize = elementSizeFor(HomeHeaderLayoutElement.Streak)
+
+                    val horizontalPadding = 8.dp
+                    // Tablet preset tuned from the visual editor payload (720x72 baseline),
+                    // while still allowing user layout deltas on top.
+                    val tabletGreetingRightPadding = 102.5.dp
+                    val tabletGreetingHeightBase = 39.5.dp
+                    val tabletGreetingYBase = 30.6.dp
+                    val tabletNicknameXBase = 0.dp
+                    val tabletNicknameYBase = 37.6.dp
+                    val tabletNicknameWidthBase = 270.5.dp
+                    val tabletStreakXAdjust = (-2).dp
+                    val avatarWidthDp = avatarSize.width.dp
+                    val avatarHeightDp = avatarSize.height.dp
+                    val streakWidthDp = streakSize.width.dp
+                    val streakHeightDp = streakSize.height.dp
+                    val nicknameHeightDp = if (isTabletHeaderLayout) {
+                        (nicknameSize.height.dp * fontScale.coerceIn(1f, 1.25f))
+                            .coerceAtLeast(nicknameSize.height.dp)
+                            .coerceAtMost(40.dp)
+                    } else {
+                        nicknameSize.height.dp
                     }
-                    HomeHeaderLayoutElement.Nickname -> {
-                        xDp = nicknameXDp
-                        yDp = nicknameYDp
-                        widthDp = nicknameWidthDp
-                        heightDp = nicknameHeightDp
+                    val greetingHeightDp = if (isTabletHeaderLayout) {
+                        (tabletGreetingHeightBase * fontScale.coerceIn(1f, 1.4f))
+                            .coerceAtLeast(tabletGreetingHeightBase)
+                            .coerceAtMost(56.dp)
+                    } else {
+                        greetingSize.height.dp
                     }
-                    HomeHeaderLayoutElement.Avatar -> {
-                        xDp = avatarXDp
-                        yDp = avatarYDp
-                        widthDp = avatarWidthDp
-                        heightDp = avatarHeightDp
+
+                    val baseAvatarXDp = (maxWidth - avatarWidthDp - horizontalPadding).coerceAtLeast(0.dp)
+                    // Lift avatar slightly on tablets so it aligns better with nickname/greeting row.
+                    val baseAvatarYDp = (maxHeight - avatarHeightDp - 4.dp).coerceAtLeast(0.dp)
+                    val baseStreakXDp = ((baseAvatarXDp + (avatarWidthDp - streakWidthDp) / 2f) + tabletStreakXAdjust)
+                        .coerceAtLeast(0.dp)
+                    // Keep the streak chip as high as possible on tablets to add separation from avatar.
+                    val baseStreakYDp = 0.dp
+
+                    val (avatarDeltaX, avatarDeltaY) = tabletCustomDeltaFor(HomeHeaderLayoutElement.Avatar)
+                    val (streakDeltaX, streakDeltaY) = tabletCustomDeltaFor(HomeHeaderLayoutElement.Streak)
+                    val (nicknameDeltaX, nicknameDeltaY) = tabletCustomDeltaFor(HomeHeaderLayoutElement.Nickname)
+                    val (greetingDeltaX, greetingDeltaY) = tabletCustomDeltaFor(HomeHeaderLayoutElement.Greeting)
+
+                    val (avatarXDp, avatarYDp) = clampDpFramePosition(
+                        x = baseAvatarXDp + avatarDeltaX,
+                        y = baseAvatarYDp + avatarDeltaY,
+                        width = avatarWidthDp,
+                        height = avatarHeightDp,
+                    )
+                    val (streakXDp, streakYDp) = clampDpFramePosition(
+                        x = baseStreakXDp + streakDeltaX,
+                        y = baseStreakYDp + streakDeltaY,
+                        width = streakWidthDp,
+                        height = streakHeightDp,
+                    )
+
+                    val baseNicknameXDp = if (isTabletHeaderLayout) tabletNicknameXBase else horizontalPadding
+                    val baseNicknameYDp = if (isTabletHeaderLayout) tabletNicknameYBase else 28.dp
+                    val greetingWidthDp = if (isTabletHeaderLayout) {
+                        320.dp.coerceAtMost((maxWidth - horizontalPadding).coerceAtLeast(220.dp))
+                    } else {
+                        (maxWidth - (horizontalPadding * 2)).coerceIn(220.dp, 520.dp)
                     }
-                    HomeHeaderLayoutElement.Streak -> {
-                        xDp = streakXDp
-                        yDp = streakYDp
-                        widthDp = streakWidthDp
-                        heightDp = streakHeightDp
+                    val nicknameXDpRaw = baseNicknameXDp + nicknameDeltaX
+                    val nicknameYDpRaw = baseNicknameYDp + nicknameDeltaY
+                    val nicknameXDp = nicknameXDpRaw.coerceAtLeast(0.dp)
+                    val nicknameYDp = nicknameYDpRaw.coerceIn(0.dp, (maxHeight - nicknameHeightDp).coerceAtLeast(0.dp))
+                    val nicknameWidthDp = if (isTabletHeaderLayout) {
+                        tabletNicknameWidthBase
+                            .coerceAtMost((maxWidth - nicknameXDp).coerceAtLeast(160.dp))
+                            .coerceAtMost((avatarXDp - nicknameXDp - 12.dp).coerceAtLeast(160.dp))
+                            .coerceAtMost(greetingWidthDp)
+                            .coerceAtLeast(160.dp)
+                    } else {
+                        (avatarXDp - nicknameXDp - 12.dp)
+                            .coerceIn(160.dp, 520.dp)
+                            .coerceAtMost((maxWidth - nicknameXDp).coerceAtLeast(160.dp))
+                            .coerceAtMost(520.dp)
                     }
+                    val baseGreetingXDp = if (isTabletHeaderLayout) {
+                        (maxWidth - greetingWidthDp - tabletGreetingRightPadding).coerceAtLeast(0.dp)
+                    } else {
+                        ((maxWidth - greetingWidthDp) / 2f).coerceAtLeast(0.dp)
+                    }
+                    val baseGreetingYDp = if (isTabletHeaderLayout) {
+                        tabletGreetingYBase.coerceIn(0.dp, (maxHeight - greetingHeightDp).coerceAtLeast(0.dp))
+                    } else {
+                        (baseNicknameYDp + (nicknameHeightDp - greetingHeightDp) / 2f).coerceAtLeast(0.dp)
+                    }
+                    val (greetingXDp, greetingYDp) = clampDpFramePosition(
+                        x = baseGreetingXDp + greetingDeltaX,
+                        y = baseGreetingYDp + greetingDeltaY,
+                        width = greetingWidthDp,
+                        height = greetingHeightDp,
+                    )
+
+                    val xDp: androidx.compose.ui.unit.Dp
+                    val yDp: androidx.compose.ui.unit.Dp
+                    val widthDp: androidx.compose.ui.unit.Dp
+                    val heightDp: androidx.compose.ui.unit.Dp
+                    when (element) {
+                        HomeHeaderLayoutElement.Greeting -> {
+                            xDp = greetingXDp
+                            yDp = greetingYDp
+                            widthDp = greetingWidthDp
+                            heightDp = greetingHeightDp
+                        }
+                        HomeHeaderLayoutElement.Nickname -> {
+                            xDp = nicknameXDp
+                            yDp = nicknameYDp
+                            widthDp = nicknameWidthDp
+                            heightDp = nicknameHeightDp
+                        }
+                        HomeHeaderLayoutElement.Avatar -> {
+                            xDp = avatarXDp
+                            yDp = avatarYDp
+                            widthDp = avatarWidthDp
+                            heightDp = avatarHeightDp
+                        }
+                        HomeHeaderLayoutElement.Streak -> {
+                            xDp = streakXDp
+                            yDp = streakYDp
+                            widthDp = streakWidthDp
+                            heightDp = streakHeightDp
+                        }
+                    }
+
+                    val slotModifier = Modifier
+                        .offset(x = xDp, y = yDp)
+                        .width(widthDp)
+                        .height(heightDp)
+                    val contentModifier = Modifier.fillMaxSize()
+                    return slotModifier to contentModifier
                 }
+
+                val point = basePointFor(element)
+                val xPx = point.x * scaleX
+                val yPxRaw = point.y * scaleY
+                val widthDp = with(density) { (size.width * scaleX).toDp() }
+                val heightDp = with(density) { (size.height * scaleY).toDp() }
+                val yPxAdjusted = if (element == HomeHeaderLayoutElement.Nickname && showGreeting) {
+                    val greetingPoint = basePointFor(HomeHeaderLayoutElement.Greeting)
+                    val greetingSize = elementSizeFor(HomeHeaderLayoutElement.Greeting)
+                    resolveNicknameYForGreetingOverlap(
+                        nicknameY = yPxRaw,
+                        greetingY = greetingPoint.y * scaleY,
+                        greetingHeight = greetingSize.height * scaleY,
+                    )
+                } else {
+                    yPxRaw
+                }
+                val elementHeightPx = size.height * scaleY
+                val yPx = yPxAdjusted.coerceIn(
+                    0f,
+                    (containerHeightPx - elementHeightPx).coerceAtLeast(0f),
+                )
 
                 val slotModifier = Modifier
-                    .offset(x = xDp, y = yDp)
+                    .offset { IntOffset(xPx.roundToInt(), yPx.roundToInt()) }
                     .width(widthDp)
                     .height(heightDp)
                 val contentModifier = Modifier.fillMaxSize()
                 return slotModifier to contentModifier
             }
 
-            val point = basePointFor(element)
-            val xPx = point.x * scaleX
-            val yPx = point.y * scaleY
-            val widthDp = with(density) { (size.width * scaleX).toDp() }
-            val heightDp = with(density) { (size.height * scaleY).toDp() }
-
-            val slotModifier = Modifier
-                .offset { IntOffset(xPx.roundToInt(), yPx.roundToInt()) }
-                .width(widthDp)
-                .height(heightDp)
-            val contentModifier = Modifier.fillMaxSize()
-            return slotModifier to contentModifier
-        }
-
-        if (showGreeting) {
-            val (slotModifier, contentModifier) = frameFor(HomeHeaderLayoutElement.Greeting)
-            val greetingFontFamily = greetingStyle.font.fontRes?.let { FontFamily(Font(it)) }
-            val greetingColor = resolveNicknameColor(greetingStyle.color, greetingStyle.customColorHex, colors)
-            Box(
-                modifier = slotModifier,
-                contentAlignment = when {
-                    isTabletHeaderLayout -> Alignment.Center
-                    greetingAlignRight -> Alignment.TopEnd
-                    else -> Alignment.TopStart
-                },
-            ) {
-                Text(
-                    text = decorateGreetingText(greetingText, greetingStyle.decoration),
-                    modifier = contentModifier.clickable(onClick = onGreetingClick),
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontSize = greetingStyle.fontSize.sp,
-                        lineHeight = (greetingStyle.fontSize + 3).sp,
-                        fontStyle = if (greetingStyle.italic) FontStyle.Italic else FontStyle.Normal,
-                        fontFamily = greetingFontFamily,
-                        lineBreak = LineBreak.Heading,
-                    ),
-                    color = greetingColor.copy(alpha = greetingStyle.alpha.coerceIn(10, 100) / 100f),
-                    fontWeight = FontWeight.Medium,
-                    maxLines = if (isTabletHeaderLayout) 2 else 2,
-                    textAlign = when {
-                        isTabletHeaderLayout -> TextAlign.Center
-                        greetingAlignRight -> TextAlign.End
-                        else -> TextAlign.Start
+            if (showGreeting) {
+                val (slotModifier, _) = frameFor(HomeHeaderLayoutElement.Greeting)
+                val greetingColor = resolveNicknameColor(greetingStyle.color, greetingStyle.customColorHex, colors)
+                Box(
+                    modifier = slotModifier.clickable(onClick = onGreetingClick),
+                    contentAlignment = when {
+                        isTabletHeaderLayout -> Alignment.Center
+                        else -> Alignment.BottomCenter
                     },
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-
-        run {
-            val (slotModifier, contentModifier) = frameFor(HomeHeaderLayoutElement.Nickname)
-            Box(slotModifier) {
-                Row(
-                    modifier = contentModifier.clickable(onClick = onNameClick),
-                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(
-                        modifier = Modifier.weight(
-                            1f,
-                            fill = if (nicknameAlignRight) {
-                                true
-                            } else {
-                                shouldFillNicknameRowSpace(showNameEditHint)
-                            },
-                        ),
-                        contentAlignment = if (nicknameAlignRight) {
-                            Alignment.CenterEnd
-                        } else {
-                            Alignment.CenterStart
+                    Text(
+                        text = decoratedGreetingText,
+                        modifier = Modifier.fillMaxWidth(),
+                        style = greetingTextStyle,
+                        color = greetingColor.copy(alpha = greetingStyle.alpha.coerceIn(10, 100) / 100f),
+                        fontWeight = FontWeight.Medium,
+                        maxLines = if (isTabletHeaderLayout) 2 else greetingLineLimit,
+                        textAlign = when {
+                            isTabletHeaderLayout -> TextAlign.Center
+                            greetingAlignRight -> TextAlign.End
+                            else -> TextAlign.Start
                         },
-                    ) {
-                        StyledNicknameText(
-                            text = userName,
-                            nicknameStyle = nicknameStyle,
-                        )
-                    }
-                    if (showNameEditHint) {
-                        if (isTabletHeaderLayout) {
-                            Spacer(Modifier.width(0.dp))
-                            Box(
-                                modifier = Modifier
-                                    .offset(x = 0.dp, y = 9.dp)
-                                    .size(18.dp)
-                                    .clickable(onClick = onNameClick),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Edit,
-                                    contentDescription = null,
-                                    tint = colors.accent,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                            }
-                        } else {
-                            Spacer(Modifier.width(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.accent.copy(alpha = 0.2f))
-                                    .border(
-                                        width = 1.dp,
-                                        color = colors.accent.copy(alpha = 0.45f),
-                                        shape = CircleShape,
-                                    ),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Edit,
-                                    contentDescription = null,
-                                    tint = colors.accent,
-                                    modifier = Modifier.size(12.dp),
-                                )
-                            }
-                        }
-                    }
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
-        }
 
-        val attachStreakToAvatarOnTablet = false
-
-        if (showStreak && !attachStreakToAvatarOnTablet) {
-            val (slotModifier, contentModifier) = frameFor(HomeHeaderLayoutElement.Streak)
-            Box(slotModifier) {
-                Box(contentModifier, contentAlignment = Alignment.Center) {
+            run {
+                val (slotModifier, contentModifier) = frameFor(HomeHeaderLayoutElement.Nickname)
+                Box(slotModifier) {
                     Row(
-                        modifier = Modifier
-                            .offset(y = if (isTabletHeaderLayout) (-3).dp else 0.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(colors.accent.copy(alpha = 0.14f))
-                            .border(
-                                width = 1.dp,
-                                color = colors.accent.copy(alpha = 0.35f),
-                                shape = RoundedCornerShape(50),
-                            )
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                        modifier = contentModifier.clickable(onClick = onNameClick),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.LocalFireDepartment,
-                            contentDescription = null,
-                            tint = colors.accent,
-                            modifier = Modifier.size(12.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = currentStreak.toString(),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = colors.textPrimary,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
-            }
-        }
-
-        run {
-            val (slotModifier, contentModifier) = frameFor(HomeHeaderLayoutElement.Avatar)
-            Box(slotModifier) {
-                Box(contentModifier, contentAlignment = Alignment.Center) {
-                    if (attachStreakToAvatarOnTablet) {
                         Box(
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .offset(x = (-42).dp),
+                            modifier = Modifier.weight(
+                                1f,
+                                fill = if (nicknameAlignRight) {
+                                    true
+                                } else {
+                                    shouldFillNicknameRowSpace(showNameEditHint)
+                                },
+                            ),
+                            contentAlignment = if (nicknameAlignRight) {
+                                Alignment.CenterEnd
+                            } else {
+                                Alignment.CenterStart
+                            },
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(50))
-                                    .background(colors.accent.copy(alpha = 0.14f))
-                                    .border(
-                                        width = 1.dp,
-                                        color = colors.accent.copy(alpha = 0.35f),
-                                        shape = RoundedCornerShape(50),
+                            StyledNicknameText(
+                                text = userName,
+                                nicknameStyle = nicknameStyle,
+                            )
+                        }
+                        if (showNameEditHint) {
+                            if (isTabletHeaderLayout) {
+                                Spacer(Modifier.width(0.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = 0.dp, y = 9.dp)
+                                        .size(18.dp)
+                                        .clickable(onClick = onNameClick),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Edit,
+                                        contentDescription = null,
+                                        tint = colors.accent,
+                                        modifier = Modifier.size(14.dp),
                                     )
-                                    .padding(horizontal = 8.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.LocalFireDepartment,
-                                    contentDescription = null,
-                                    tint = colors.accent,
-                                    modifier = Modifier.size(12.dp),
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    text = currentStreak.toString(),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = colors.textPrimary,
-                                    fontWeight = FontWeight.Bold,
-                                )
+                                }
+                            } else {
+                                Spacer(Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .background(colors.accent.copy(alpha = 0.2f))
+                                        .border(
+                                            width = 1.dp,
+                                            color = colors.accent.copy(alpha = 0.45f),
+                                            shape = CircleShape,
+                                        ),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Edit,
+                                        contentDescription = null,
+                                        tint = colors.accent,
+                                        modifier = Modifier.size(12.dp),
+                                    )
+                                }
                             }
                         }
                     }
+                }
+            }
 
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clickable(onClick = onAvatarClick),
-                    ) {
-                        if (userAvatar.isNotEmpty()) {
-                            AsyncImage(
-                                model = userAvatar,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape),
-                            )
-                        } else {
+            val attachStreakToAvatarOnTablet = false
+
+            if (showStreak && !attachStreakToAvatarOnTablet) {
+                val (slotModifier, contentModifier) = frameFor(HomeHeaderLayoutElement.Streak)
+                Box(slotModifier) {
+                    Box(contentModifier, contentAlignment = Alignment.Center) {
+                        Row(
+                            modifier = Modifier
+                                .offset(y = if (isTabletHeaderLayout) (-3).dp else 0.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(colors.accent.copy(alpha = 0.14f))
+                                .border(
+                                    width = 1.dp,
+                                    color = colors.accent.copy(alpha = 0.35f),
+                                    shape = RoundedCornerShape(50),
+                                )
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Icon(
-                                Icons.Filled.AccountCircle,
-                                null,
+                                imageVector = Icons.Filled.LocalFireDepartment,
+                                contentDescription = null,
                                 tint = colors.accent,
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier.size(12.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = currentStreak.toString(),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colors.textPrimary,
+                                fontWeight = FontWeight.Bold,
                             )
                         }
-                        if (userAvatar.isEmpty()) {
+                    }
+                }
+            }
+
+            run {
+                val (slotModifier, contentModifier) = frameFor(HomeHeaderLayoutElement.Avatar)
+                Box(slotModifier) {
+                    Box(contentModifier, contentAlignment = Alignment.Center) {
+                        if (attachStreakToAvatarOnTablet) {
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .size(16.dp)
-                                    .background(colors.accent, CircleShape),
-                                contentAlignment = Alignment.Center,
+                                    .align(Alignment.Center)
+                                    .offset(x = (-42).dp),
                             ) {
-                                Icon(
-                                    Icons.Filled.CameraAlt,
-                                    null,
-                                    tint = colors.textOnAccent,
-                                    modifier = Modifier.size(10.dp),
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .background(colors.accent.copy(alpha = 0.14f))
+                                        .border(
+                                            width = 1.dp,
+                                            color = colors.accent.copy(alpha = 0.35f),
+                                            shape = RoundedCornerShape(50),
+                                        )
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.LocalFireDepartment,
+                                        contentDescription = null,
+                                        tint = colors.accent,
+                                        modifier = Modifier.size(12.dp),
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = currentStreak.toString(),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = colors.textPrimary,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clickable(onClick = onAvatarClick),
+                        ) {
+                            if (userAvatar.isNotEmpty()) {
+                                AsyncImage(
+                                    model = userAvatar,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape),
                                 )
+                            } else {
+                                Icon(
+                                    Icons.Filled.AccountCircle,
+                                    null,
+                                    tint = colors.accent,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                            if (userAvatar.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .size(16.dp)
+                                        .background(colors.accent, CircleShape),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Filled.CameraAlt,
+                                        null,
+                                        tint = colors.textOnAccent,
+                                        modifier = Modifier.size(10.dp),
+                                    )
+                                }
                             }
                         }
                     }
@@ -1849,11 +1968,28 @@ private fun HeroSection(
         Brush.verticalGradient(
             colorStops = arrayOf(
                 0.00f to Color.Transparent,
-                0.46f to Color.Transparent,
-                0.72f to colors.background.copy(alpha = 0.34f),
-                0.90f to colors.background.copy(alpha = 0.72f),
-                1.00f to colors.background.copy(alpha = 0.93f),
+                0.40f to Color.Transparent,
+                0.66f to colors.background.copy(alpha = 0.42f),
+                0.86f to colors.background.copy(alpha = 0.84f),
+                1.00f to colors.background.copy(alpha = 0.96f),
             ),
+        )
+    }
+    val readabilityScrim = remember {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.00f to Color.Transparent,
+                0.58f to Color.Transparent,
+                0.78f to Color.Black.copy(alpha = 0.46f),
+                1.00f to Color.Black.copy(alpha = 0.88f),
+            ),
+        )
+    }
+    val heroTextShadow = remember {
+        Shadow(
+            color = Color.Black.copy(alpha = 0.86f),
+            offset = Offset(0f, 2.5f),
+            blurRadius = 10f,
         )
     }
     val rimLightBrush = remember { homeHubRimLightBrush() }
@@ -1877,13 +2013,17 @@ private fun HeroSection(
             .border(width = 1.dp, brush = rimLightBrush, shape = heroCardShape)
             .clickable(onClick = onEntryClick),
     ) {
+        val fallbackPainter = rememberThemeAwareCoverErrorPainter(variant = AuroraCoverPlaceholderVariant.Wide)
         AsyncImage(
             model = hero.coverData,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
+            error = fallbackPainter,
+            fallback = fallbackPainter,
         )
         Box(Modifier.fillMaxSize().background(overlayGradient))
+        Box(Modifier.fillMaxSize().background(readabilityScrim))
 
         Column(
             modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp),
@@ -1892,11 +2032,11 @@ private fun HeroSection(
             // Badge hidden as per design update
             Text(
                 hero.title,
-                color = colors.textPrimary,
+                color = Color.White,
                 fontSize = 28.sp,
                 fontFamily = FontFamily(Font(eu.kanade.tachiyomi.R.font.montserrat_bold)),
                 lineHeight = 34.sp,
-                style = TextStyle(lineBreak = LineBreak.Heading),
+                style = TextStyle(lineBreak = LineBreak.Heading, shadow = heroTextShadow),
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -1908,9 +2048,10 @@ private fun HeroSection(
                 Spacer(Modifier.width(8.dp))
                 Text(
                     stringResource(progressLabelRes, (hero.progressNumber % 1000).toInt()),
-                    color = colors.textSecondary,
+                    color = Color.White.copy(alpha = 0.92f),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
+                    style = TextStyle(shadow = heroTextShadow),
                 )
             }
 

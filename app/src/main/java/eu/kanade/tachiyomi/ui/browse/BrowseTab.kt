@@ -3,8 +3,6 @@ package eu.kanade.tachiyomi.ui.browse
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -171,68 +169,62 @@ data object BrowseTab : Tab {
         val auroraAdaptiveSpec = rememberAuroraAdaptiveSpec()
         val useWideBrowseTabs = auroraAdaptiveSpec.deviceClass != AuroraDeviceClass.Phone
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colors.backgroundGradient),
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                TabbedScreenAurora(
-                    titleRes = MR.strings.browse,
-                    tabs = currentTabs,
-                    state = state,
-                    mangaSearchQuery = if (isMangaSection) mangaExtensionsState.searchQuery else null,
-                    onChangeMangaSearchQuery = mangaExtensionsScreenModel::search,
-                    animeSearchQuery = when (effectiveSection) {
-                        BrowseSection.Anime -> animeExtensionsState.searchQuery
-                        BrowseSection.Novel -> novelExtensionsState.searchQuery
-                        BrowseSection.Manga -> null
-                    },
-                    onChangeAnimeSearchQuery = { query ->
-                        when (effectiveSection) {
-                            BrowseSection.Anime -> animeExtensionsScreenModel.search(query)
-                            BrowseSection.Novel -> novelExtensionsScreenModel.search(query)
-                            BrowseSection.Manga -> Unit
-                        }
-                    },
-                    isMangaTab = { isMangaSection },
-                    scrollable = !useWideBrowseTabs,
-                    applyStatusBarsPadding = true,
-                    highlightedActionTitle = stringResource(MR.strings.action_global_search),
-                    extraHeaderContent = {
-                        if (sections.size > 1) {
-                            Column {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                AuroraTabRow(
-                                    tabs = sections.map { section ->
-                                        when (section) {
-                                            BrowseSection.Anime -> {
-                                                TabContent(AYMR.strings.label_anime, content = { _, _ -> })
-                                            }
-                                            BrowseSection.Manga -> {
-                                                TabContent(AYMR.strings.label_manga, content = { _, _ -> })
-                                            }
-                                            BrowseSection.Novel -> {
-                                                TabContent(AYMR.strings.label_novel, content = { _, _ -> })
-                                            }
+        Column(modifier = Modifier.fillMaxSize()) {
+            TabbedScreenAurora(
+                titleRes = MR.strings.browse,
+                tabs = currentTabs,
+                state = state,
+                mangaSearchQuery = if (isMangaSection) mangaExtensionsState.searchQuery else null,
+                onChangeMangaSearchQuery = mangaExtensionsScreenModel::search,
+                animeSearchQuery = when (effectiveSection) {
+                    BrowseSection.Anime -> animeExtensionsState.searchQuery
+                    BrowseSection.Novel -> novelExtensionsState.searchQuery
+                    BrowseSection.Manga -> null
+                },
+                onChangeAnimeSearchQuery = { query ->
+                    when (effectiveSection) {
+                        BrowseSection.Anime -> animeExtensionsScreenModel.search(query)
+                        BrowseSection.Novel -> novelExtensionsScreenModel.search(query)
+                        BrowseSection.Manga -> Unit
+                    }
+                },
+                isMangaTab = { isMangaSection },
+                scrollable = !useWideBrowseTabs,
+                applyStatusBarsPadding = true,
+                highlightedActionTitle = stringResource(MR.strings.action_global_search),
+                extraHeaderContent = {
+                    if (sections.size > 1) {
+                        Column {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            AuroraTabRow(
+                                tabs = sections.map { section ->
+                                    when (section) {
+                                        BrowseSection.Anime -> {
+                                            TabContent(AYMR.strings.label_anime, content = { _, _ -> })
                                         }
-                                    }.toPersistentList(),
-                                    selectedIndex = when (effectiveSection) {
-                                        BrowseSection.Anime -> sections.indexOf(BrowseSection.Anime)
-                                        BrowseSection.Manga -> sections.indexOf(BrowseSection.Manga)
-                                        BrowseSection.Novel -> sections.indexOf(BrowseSection.Novel)
-                                    },
-                                    onTabSelected = { index ->
-                                        currentSection = sections.getOrNull(index) ?: BrowseSection.Anime
-                                    },
-                                    scrollable = false,
-                                )
-                                Spacer(modifier = Modifier.height(if (useWideBrowseTabs) 15.dp else 16.dp))
-                            }
+                                        BrowseSection.Manga -> {
+                                            TabContent(AYMR.strings.label_manga, content = { _, _ -> })
+                                        }
+                                        BrowseSection.Novel -> {
+                                            TabContent(AYMR.strings.label_novel, content = { _, _ -> })
+                                        }
+                                    }
+                                }.toPersistentList(),
+                                selectedIndex = when (effectiveSection) {
+                                    BrowseSection.Anime -> sections.indexOf(BrowseSection.Anime)
+                                    BrowseSection.Manga -> sections.indexOf(BrowseSection.Manga)
+                                    BrowseSection.Novel -> sections.indexOf(BrowseSection.Novel)
+                                },
+                                onTabSelected = { index ->
+                                    currentSection = sections.getOrNull(index) ?: BrowseSection.Anime
+                                },
+                                scrollable = false,
+                            )
+                            Spacer(modifier = Modifier.height(if (useWideBrowseTabs) 15.dp else 16.dp))
                         }
-                    },
-                )
-            }
+                    }
+                },
+            )
         }
 
         LaunchedEffect(currentTabs.size) {

@@ -3,6 +3,7 @@ package eu.kanade.domain.ui
 import eu.kanade.domain.ui.model.AnimeMetadataSource
 import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.domain.ui.model.NavStyle
+import eu.kanade.domain.ui.model.NavTransitionMode
 import eu.kanade.domain.ui.model.StartScreen
 import eu.kanade.domain.ui.model.TabletUiMode
 import eu.kanade.domain.ui.model.ThemeMode
@@ -43,6 +44,11 @@ class UiPreferences(
 
     fun navStyle() = preferenceStore.getEnum("bottom_rail_nav_style", NavStyle.MOVE_HISTORY_TO_MORE)
 
+    fun navigationTransitionMode() = preferenceStore.getEnum(
+        "navigation_transition_mode",
+        NavTransitionMode.MODERN,
+    )
+
     /**
      * Source for anime metadata (posters, ratings, type, status).
      * Default is ANILIST for better coverage and quality.
@@ -67,6 +73,8 @@ class UiPreferences(
     fun showOriginalTitle() = preferenceStore.getBoolean("show_original_title", true)
 
     fun showAchievementNotifications() = preferenceStore.getBoolean("show_achievement_notifications", true)
+
+    fun animatedAuroraBackground() = preferenceStore.getBoolean("animated_aurora_background", true)
 
     companion object {
         fun dateFormat(format: String): DateTimeFormatter = when (format) {

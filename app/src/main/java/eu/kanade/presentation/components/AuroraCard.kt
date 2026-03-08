@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -26,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,6 +53,7 @@ fun AuroraCard(
     val colors = AuroraTheme.colors
     val normalizedCoverHeightFraction = coverHeightFraction.coerceIn(0.01f, 1f)
     val showTextContent = normalizedCoverHeightFraction < 1f
+    val placeholderPainter = rememberAuroraCoverPlaceholderPainter()
 
     Card(
         modifier = modifier
@@ -89,7 +88,7 @@ fun AuroraCard(
                     .padding(imagePadding),
             ) {
                 AsyncImage(
-                    model = coverData,
+                    model = resolveAuroraCoverModel(coverData),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -105,7 +104,8 @@ fun AuroraCard(
                                 RoundedCornerShape(12.dp)
                             },
                         ),
-                    error = rememberVectorPainter(Icons.Default.BrokenImage),
+                    error = placeholderPainter,
+                    fallback = placeholderPainter,
                 )
 
                 // Badge overlay (e.g. Unread count)

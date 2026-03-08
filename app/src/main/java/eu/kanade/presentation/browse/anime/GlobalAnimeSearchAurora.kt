@@ -27,6 +27,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import eu.kanade.presentation.components.AuroraBackground
+import eu.kanade.presentation.components.rememberAuroraCoverPlaceholderPainter
+import eu.kanade.presentation.components.resolveAuroraCoverModel
 import eu.kanade.presentation.theme.AuroraTheme
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.i18n.aniyomi.AYMR
@@ -39,12 +42,9 @@ fun GlobalAnimeSearchAuroraContent(
     contentPadding: PaddingValues,
 ) {
     val colors = AuroraTheme.colors
+    val placeholderPainter = rememberAuroraCoverPlaceholderPainter()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colors.backgroundGradient),
-    ) {
+    AuroraBackground {
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             contentPadding = contentPadding,
@@ -81,10 +81,12 @@ fun GlobalAnimeSearchAuroraContent(
                             .background(colors.cardBackground),
                     ) {
                         AsyncImage(
-                            model = anime.thumbnailUrl,
+                            model = resolveAuroraCoverModel(anime.thumbnailUrl),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
+                            error = placeholderPainter,
+                            fallback = placeholderPainter,
                         )
                     }
                     Text(

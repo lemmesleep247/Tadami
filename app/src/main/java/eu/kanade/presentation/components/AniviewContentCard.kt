@@ -48,13 +48,14 @@ fun AniviewContentCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = AuroraTheme.colors
+    val placeholderPainter = rememberAuroraCoverPlaceholderPainter()
 
     Column(
         modifier = modifier.clickable { onClick() },
     ) {
         Box {
             AsyncImage(
-                model = imageUrl,
+                model = resolveAuroraCoverModel(imageUrl),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -62,6 +63,8 @@ fun AniviewContentCard(
                     .clip(RoundedCornerShape(12.dp))
                     .cyanGlow(blurRadius = 12.dp, alpha = 0.4f),
                 contentScale = ContentScale.Crop,
+                error = placeholderPainter,
+                fallback = placeholderPainter,
             )
 
             // Badge (top-left)
@@ -132,6 +135,7 @@ fun AniviewHeroCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = AuroraTheme.colors
+    val placeholderPainter = rememberAuroraCoverPlaceholderPainter(AuroraCoverPlaceholderVariant.Wide)
 
     Box(
         modifier = modifier
@@ -148,10 +152,12 @@ fun AniviewHeroCard(
     ) {
         // Background image
         AsyncImage(
-            model = imageUrl,
+            model = resolveAuroraCoverModel(imageUrl),
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
+            error = placeholderPainter,
+            fallback = placeholderPainter,
         )
 
         // Gradient overlay (dark at bottom for text readability)
