@@ -26,12 +26,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import eu.kanade.presentation.more.settings.AURORA_SETTINGS_CARD_SHAPE
 import eu.kanade.presentation.more.settings.LocalPreferenceHighlighted
 import eu.kanade.presentation.more.settings.LocalPreferenceMinHeight
+import eu.kanade.presentation.more.settings.LocalSettingsUiStyle
+import eu.kanade.presentation.more.settings.SettingsUiStyle
+import eu.kanade.presentation.more.settings.settingsCardContainerColor
+import eu.kanade.presentation.more.settings.settingsTitleColor
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.seconds
 
@@ -47,9 +53,21 @@ internal fun BasePreferenceWidget(
 ) {
     val highlighted = LocalPreferenceHighlighted.current
     val minHeight = LocalPreferenceMinHeight.current
+    val isAurora = LocalSettingsUiStyle.current == SettingsUiStyle.Aurora
+    val rowShape = if (isAurora) AURORA_SETTINGS_CARD_SHAPE else MaterialTheme.shapes.medium
     Row(
         modifier = modifier
             .highlightBackground(highlighted)
+            .then(
+                if (isAurora) {
+                    Modifier
+                        .padding(vertical = 4.dp)
+                        .clip(rowShape)
+                        .background(settingsCardContainerColor())
+                } else {
+                    Modifier
+                },
+            )
             .sizeIn(minHeight = minHeight)
             .combinedClickable(
                 enabled = onClick != null || onLongClick != null,
@@ -74,9 +92,10 @@ internal fun BasePreferenceWidget(
                 Text(
                     modifier = Modifier.padding(horizontal = PrefsHorizontalPadding),
                     text = title,
-                    overflow = TextOverflow.Ellipsis,
-                    maxLines = 2,
+                    overflow = if (isAurora) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    maxLines = if (isAurora) Int.MAX_VALUE else 2,
                     style = MaterialTheme.typography.titleLarge,
+                    color = settingsTitleColor(),
                     fontSize = TitleFontSize,
                 )
             }

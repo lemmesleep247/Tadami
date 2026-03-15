@@ -130,7 +130,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -168,7 +167,6 @@ import eu.kanade.tachiyomi.ui.reader.novel.setting.GeminiPromptMode
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderAppearanceMode
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundSource
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundTexture
-import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderParagraphSpacing
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderSettings
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderTheme
@@ -475,10 +473,17 @@ fun NovelReaderScreen(
             selectedFontId = state.readerSettings.fontFamily,
         )
     }
-    val composeTypeface = remember(selectedReaderFont.id, context) {
+    val composeTypeface = remember(
+        selectedReaderFont.id,
+        state.readerSettings.forceBoldText,
+        state.readerSettings.forceItalicText,
+        context,
+    ) {
         loadNovelReaderTypeface(
             context = context,
             font = selectedReaderFont,
+            forceBoldText = state.readerSettings.forceBoldText,
+            forceItalicText = state.readerSettings.forceItalicText,
         )
     }
     val composeFontFamily = remember(selectedReaderFont.id, composeTypeface) {
@@ -545,7 +550,7 @@ fun NovelReaderScreen(
             preserveSourceTextAlignInNative = state.readerSettings.preserveSourceTextAlignInNative,
         )
     }
-    val pageReaderBlocks: List<String> = remember(
+    val pageReaderPages: List<List<PlainPageSlice>> = remember(
         state.chapter.id,
         state.textBlocks,
         shouldPaginateForPageReader,
@@ -553,16 +558,18 @@ fun NovelReaderScreen(
         state.readerSettings.lineHeight,
         state.readerSettings.margin,
         state.readerSettings.textAlign,
+        state.readerSettings.paragraphSpacing,
         state.readerSettings.forceParagraphIndent,
+        pageReaderLayoutTextAlign,
         composeTypeface,
         pageViewportSize,
         contentPaddingPx,
         statusBarTopPadding,
     ) {
-        resolvePageReaderBlocks(
-            shouldPaginate = shouldPaginateForPageReader,
-            textBlocks = state.textBlocks,
-        ) { chapterText ->
+        val textBlocks = state.textBlocks.filter { it.isNotBlank() }
+        if (!shouldPaginateForPageReader || textBlocks.isEmpty()) {
+            emptyList()
+        } else {
             val screenWidthPx = pageViewportSize.width.takeIf { it > 0 }
                 ?: with(density) { configuration.screenWidthDp.dp.roundToPx() }
             val screenHeightPx = pageViewportSize.height.takeIf { it > 0 }
@@ -571,8 +578,9 @@ fun NovelReaderScreen(
             val topPaddingPx = with(density) { (contentPaddingPx + statusBarTopPadding).roundToPx() }
             val bottomPaddingPx = with(density) { contentPaddingPx.roundToPx() }
             val verticalPaddingPx = topPaddingPx + bottomPaddingPx
-            paginateTextIntoPages(
-                text = chapterText,
+            paginatePlainPageBlocks(
+                textBlocks = textBlocks,
+                paragraphSpacingPx = with(density) { state.readerSettings.paragraphSpacing.dp.roundToPx() },
                 widthPx = (screenWidthPx - horizontalPaddingPx).coerceAtLeast(1),
                 heightPx = (screenHeightPx - verticalPaddingPx).coerceAtLeast(1),
                 textSizePx = with(density) { state.readerSettings.fontSize.sp.toPx() },
@@ -588,7 +596,7 @@ fun NovelReaderScreen(
         !state.richContentUnsupportedFeaturesDetected &&
         state.richContentBlocks.isNotEmpty() &&
         state.richContentBlocks.none { it is NovelRichContentBlock.Image }
-    val richPageReaderBlocks: List<AnnotatedString> = remember(
+    val richPageReaderPages: List<List<RichPageSlice>> = remember(
         state.chapter.id,
         state.richContentBlocks,
         shouldPaginateRichForPageReader,
@@ -596,6 +604,9 @@ fun NovelReaderScreen(
         state.readerSettings.lineHeight,
         state.readerSettings.margin,
         state.readerSettings.textAlign,
+        state.readerSettings.paragraphSpacing,
+        state.readerSettings.forceParagraphIndent,
+        pageReaderLayoutTextAlign,
         composeTypeface,
         pageViewportSize,
         contentPaddingPx,
@@ -604,15 +615,17 @@ fun NovelReaderScreen(
         if (!shouldPaginateRichForPageReader) {
             emptyList()
         } else {
-            val richChapterText = buildRichPageReaderChapterAnnotatedText(
-                richBlocks = state.richContentBlocks,
-                forcedParagraphFirstLineIndentEm = if (state.readerSettings.forceParagraphIndent) {
-                    FORCED_PARAGRAPH_FIRST_LINE_INDENT_EM
-                } else {
-                    null
-                },
-            )
-            if (richChapterText.text.isBlank()) {
+            val richPageBlocks = state.richContentBlocks.map { block ->
+                buildRichPageReaderBlockText(
+                    block = block,
+                    forcedParagraphFirstLineIndentEm = if (state.readerSettings.forceParagraphIndent) {
+                        FORCED_PARAGRAPH_FIRST_LINE_INDENT_EM
+                    } else {
+                        null
+                    },
+                )
+            }.filter { it.text.text.isNotBlank() }
+            if (richPageBlocks.isEmpty()) {
                 emptyList()
             } else {
                 val screenWidthPx = pageViewportSize.width.takeIf { it > 0 }
@@ -623,8 +636,9 @@ fun NovelReaderScreen(
                 val topPaddingPx = with(density) { (contentPaddingPx + statusBarTopPadding).roundToPx() }
                 val bottomPaddingPx = with(density) { contentPaddingPx.roundToPx() }
                 val verticalPaddingPx = topPaddingPx + bottomPaddingPx
-                paginateAnnotatedTextIntoPages(
-                    text = richChapterText,
+                paginateRichPageBlocks(
+                    blockTexts = richPageBlocks,
+                    paragraphSpacingPx = with(density) { state.readerSettings.paragraphSpacing.dp.roundToPx() },
                     widthPx = (screenWidthPx - horizontalPaddingPx).coerceAtLeast(1),
                     heightPx = (screenHeightPx - verticalPaddingPx).coerceAtLeast(1),
                     textSizePx = with(density) { state.readerSettings.fontSize.sp.toPx() },
@@ -637,10 +651,10 @@ fun NovelReaderScreen(
     }
     val usePageReader = shouldPaginateForPageReader &&
         (
-            pageReaderBlocks.isNotEmpty() || richPageReaderBlocks.isNotEmpty()
+            pageReaderPages.isNotEmpty() || richPageReaderPages.isNotEmpty()
             )
-    val useRichPageReader = usePageReader && richPageReaderBlocks.isNotEmpty()
-    val pageReaderItemsCount = if (useRichPageReader) richPageReaderBlocks.size else pageReaderBlocks.size
+    val useRichPageReader = usePageReader && richPageReaderPages.isNotEmpty()
+    val pageReaderItemsCount = if (useRichPageReader) richPageReaderPages.size else pageReaderPages.size
     val useRichNativeScroll = shouldUseRichNativeScrollRenderer(
         richNativeRendererExperimentalEnabled = state.readerSettings.richNativeRendererExperimental,
         showWebView = showWebView,
@@ -731,7 +745,6 @@ fun NovelReaderScreen(
         fullScreenMode = state.readerSettings.fullScreenMode,
         keepScreenOn = state.readerSettings.keepScreenOn,
         showReaderUi = showReaderUI,
-        defaultLightStatusBars = context.resources.getBoolean(R.bool.lightStatusBar),
     )
 
     // Volume Buttons Handler
@@ -768,7 +781,7 @@ fun NovelReaderScreen(
             }
         } else if (usePageReader) {
             val currentPage = pagerState.currentPage
-            if (currentPage < pageReaderBlocks.lastIndex) {
+            if (currentPage < pageReaderItemsCount - 1) {
                 pagerState.animateScrollToPage(currentPage + 1)
             } else if (state.readerSettings.swipeToNextChapter && state.nextChapterId != null) {
                 onOpenNextChapter?.invoke(state.nextChapterId)
@@ -884,7 +897,7 @@ fun NovelReaderScreen(
                 delay(autoScrollPageDelayMs(autoScrollSpeed))
                 if (showReaderUI || showWebView || !autoScrollEnabled) continue
                 val currentPage = pagerState.currentPage
-                if (currentPage < pageReaderBlocks.lastIndex) {
+                if (currentPage < pageReaderItemsCount - 1) {
                     pagerState.animateScrollToPage(currentPage + 1)
                 } else if (state.readerSettings.swipeToNextChapter && state.nextChapterId != null) {
                     autoScrollEnabled = false
@@ -1043,25 +1056,98 @@ fun NovelReaderScreen(
                                 ),
                             contentAlignment = androidx.compose.ui.Alignment.TopStart,
                         ) {
-                            Text(
-                                text = when {
-                                    useRichPageReader -> richPageReaderBlocks[page]
-                                    state.readerSettings.bionicReading -> toBionicText(pageReaderBlocks[page])
-                                    else -> AnnotatedString(pageReaderBlocks[page])
-                                },
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    color = textColor,
-                                    fontSize = state.readerSettings.fontSize.sp,
-                                    lineHeight = state.readerSettings.lineHeight.em,
-                                    fontFamily = composeFontFamily,
-                                ).withOptionalTextAlign(
-                                    resolveNativeTextAlign(
-                                        globalTextAlign = state.readerSettings.textAlign,
-                                        preserveSourceTextAlignInNative =
-                                        state.readerSettings.preserveSourceTextAlignInNative,
-                                    ),
-                                ),
+                            val paragraphSpacingPx = with(density) {
+                                state.readerSettings.paragraphSpacing.dp.roundToPx()
+                            }
+                            val baseTextStyle = resolvePageReaderBaseTextStyle(
+                                baseStyle = MaterialTheme.typography.bodyLarge,
+                                color = textColor,
+                                backgroundColor = textBackground,
+                                fontSize = state.readerSettings.fontSize,
+                                lineHeight = state.readerSettings.lineHeight,
+                                fontFamily = composeFontFamily,
+                                textAlign = null,
+                                forceBoldText = state.readerSettings.forceBoldText,
+                                forceItalicText = state.readerSettings.forceItalicText,
+                                textShadow = state.readerSettings.textShadow,
+                                textShadowColor = state.readerSettings.textShadowColor,
+                                textShadowBlur = state.readerSettings.textShadowBlur,
+                                textShadowX = state.readerSettings.textShadowX,
+                                textShadowY = state.readerSettings.textShadowY,
                             )
+                            androidx.compose.foundation.layout.Column(
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                if (useRichPageReader) {
+                                    val renderBlocks = buildRichPageRenderBlocks(
+                                        page = richPageReaderPages[page],
+                                        blockTexts = state.richContentBlocks.map { block ->
+                                            buildRichPageReaderBlockText(
+                                                block = block,
+                                                forcedParagraphFirstLineIndentEm = if (
+                                                    state.readerSettings.forceParagraphIndent
+                                                ) {
+                                                    FORCED_PARAGRAPH_FIRST_LINE_INDENT_EM
+                                                } else {
+                                                    null
+                                                },
+                                            )
+                                        }.filter { it.text.text.isNotBlank() },
+                                        paragraphSpacingPx = paragraphSpacingPx,
+                                    )
+                                    renderBlocks.forEach { block ->
+                                        if (block.spacingBeforePx > 0) {
+                                            Spacer(
+                                                modifier = Modifier.height(
+                                                    with(density) { block.spacingBeforePx.toDp() },
+                                                ),
+                                            )
+                                        }
+                                        Text(
+                                            text = block.text,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            style = baseTextStyle
+                                                .withOptionalTextAlign(
+                                                    resolvePageReaderRenderTextAlign(
+                                                        globalTextAlign = state.readerSettings.textAlign,
+                                                    ),
+                                                )
+                                                .withOptionalFirstLineIndentEm(block.firstLineIndentEm),
+                                        )
+                                    }
+                                } else {
+                                    val renderBlocks = buildPlainPageRenderBlocks(
+                                        page = pageReaderPages[page],
+                                        textBlocks = state.textBlocks.filter { it.isNotBlank() },
+                                        paragraphSpacingPx = paragraphSpacingPx,
+                                        forceParagraphIndent = state.readerSettings.forceParagraphIndent,
+                                    )
+                                    renderBlocks.forEach { block ->
+                                        if (block.spacingBeforePx > 0) {
+                                            Spacer(
+                                                modifier = Modifier.height(
+                                                    with(density) { block.spacingBeforePx.toDp() },
+                                                ),
+                                            )
+                                        }
+                                        Text(
+                                            text = if (state.readerSettings.bionicReading) {
+                                                toBionicText(block.text)
+                                            } else {
+                                                AnnotatedString(block.text)
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            style = baseTextStyle
+                                                .withOptionalTextAlign(
+                                                    resolvePageReaderRenderTextAlign(
+                                                        globalTextAlign = state.readerSettings.textAlign,
+                                                    ),
+                                                )
+                                                .withOptionalFirstLineIndentEm(block.firstLineIndentEm),
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 } else {
@@ -1181,6 +1267,7 @@ fun NovelReaderScreen(
 
                                             when (
                                                 resolveVerticalChapterSwipeAction(
+                                                    swipeGesturesEnabled = state.readerSettings.swipeGestures,
                                                     swipeToNextChapter = state.readerSettings.swipeToNextChapter,
                                                     swipeToPrevChapter = state.readerSettings.swipeToPrevChapter,
                                                     deltaX = deltaX,
@@ -1465,6 +1552,7 @@ fun NovelReaderScreen(
                     paddingHorizontal = initialPaddingHorizontal,
                     fontSizePx = state.readerSettings.fontSize,
                     lineHeightMultiplier = state.readerSettings.lineHeight,
+                    paragraphSpacingPx = state.readerSettings.paragraphSpacing,
                     textAlignCss = initialCssTextAlign,
                     firstLineIndentCss = initialCssFirstLineIndent,
                     textColorHex = colorToCssHex(textColor),
@@ -1476,6 +1564,8 @@ fun NovelReaderScreen(
                     fontFamilyName = initialSelectedFontFamily,
                     customCss = state.readerSettings.customCSS,
                     textShadowCss = initialTextShadowCss,
+                    forceBoldText = state.readerSettings.forceBoldText,
+                    forceItalicText = state.readerSettings.forceItalicText,
                 )
                 val initialFactoryWebViewHtml = buildInitialWebReaderHtml(
                     rawHtml = state.html,
@@ -1600,6 +1690,7 @@ fun NovelReaderScreen(
 
                                         when (
                                             resolveWebViewVerticalChapterSwipeAction(
+                                                swipeGesturesEnabled = state.readerSettings.swipeGestures,
                                                 swipeToNextChapter = state.readerSettings.swipeToNextChapter,
                                                 swipeToPrevChapter = state.readerSettings.swipeToPrevChapter,
                                                 deltaX = deltaX,
@@ -1673,6 +1764,7 @@ fun NovelReaderScreen(
                             paddingHorizontal = paddingHorizontal,
                             fontSizePx = state.readerSettings.fontSize,
                             lineHeightMultiplier = state.readerSettings.lineHeight,
+                            paragraphSpacingPx = state.readerSettings.paragraphSpacing,
                             textAlignCss = cssTextAlign,
                             firstLineIndentCss = cssFirstLineIndent,
                             textColorHex = colorToCssHex(textColor),
@@ -1684,6 +1776,8 @@ fun NovelReaderScreen(
                             fontFamilyName = selectedFontFamily,
                             customCss = state.readerSettings.customCSS,
                             textShadowCss = currentTextShadowCss,
+                            forceBoldText = state.readerSettings.forceBoldText,
+                            forceItalicText = state.readerSettings.forceItalicText,
                         )
                         val currentRestoreProgress = state.lastSavedWebProgressPercent.coerceIn(0, 100)
                         val currentFontSize = state.readerSettings.fontSize
@@ -1695,6 +1789,7 @@ fun NovelReaderScreen(
                             paddingHorizontal = paddingHorizontal,
                             fontSizePx = currentFontSize,
                             lineHeightMultiplier = currentLineHeight,
+                            paragraphSpacingPx = state.readerSettings.paragraphSpacing,
                             textAlignCss = cssTextAlign,
                             firstLineIndentCss = cssFirstLineIndent,
                             textColorHex = currentTextColorCss,
@@ -1706,6 +1801,8 @@ fun NovelReaderScreen(
                             fontFamilyName = selectedFontFamily,
                             customCss = currentCustomCss,
                             textShadowCss = currentTextShadowCss,
+                            forceBoldText = state.readerSettings.forceBoldText,
+                            forceItalicText = state.readerSettings.forceItalicText,
                         )
                         val initialWebViewHtml = buildInitialWebReaderHtml(
                             rawHtml = state.html,
@@ -1761,6 +1858,7 @@ fun NovelReaderScreen(
                                     paddingHorizontal = paddingHorizontal,
                                     fontSizePx = currentFontSize,
                                     lineHeightMultiplier = currentLineHeight,
+                                    paragraphSpacingPx = state.readerSettings.paragraphSpacing,
                                     textAlignCss = cssTextAlign,
                                     firstLineIndentCss = cssFirstLineIndent,
                                     textColorHex = currentTextColorCss,
@@ -1772,6 +1870,9 @@ fun NovelReaderScreen(
                                     fontFamilyName = selectedFontFamily,
                                     customCss = currentCustomCss,
                                     textShadowCss = currentTextShadowCss,
+                                    forceBoldText = state.readerSettings.forceBoldText,
+                                    forceItalicText = state.readerSettings.forceItalicText,
+                                    bionicReadingEnabled = state.readerSettings.bionicReading,
                                 )
                                 appliedWebCssFingerprint = styleFingerprint
 
@@ -1840,6 +1941,7 @@ fun NovelReaderScreen(
                                 paddingHorizontal = paddingHorizontal,
                                 fontSizePx = state.readerSettings.fontSize,
                                 lineHeightMultiplier = state.readerSettings.lineHeight,
+                                paragraphSpacingPx = state.readerSettings.paragraphSpacing,
                                 textAlignCss = cssTextAlign,
                                 firstLineIndentCss = cssFirstLineIndent,
                                 textColorHex = colorToCssHex(textColor),
@@ -1851,6 +1953,9 @@ fun NovelReaderScreen(
                                 fontFamilyName = selectedFontFamily,
                                 customCss = state.readerSettings.customCSS,
                                 textShadowCss = currentTextShadowCss,
+                                forceBoldText = state.readerSettings.forceBoldText,
+                                forceItalicText = state.readerSettings.forceItalicText,
+                                bionicReadingEnabled = state.readerSettings.bionicReading,
                             )
                             appliedWebCssFingerprint = styleFingerprint
                         }
@@ -2333,6 +2438,8 @@ fun NovelReaderScreen(
         if (showSettings) {
             NovelReaderSettingsDialog(
                 sourceId = state.novel.source,
+                currentWebViewActive = showWebView,
+                currentPageReaderActive = usePageReader,
                 onDismissRequest = { showSettings = false },
             )
         }
@@ -4016,6 +4123,7 @@ internal fun buildWebReaderCssText(
     paddingHorizontal: Int,
     fontSizePx: Int,
     lineHeightMultiplier: Float,
+    paragraphSpacingPx: Int,
     textAlignCss: String?,
     firstLineIndentCss: String?,
     textColorHex: String,
@@ -4027,11 +4135,14 @@ internal fun buildWebReaderCssText(
     fontFamilyName: String?,
     customCss: String,
     textShadowCss: String?,
+    forceBoldText: Boolean,
+    forceItalicText: Boolean,
 ): String {
     val escapedFontFamily = fontFamilyName
         ?.replace("\\", "\\\\")
         ?.replace("'", "\\'")
     val fontVariable = escapedFontFamily?.let { "'$it', sans-serif" }.orEmpty()
+    val resolvedParagraphSpacingPx = paragraphSpacingPx.coerceIn(0, 32)
 
     return buildString {
         append(fontFaceCss)
@@ -4047,12 +4158,15 @@ internal fun buildWebReaderCssText(
         }
         append("  --an-reader-size: ${fontSizePx}px;\n")
         append("  --an-reader-line-height: ${lineHeightMultiplier.coerceAtLeast(1f)};\n")
+        append("  --an-reader-paragraph-spacing: ${resolvedParagraphSpacingPx}px;\n")
         if (!textShadowCss.isNullOrBlank()) {
             append("  --an-reader-text-shadow: $textShadowCss;\n")
         }
         if (fontVariable.isNotBlank()) {
             append("  --an-reader-font: $fontVariable;\n")
         }
+        append("  --an-reader-font-weight: ${if (forceBoldText) "700" else "400"};\n")
+        append("  --an-reader-font-style: ${if (forceItalicText) "italic" else "normal"};\n")
         append("}\n")
         append("html, body {\n")
         append("  margin: 0 !important;\n")
@@ -4080,6 +4194,8 @@ internal fun buildWebReaderCssText(
         if (fontVariable.isNotBlank()) {
             append("  font-family: var(--an-reader-font) !important;\n")
         }
+        append("  font-weight: var(--an-reader-font-weight) !important;\n")
+        append("  font-style: var(--an-reader-font-style) !important;\n")
         append("}\n")
         append("body > * {\n")
         append("  margin-top: 0 !important;\n")
@@ -4093,6 +4209,12 @@ internal fun buildWebReaderCssText(
         append("  font-size: 1.24em !important;\n")
         append("  margin-top: 0 !important;\n")
         append("  margin-bottom: 0.7em !important;\n")
+        append("}\n")
+        append("body p, body div, body article, body section, body blockquote, body pre, body li {\n")
+        append("  margin-bottom: ${resolvedParagraphSpacingPx}px !important;\n")
+        append("}\n")
+        append("body span.an-reader-bionic {\n")
+        append("  font-weight: 600 !important;\n")
         append("}\n")
         append("body h2 {\n")
         append("  font-size: 1.12em !important;\n")
@@ -4239,6 +4361,7 @@ private fun WebView.applyReaderCss(
     paddingHorizontal: Int,
     fontSizePx: Int,
     lineHeightMultiplier: Float,
+    paragraphSpacingPx: Int,
     textAlignCss: String?,
     firstLineIndentCss: String?,
     textColorHex: String,
@@ -4250,6 +4373,9 @@ private fun WebView.applyReaderCss(
     fontFamilyName: String?,
     customCss: String,
     textShadowCss: String?,
+    forceBoldText: Boolean,
+    forceItalicText: Boolean,
+    bionicReadingEnabled: Boolean,
 ) {
     val css = buildWebReaderCssText(
         fontFaceCss = fontFaceCss,
@@ -4258,6 +4384,7 @@ private fun WebView.applyReaderCss(
         paddingHorizontal = paddingHorizontal,
         fontSizePx = fontSizePx,
         lineHeightMultiplier = lineHeightMultiplier,
+        paragraphSpacingPx = paragraphSpacingPx,
         textAlignCss = textAlignCss,
         firstLineIndentCss = firstLineIndentCss,
         textColorHex = textColorHex,
@@ -4269,6 +4396,8 @@ private fun WebView.applyReaderCss(
         fontFamilyName = fontFamilyName,
         customCss = customCss,
         textShadowCss = textShadowCss,
+        forceBoldText = forceBoldText,
+        forceItalicText = forceItalicText,
     )
     val escapedFontFamily = fontFamilyName
         ?.replace("\\", "\\\\")
@@ -4347,6 +4476,74 @@ private fun WebView.applyReaderCss(
         """.trimIndent(),
         null,
     )
+    val bionicJavascript = buildWebReaderBionicJavascript(bionicReadingEnabled)
+    evaluateJavascript(
+        if (bionicJavascript.isBlank()) buildWebReaderBionicResetJavascript() else bionicJavascript,
+        null,
+    )
+}
+
+internal fun buildWebReaderBionicJavascript(enabled: Boolean): String {
+    if (!enabled) return ""
+    return """
+        (function() {
+            const root = document.body;
+            if (!root) return;
+            const existing = Array.from(root.querySelectorAll('span.an-reader-bionic'));
+            for (const span of existing) {
+                span.replaceWith(document.createTextNode(span.textContent || ''));
+            }
+            root.normalize();
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+                acceptNode(node) {
+                    if (!node || !node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+                    const parent = node.parentElement;
+                    if (!parent) return NodeFilter.FILTER_REJECT;
+                    if (parent.closest('script,style,noscript,textarea,svg,.an-reader-bionic')) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+            });
+            const nodes = [];
+            while (walker.nextNode()) nodes.push(walker.currentNode);
+            for (const textNode of nodes) {
+                const text = textNode.nodeValue || '';
+                const fragment = document.createDocumentFragment();
+                const parts = text.match(/\S+|\s+/g) || [];
+                for (const token of parts) {
+                    if (/^\s+$/.test(token)) {
+                        fragment.appendChild(document.createTextNode(token));
+                        continue;
+                    }
+                    const emphasizeCount = Math.max(1, Math.ceil(token.length * 0.5));
+                    const span = document.createElement('span');
+                    span.className = 'an-reader-bionic';
+                    span.textContent = token.slice(0, emphasizeCount);
+                    fragment.appendChild(span);
+                    const remainder = token.slice(emphasizeCount);
+                    if (remainder) {
+                        fragment.appendChild(document.createTextNode(remainder));
+                    }
+                }
+                textNode.replaceWith(fragment);
+            }
+        })();
+    """.trimIndent()
+}
+
+private fun buildWebReaderBionicResetJavascript(): String {
+    return """
+        (function() {
+            const root = document.body;
+            if (!root) return;
+            const spans = Array.from(root.querySelectorAll('span.an-reader-bionic'));
+            for (const span of spans) {
+                span.replaceWith(document.createTextNode(span.textContent || ''));
+            }
+            root.normalize();
+        })();
+    """.trimIndent()
 }
 
 @Composable
@@ -4672,13 +4869,9 @@ internal fun shouldShowPersistentProgressLine(
 }
 
 internal fun resolveParagraphSpacingDp(
-    spacing: NovelReaderParagraphSpacing,
+    spacing: Int,
 ): androidx.compose.ui.unit.Dp {
-    return when (spacing) {
-        NovelReaderParagraphSpacing.COMPACT -> 8.dp
-        NovelReaderParagraphSpacing.NORMAL -> 12.dp
-        NovelReaderParagraphSpacing.SPACIOUS -> 16.dp
-    }
+    return spacing.coerceIn(0, 32).dp
 }
 
 internal data class NovelReaderReadingPaceState(
@@ -4802,60 +4995,521 @@ internal fun resolveReaderTapAction(
 internal fun resolvePageReaderBlocks(
     shouldPaginate: Boolean,
     textBlocks: List<String>,
-    paginate: (String) -> List<String>,
+    paragraphSpacingDp: Int,
+    paginate: (List<String>, Int) -> List<String>,
 ): List<String> {
     val fallbackBlocks = textBlocks.takeIf { it.isNotEmpty() } ?: listOf("")
     if (!shouldPaginate) return fallbackBlocks
 
-    val chapterText = textBlocks.joinToString("\n\n").trim()
-    if (chapterText.isBlank()) return fallbackBlocks
+    val nonBlankBlocks = textBlocks.filter { it.isNotBlank() }
+    if (nonBlankBlocks.isEmpty()) return fallbackBlocks
 
-    return paginate(chapterText).ifEmpty { fallbackBlocks }
+    return paginate(nonBlankBlocks, paragraphSpacingDp.coerceIn(0, 32)).ifEmpty { fallbackBlocks }
+}
+
+internal data class PlainPageSlice(
+    val blockIndex: Int,
+    val range: TextPageRange,
+)
+
+internal data class RichPageSlice(
+    val blockIndex: Int,
+    val range: TextPageRange,
+)
+
+internal data class PlainPageRenderBlock(
+    val text: String,
+    val spacingBeforePx: Int,
+    val firstLineIndentEm: Float?,
+)
+
+internal data class RichPageBlockText(
+    val text: AnnotatedString,
+    val firstLineIndentEm: Float?,
+    val sourceTextAlign: NovelRichBlockTextAlign? = null,
+)
+
+internal data class RichPageRenderBlock(
+    val text: AnnotatedString,
+    val spacingBeforePx: Int,
+    val firstLineIndentEm: Float?,
+    val sourceTextAlign: NovelRichBlockTextAlign? = null,
+)
+
+internal fun paginatePlainPageBlocks(
+    textBlocks: List<String>,
+    paragraphSpacingPx: Int,
+    widthPx: Int,
+    heightPx: Int,
+    textSizePx: Float,
+    lineHeightMultiplier: Float,
+    typeface: android.graphics.Typeface?,
+    textAlign: ReaderTextAlign,
+): List<List<PlainPageSlice>> {
+    val safeHeight = heightPx.coerceAtLeast(1)
+    val approximateMetrics = ApproximateTextMetrics(
+        charsPerLine = (widthPx.coerceAtLeast(1) / (textSizePx.coerceAtLeast(1f) * 0.55f))
+            .toInt()
+            .coerceAtLeast(15),
+        lineHeightPx = (textSizePx.coerceAtLeast(1f) * lineHeightMultiplier.coerceAtLeast(1f))
+            .toInt()
+            .coerceAtLeast(1),
+    )
+    val layouts = textBlocks.map { block ->
+        block to buildReaderStaticLayout(
+            text = block,
+            widthPx = widthPx,
+            textSizePx = textSizePx,
+            lineHeightMultiplier = lineHeightMultiplier,
+            typeface = typeface,
+            textAlign = textAlign,
+        )
+    }
+
+    if (layouts.isEmpty()) return emptyList()
+
+    val pages = mutableListOf<MutableList<PlainPageSlice>>()
+    var currentPage = mutableListOf<PlainPageSlice>()
+    var remainingHeight = safeHeight
+
+    fun flushPage() {
+        if (currentPage.isNotEmpty()) {
+            pages += currentPage
+            currentPage = mutableListOf()
+        }
+        remainingHeight = safeHeight
+    }
+
+    layouts.forEachIndexed { blockIndex, (text, layout) ->
+        if (text.isBlank()) return@forEachIndexed
+        if (layout == null) {
+            val blockPages = paginateTextIntoPageRanges(
+                text = text,
+                widthPx = widthPx,
+                heightPx = safeHeight,
+                textSizePx = textSizePx,
+                lineHeightMultiplier = lineHeightMultiplier,
+                typeface = typeface,
+                textAlign = textAlign,
+            )
+            val blockHeight = measureApproximateTextHeight(
+                text = text,
+                metrics = approximateMetrics,
+            )
+            blockPages.forEachIndexed { sliceIndex, range ->
+                val spacingBefore = if (currentPage.isNotEmpty() && sliceIndex == 0) {
+                    paragraphSpacingPx.coerceAtLeast(0)
+                } else {
+                    0
+                }
+                if (remainingHeight <= spacingBefore) {
+                    flushPage()
+                }
+                if (
+                    currentPage.isNotEmpty() &&
+                    sliceIndex == 0 &&
+                    blockHeight <= safeHeight &&
+                    blockHeight + spacingBefore > remainingHeight
+                ) {
+                    flushPage()
+                }
+                val sliceHeight = measureApproximateTextHeight(
+                    text = text.substring(range.start, range.endExclusive),
+                    metrics = approximateMetrics,
+                ).coerceAtMost(safeHeight)
+                currentPage += PlainPageSlice(blockIndex = blockIndex, range = range)
+                remainingHeight -= spacingBefore + sliceHeight
+                if (sliceIndex < blockPages.lastIndex || remainingHeight <= 0) {
+                    flushPage()
+                }
+            }
+            return@forEachIndexed
+        }
+
+        val blockHeight = resolveStaticLayoutHeight(layout)
+        var startLine = 0
+        var isFirstSliceOfBlock = true
+
+        while (startLine < layout.lineCount) {
+            val spacingBefore = if (currentPage.isNotEmpty() && isFirstSliceOfBlock) {
+                paragraphSpacingPx.coerceAtLeast(0)
+            } else {
+                0
+            }
+
+            if (remainingHeight <= spacingBefore) {
+                flushPage()
+                continue
+            }
+
+            if (
+                currentPage.isNotEmpty() &&
+                isFirstSliceOfBlock &&
+                blockHeight <= safeHeight &&
+                blockHeight + spacingBefore > remainingHeight
+            ) {
+                flushPage()
+                continue
+            }
+
+            val slice = resolveStaticLayoutSliceForHeight(
+                text = text,
+                layout = layout,
+                startLine = startLine,
+                availableHeight = remainingHeight - spacingBefore,
+            )
+
+            if (slice == null) {
+                flushPage()
+                continue
+            }
+
+            currentPage += PlainPageSlice(blockIndex = blockIndex, range = slice.range)
+            remainingHeight -= spacingBefore + slice.heightPx
+            startLine = slice.nextStartLine
+            isFirstSliceOfBlock = false
+
+            if (remainingHeight <= 0) {
+                flushPage()
+            }
+        }
+    }
+
+    flushPage()
+    return pages
 }
 
 internal fun buildRichPageReaderChapterAnnotatedText(
     richBlocks: List<NovelRichContentBlock>,
+    paragraphSpacingDp: Int,
     forcedParagraphFirstLineIndentEm: Float? = null,
 ): AnnotatedString {
     if (richBlocks.isEmpty()) return AnnotatedString("")
 
+    val paragraphSeparator = resolvePageReaderParagraphSeparator(paragraphSpacingDp)
+
     return buildAnnotatedString {
         var appendedAny = false
         richBlocks.forEach { block ->
-            val blockText: AnnotatedString = when (block) {
-                is NovelRichContentBlock.Paragraph -> buildNovelRichAnnotatedString(block.segments)
-                is NovelRichContentBlock.Heading -> buildNovelRichAnnotatedString(block.segments)
-                is NovelRichContentBlock.BlockQuote -> buildNovelRichAnnotatedString(block.segments)
-                NovelRichContentBlock.HorizontalRule -> AnnotatedString("* * *")
-                is NovelRichContentBlock.Image -> AnnotatedString("")
-            }
+            val blockText = buildRichPageReaderBlockAnnotatedText(
+                block = block,
+                forcedParagraphFirstLineIndentEm = forcedParagraphFirstLineIndentEm,
+            )
             if (blockText.text.isBlank()) return@forEach
-            if (appendedAny) append("\n\n")
-            val start = length
+            if (appendedAny) append(paragraphSeparator)
             append(blockText)
-            val end = length
-            if (block is NovelRichContentBlock.Paragraph) {
-                val firstLineIndentEm = forcedParagraphFirstLineIndentEm ?: block.firstLineIndentEm
-                firstLineIndentEm?.let { indentEm ->
-                    addStyle(
-                        style = ParagraphStyle(
-                            textIndent = TextIndent(firstLine = indentEm.em),
-                        ),
-                        start = start,
-                        end = end,
-                    )
-                }
-            }
             appendedAny = true
         }
     }
 }
 
+internal fun buildRichPageReaderBlockAnnotatedText(
+    block: NovelRichContentBlock,
+    forcedParagraphFirstLineIndentEm: Float? = null,
+): AnnotatedString {
+    return buildRichPageReaderBlockText(
+        block = block,
+        forcedParagraphFirstLineIndentEm = forcedParagraphFirstLineIndentEm,
+    ).text
+}
+
+internal fun buildRichPageReaderBlockText(
+    block: NovelRichContentBlock,
+    forcedParagraphFirstLineIndentEm: Float? = null,
+): RichPageBlockText {
+    val blockText: AnnotatedString = when (block) {
+        is NovelRichContentBlock.Paragraph -> buildNovelRichAnnotatedString(block.segments)
+        is NovelRichContentBlock.Heading -> buildNovelRichAnnotatedString(block.segments)
+        is NovelRichContentBlock.BlockQuote -> buildNovelRichAnnotatedString(block.segments)
+        NovelRichContentBlock.HorizontalRule -> AnnotatedString("* * *")
+        is NovelRichContentBlock.Image -> AnnotatedString("")
+    }
+    if (blockText.text.isBlank()) {
+        return RichPageBlockText(
+            text = AnnotatedString(""),
+            firstLineIndentEm = null,
+            sourceTextAlign = null,
+        )
+    }
+    if (block !is NovelRichContentBlock.Paragraph) {
+        val sourceTextAlign = when (block) {
+            is NovelRichContentBlock.Heading -> block.textAlign
+            is NovelRichContentBlock.BlockQuote -> block.textAlign
+            else -> null
+        }
+        return RichPageBlockText(
+            text = blockText,
+            firstLineIndentEm = null,
+            sourceTextAlign = sourceTextAlign,
+        )
+    }
+
+    val firstLineIndentEm = forcedParagraphFirstLineIndentEm ?: block.firstLineIndentEm
+    return RichPageBlockText(
+        text = blockText,
+        firstLineIndentEm = firstLineIndentEm,
+        sourceTextAlign = block.textAlign,
+    )
+}
+
+internal fun paginateRichPageBlocks(
+    blockTexts: List<RichPageBlockText>,
+    paragraphSpacingPx: Int,
+    widthPx: Int,
+    heightPx: Int,
+    textSizePx: Float,
+    lineHeightMultiplier: Float,
+    typeface: android.graphics.Typeface?,
+    textAlign: ReaderTextAlign,
+): List<List<RichPageSlice>> {
+    val safeHeight = heightPx.coerceAtLeast(1)
+    val approximateMetrics = ApproximateTextMetrics(
+        charsPerLine = (widthPx.coerceAtLeast(1) / (textSizePx.coerceAtLeast(1f) * 0.55f))
+            .toInt()
+            .coerceAtLeast(15),
+        lineHeightPx = (textSizePx.coerceAtLeast(1f) * lineHeightMultiplier.coerceAtLeast(1f))
+            .toInt()
+            .coerceAtLeast(1),
+    )
+    val layouts = blockTexts.map { blockText ->
+        blockText to buildReaderStaticLayout(
+            text = blockText.text.text,
+            widthPx = widthPx,
+            textSizePx = textSizePx,
+            lineHeightMultiplier = lineHeightMultiplier,
+            typeface = typeface,
+            textAlign = textAlign,
+        )
+    }
+
+    if (layouts.isEmpty()) return emptyList()
+
+    val pages = mutableListOf<MutableList<RichPageSlice>>()
+    var currentPage = mutableListOf<RichPageSlice>()
+    var remainingHeight = safeHeight
+
+    fun flushPage() {
+        if (currentPage.isNotEmpty()) {
+            pages += currentPage
+            currentPage = mutableListOf()
+        }
+        remainingHeight = safeHeight
+    }
+
+    layouts.forEachIndexed { blockIndex, (blockText, layout) ->
+        if (blockText.text.text.isBlank()) return@forEachIndexed
+        if (layout == null) {
+            val blockPages = paginateTextIntoPageRanges(
+                text = blockText.text.text,
+                widthPx = widthPx,
+                heightPx = safeHeight,
+                textSizePx = textSizePx,
+                lineHeightMultiplier = lineHeightMultiplier,
+                typeface = typeface,
+                textAlign = textAlign,
+            )
+            val blockHeight = measureApproximateTextHeight(
+                text = blockText.text.text,
+                metrics = approximateMetrics,
+            )
+            blockPages.forEachIndexed { sliceIndex, range ->
+                val spacingBefore = if (currentPage.isNotEmpty() && sliceIndex == 0) {
+                    paragraphSpacingPx.coerceAtLeast(0)
+                } else {
+                    0
+                }
+                if (remainingHeight <= spacingBefore) {
+                    flushPage()
+                }
+                if (
+                    currentPage.isNotEmpty() &&
+                    sliceIndex == 0 &&
+                    blockHeight <= safeHeight &&
+                    blockHeight + spacingBefore > remainingHeight
+                ) {
+                    flushPage()
+                }
+                val sliceHeight = measureApproximateTextHeight(
+                    text = blockText.text.text.substring(range.start, range.endExclusive),
+                    metrics = approximateMetrics,
+                ).coerceAtMost(safeHeight)
+                currentPage += RichPageSlice(blockIndex = blockIndex, range = range)
+                remainingHeight -= spacingBefore + sliceHeight
+                if (sliceIndex < blockPages.lastIndex || remainingHeight <= 0) {
+                    flushPage()
+                }
+            }
+            return@forEachIndexed
+        }
+
+        val blockHeight = resolveStaticLayoutHeight(layout)
+        var startLine = 0
+        var isFirstSliceOfBlock = true
+
+        while (startLine < layout.lineCount) {
+            val spacingBefore = if (currentPage.isNotEmpty() && isFirstSliceOfBlock) {
+                paragraphSpacingPx.coerceAtLeast(0)
+            } else {
+                0
+            }
+
+            if (remainingHeight <= spacingBefore) {
+                flushPage()
+                continue
+            }
+
+            if (
+                currentPage.isNotEmpty() &&
+                isFirstSliceOfBlock &&
+                blockHeight <= safeHeight &&
+                blockHeight + spacingBefore > remainingHeight
+            ) {
+                flushPage()
+                continue
+            }
+
+            val slice = resolveStaticLayoutSliceForHeight(
+                text = blockText.text.text,
+                layout = layout,
+                startLine = startLine,
+                availableHeight = remainingHeight - spacingBefore,
+            )
+
+            if (slice == null) {
+                flushPage()
+                continue
+            }
+
+            currentPage += RichPageSlice(blockIndex = blockIndex, range = slice.range)
+            remainingHeight -= spacingBefore + slice.heightPx
+            startLine = slice.nextStartLine
+            isFirstSliceOfBlock = false
+
+            if (remainingHeight <= 0) {
+                flushPage()
+            }
+        }
+    }
+
+    flushPage()
+    return pages
+}
+
+internal fun buildPlainPageRenderBlocks(
+    page: List<PlainPageSlice>,
+    textBlocks: List<String>,
+    paragraphSpacingPx: Int,
+    forceParagraphIndent: Boolean,
+): List<PlainPageRenderBlock> {
+    if (page.isEmpty()) return emptyList()
+    return page.mapIndexed { index, slice ->
+        val previousBlockIndex = page.getOrNull(index - 1)?.blockIndex
+        val startsNewBlock = index > 0 && previousBlockIndex != slice.blockIndex
+        PlainPageRenderBlock(
+            text = textBlocks[slice.blockIndex].substring(slice.range.start, slice.range.endExclusive),
+            spacingBeforePx = if (startsNewBlock) paragraphSpacingPx.coerceAtLeast(0) else 0,
+            firstLineIndentEm = if (forceParagraphIndent && slice.range.start == 0) {
+                FORCED_PARAGRAPH_FIRST_LINE_INDENT_EM
+            } else {
+                null
+            },
+        )
+    }
+}
+
+internal fun buildRichPageRenderBlocks(
+    page: List<RichPageSlice>,
+    blockTexts: List<RichPageBlockText>,
+    paragraphSpacingPx: Int,
+): List<RichPageRenderBlock> {
+    if (page.isEmpty()) return emptyList()
+    return page.mapIndexed { index, slice ->
+        val previousBlockIndex = page.getOrNull(index - 1)?.blockIndex
+        val startsNewBlock = index > 0 && previousBlockIndex != slice.blockIndex
+        val blockText = blockTexts[slice.blockIndex]
+        RichPageRenderBlock(
+            text = blockText.text.subSequence(TextRange(slice.range.start, slice.range.endExclusive)),
+            spacingBeforePx = if (startsNewBlock) paragraphSpacingPx.coerceAtLeast(0) else 0,
+            firstLineIndentEm = if (slice.range.start == 0) blockText.firstLineIndentEm else null,
+            sourceTextAlign = blockText.sourceTextAlign,
+        )
+    }
+}
+
+internal fun resolvePageReaderParagraphSeparator(
+    paragraphSpacingDp: Int,
+): String {
+    return if (paragraphSpacingDp.coerceIn(0, 32) >= 20) "\n\n" else "\n"
+}
+
 internal fun shouldEnableJavaScriptInReaderWebView(
-    @Suppress("UNUSED_PARAMETER")
     pluginRequestsJavaScript: Boolean,
 ): Boolean {
-    return true
+    return pluginRequestsJavaScript
+}
+
+internal enum class RendererSettingDisableReason {
+    PAGE_MODE,
+    WEBVIEW_ACTIVE,
+    BIONIC_READING,
+}
+
+internal data class RendererSettingsAvailability(
+    val preferWebViewEnabled: Boolean,
+    val preferWebViewReason: RendererSettingDisableReason?,
+    val richNativeEnabled: Boolean,
+    val richNativeReason: RendererSettingDisableReason?,
+)
+
+internal fun resolveRendererSettingsAvailability(
+    pageReaderEnabled: Boolean,
+    showWebView: Boolean,
+    bionicReadingEnabled: Boolean,
+): RendererSettingsAvailability {
+    val preferWebViewReason = if (pageReaderEnabled) RendererSettingDisableReason.PAGE_MODE else null
+    val richNativeReason = when {
+        pageReaderEnabled -> RendererSettingDisableReason.PAGE_MODE
+        showWebView -> RendererSettingDisableReason.WEBVIEW_ACTIVE
+        bionicReadingEnabled -> RendererSettingDisableReason.BIONIC_READING
+        else -> null
+    }
+    return RendererSettingsAvailability(
+        preferWebViewEnabled = preferWebViewReason == null,
+        preferWebViewReason = preferWebViewReason,
+        richNativeEnabled = richNativeReason == null,
+        richNativeReason = richNativeReason,
+    )
+}
+
+internal enum class NovelReaderSettingsFamily {
+    SOURCE_ALIGNMENT_POLICY,
+    CHAPTER_CACHE_POLICY,
+    LIVE_TEXT_STYLING,
+    RENDERER_TUNING,
+}
+
+internal data class NovelReaderSettingsSurfaceStrategy(
+    val globalOnlyFamilies: Set<NovelReaderSettingsFamily>,
+    val quickDialogOnlyFamilies: Set<NovelReaderSettingsFamily>,
+)
+
+internal fun resolveNovelReaderSettingsSurfaceStrategy(): NovelReaderSettingsSurfaceStrategy {
+    return NovelReaderSettingsSurfaceStrategy(
+        globalOnlyFamilies = setOf(
+            NovelReaderSettingsFamily.SOURCE_ALIGNMENT_POLICY,
+            NovelReaderSettingsFamily.CHAPTER_CACHE_POLICY,
+        ),
+        quickDialogOnlyFamilies = setOf(
+            NovelReaderSettingsFamily.LIVE_TEXT_STYLING,
+            NovelReaderSettingsFamily.RENDERER_TUNING,
+        ),
+    )
+}
+
+internal fun areQuickDialogKindleDependentControlsEnabled(
+    showKindleInfoBlock: Boolean,
+): Boolean {
+    return showKindleInfoBlock
 }
 
 internal fun verticalSeekbarLabels(
@@ -4991,8 +5645,10 @@ private fun resolveReaderBackgroundWebResourceResponse(
 internal fun loadNovelReaderTypeface(
     context: Context,
     font: NovelReaderFontOption,
+    forceBoldText: Boolean = false,
+    forceItalicText: Boolean = false,
 ): android.graphics.Typeface? {
-    return runCatching {
+    val baseTypeface = runCatching {
         when (font.source) {
             NovelReaderFontSource.BUILT_IN -> font.fontResId?.let { ResourcesCompat.getFont(context, it) }
             NovelReaderFontSource.LOCAL_PRIVATE -> {
@@ -5008,6 +5664,33 @@ internal fun loadNovelReaderTypeface(
                     ?.let { android.graphics.Typeface.createFromFile(it) }
         }
     }.getOrNull()
+    return resolveForcedReaderTypeface(
+        typeface = baseTypeface,
+        forceBoldText = forceBoldText,
+        forceItalicText = forceItalicText,
+    )
+}
+
+internal fun resolveForcedReaderTypeface(
+    typeface: android.graphics.Typeface?,
+    forceBoldText: Boolean,
+    forceItalicText: Boolean,
+): android.graphics.Typeface? {
+    if (typeface == null) return null
+    val style = resolveForcedReaderTypefaceStyle(forceBoldText, forceItalicText)
+    return android.graphics.Typeface.create(typeface, style)
+}
+
+internal fun resolveForcedReaderTypefaceStyle(
+    forceBoldText: Boolean,
+    forceItalicText: Boolean,
+): Int {
+    return when {
+        forceBoldText && forceItalicText -> android.graphics.Typeface.BOLD_ITALIC
+        forceBoldText -> android.graphics.Typeface.BOLD
+        forceItalicText -> android.graphics.Typeface.ITALIC
+        else -> android.graphics.Typeface.NORMAL
+    }
 }
 
 internal fun resolveNovelReaderComposeFontFamily(
@@ -5094,6 +5777,7 @@ internal fun buildWebReaderCssFingerprint(
     paddingHorizontal: Int,
     fontSizePx: Int,
     lineHeightMultiplier: Float,
+    paragraphSpacingPx: Int,
     textAlignCss: String?,
     firstLineIndentCss: String?,
     textColorHex: String,
@@ -5105,6 +5789,8 @@ internal fun buildWebReaderCssFingerprint(
     fontFamilyName: String?,
     customCss: String,
     textShadowCss: String?,
+    forceBoldText: Boolean,
+    forceItalicText: Boolean,
 ): String {
     return buildString {
         append(chapterId)
@@ -5113,6 +5799,7 @@ internal fun buildWebReaderCssFingerprint(
         append('|').append(paddingHorizontal)
         append('|').append(fontSizePx)
         append('|').append(lineHeightMultiplier)
+        append('|').append(paragraphSpacingPx)
         append('|').append(textAlignCss ?: "<site>")
         append('|').append(firstLineIndentCss ?: "<site>")
         append('|').append(textColorHex)
@@ -5124,6 +5811,8 @@ internal fun buildWebReaderCssFingerprint(
         append('|').append(fontFamilyName.orEmpty())
         append('|').append(customCss)
         append('|').append(textShadowCss ?: "<none>")
+        append('|').append(forceBoldText)
+        append('|').append(forceItalicText)
     }
 }
 
@@ -5155,6 +5844,7 @@ internal fun resolveHorizontalChapterSwipeAction(
 }
 
 internal fun resolveVerticalChapterSwipeAction(
+    swipeGesturesEnabled: Boolean,
     swipeToNextChapter: Boolean,
     swipeToPrevChapter: Boolean,
     deltaX: Float,
@@ -5168,6 +5858,7 @@ internal fun resolveVerticalChapterSwipeAction(
     isNearChapterEnd: Boolean,
     isNearChapterStart: Boolean,
 ): VerticalChapterSwipeAction {
+    if (!swipeGesturesEnabled) return VerticalChapterSwipeAction.NONE
     if (gestureDurationMillis < minHoldDurationMillis) return VerticalChapterSwipeAction.NONE
 
     val absX = abs(deltaX)
@@ -5185,6 +5876,7 @@ internal fun resolveVerticalChapterSwipeAction(
 }
 
 internal fun resolveWebViewVerticalChapterSwipeAction(
+    swipeGesturesEnabled: Boolean,
     swipeToNextChapter: Boolean,
     swipeToPrevChapter: Boolean,
     deltaX: Float,
@@ -5198,6 +5890,7 @@ internal fun resolveWebViewVerticalChapterSwipeAction(
     isNearChapterEnd: Boolean,
     isNearChapterStart: Boolean,
 ): VerticalChapterSwipeAction {
+    if (!swipeGesturesEnabled) return VerticalChapterSwipeAction.NONE
     if (gestureDurationMillis < minHoldDurationMillis) return VerticalChapterSwipeAction.NONE
 
     val absX = abs(deltaX)
@@ -5546,6 +6239,64 @@ private fun NovelRichNativeScrollItem(
     }
 }
 
+internal fun resolveReaderTextShadow(
+    textShadowEnabled: Boolean,
+    textShadowColor: String,
+    textShadowBlur: Float,
+    textShadowX: Float,
+    textShadowY: Float,
+    textColor: Color,
+    backgroundColor: Color,
+): Shadow? {
+    if (!textShadowEnabled) return null
+    val customColor = parseReaderColor(textShadowColor)
+    val shadowColor = resolveAutoReaderShadowColor(
+        customShadowColor = customColor,
+        textColor = textColor,
+        backgroundColor = backgroundColor,
+    )
+    return Shadow(
+        color = shadowColor,
+        offset = Offset(textShadowX, textShadowY),
+        blurRadius = textShadowBlur,
+    )
+}
+
+internal fun resolvePageReaderBaseTextStyle(
+    baseStyle: TextStyle,
+    color: Color,
+    backgroundColor: Color,
+    fontSize: Int,
+    lineHeight: Float,
+    fontFamily: FontFamily?,
+    textAlign: TextAlign?,
+    forceBoldText: Boolean,
+    forceItalicText: Boolean,
+    textShadow: Boolean,
+    textShadowColor: String,
+    textShadowBlur: Float,
+    textShadowX: Float,
+    textShadowY: Float,
+): TextStyle {
+    return baseStyle.copy(
+        color = color,
+        fontSize = fontSize.sp,
+        lineHeight = lineHeight.em,
+        fontFamily = fontFamily,
+        fontWeight = if (forceBoldText) FontWeight.Bold else FontWeight.Normal,
+        fontStyle = if (forceItalicText) FontStyle.Italic else FontStyle.Normal,
+        shadow = resolveReaderTextShadow(
+            textShadowEnabled = textShadow,
+            textShadowColor = textShadowColor,
+            textShadowBlur = textShadowBlur,
+            textShadowX = textShadowX,
+            textShadowY = textShadowY,
+            textColor = color,
+            backgroundColor = backgroundColor,
+        ),
+    ).withOptionalTextAlign(textAlign)
+}
+
 @Composable
 private fun NovelRichAnnotatedText(
     text: AnnotatedString,
@@ -5600,17 +6351,20 @@ private fun TextStyle.withOptionalFirstLineIndentEm(firstLineIndentEm: Float?): 
 
 internal fun resolvePageReaderLayoutTextAlign(
     globalTextAlign: ReaderTextAlign,
-    preserveSourceTextAlignInNative: Boolean,
+    @Suppress("UNUSED_PARAMETER") preserveSourceTextAlignInNative: Boolean,
 ): ReaderTextAlign {
-    return if (preserveSourceTextAlignInNative) {
-        // Page mode uses a flattened text layout, so keep layout stable and avoid forcing justify.
-        ReaderTextAlign.LEFT
-    } else if (globalTextAlign == ReaderTextAlign.SOURCE) {
+    return if (globalTextAlign == ReaderTextAlign.SOURCE) {
         // Page mode always needs a deterministic alignment for layout and pagination.
         ReaderTextAlign.LEFT
     } else {
         globalTextAlign
     }
+}
+
+internal fun resolvePageReaderRenderTextAlign(
+    globalTextAlign: ReaderTextAlign,
+): TextAlign {
+    return novelReaderTextAlign(textAlign = globalTextAlign) ?: TextAlign.Start
 }
 
 internal fun resolveNativeTextAlign(
@@ -5626,7 +6380,7 @@ internal fun resolveNativeTextAlign(
         NovelRichBlockTextAlign.CENTER -> TextAlign.Center
         NovelRichBlockTextAlign.JUSTIFY -> TextAlign.Justify
         NovelRichBlockTextAlign.RIGHT -> TextAlign.End
-        null -> null
+        null -> novelReaderTextAlign(textAlign = globalTextAlign)
     }
 }
 
@@ -6042,18 +6796,14 @@ internal fun paginateTextIntoPageRanges(
     val safeWidth = widthPx.coerceAtLeast(1)
     val safeHeight = heightPx.coerceAtLeast(1)
 
-    val layout = runCatching {
-        val paint = TextPaint().apply {
-            isAntiAlias = true
-            this.textSize = textSizePx.coerceAtLeast(1f)
-            this.typeface = typeface
-        }
-        StaticLayout.Builder.obtain(text, 0, text.length, paint, safeWidth)
-            .setAlignment(textAlign.toLayoutAlignment())
-            .setIncludePad(false)
-            .setLineSpacing(0f, lineHeightMultiplier.coerceAtLeast(1f))
-            .build()
-    }.getOrElse {
+    val layout = buildReaderStaticLayout(
+        text = text,
+        widthPx = safeWidth,
+        textSizePx = textSizePx,
+        lineHeightMultiplier = lineHeightMultiplier,
+        typeface = typeface,
+        textAlign = textAlign,
+    ) ?: run {
         val safeTextSize = textSizePx.coerceAtLeast(1f)
         val approxCharsPerLine = (safeWidth / (safeTextSize * 0.55f)).toInt().coerceAtLeast(15)
         val approxLinesPerPage = (safeHeight / (safeTextSize * lineHeightMultiplier.coerceAtLeast(1f)))
@@ -6076,18 +6826,14 @@ internal fun paginateTextIntoPageRanges(
     val ranges = mutableListOf<TextPageRange>()
     var startLine = 0
     while (startLine < layout.lineCount) {
-        val startOffset = layout.getLineStart(startLine)
-        var endLineExclusive = startLine
-        while (
-            endLineExclusive < layout.lineCount &&
-            layout.getLineBottom(endLineExclusive) - layout.getLineTop(startLine) <= safeHeight
-        ) {
-            endLineExclusive++
-        }
-        val endLine = if (endLineExclusive > startLine) endLineExclusive - 1 else startLine
-        val endOffset = layout.getLineEnd(endLine).coerceIn(startOffset, text.length)
-        trimTextRange(text, startOffset, endOffset)?.let { ranges += it }
-        startLine = endLine + 1
+        val slice = resolveStaticLayoutSliceForHeight(
+            text = text,
+            layout = layout,
+            startLine = startLine,
+            availableHeight = safeHeight,
+        ) ?: break
+        ranges += slice.range
+        startLine = slice.nextStartLine
     }
 
     return if (ranges.isNotEmpty()) ranges else listOf(TextPageRange(0, text.length))
@@ -6151,6 +6897,83 @@ private fun trimTextRange(
     return if (start < end) TextPageRange(start, end) else null
 }
 
+private data class StaticLayoutSlice(
+    val range: TextPageRange,
+    val nextStartLine: Int,
+    val heightPx: Int,
+)
+
+private data class ApproximateTextMetrics(
+    val charsPerLine: Int,
+    val lineHeightPx: Int,
+)
+
+private fun buildReaderStaticLayout(
+    text: String,
+    widthPx: Int,
+    textSizePx: Float,
+    lineHeightMultiplier: Float,
+    typeface: android.graphics.Typeface?,
+    textAlign: ReaderTextAlign,
+): StaticLayout? {
+    return runCatching {
+        val paint = TextPaint().apply {
+            isAntiAlias = true
+            this.textSize = textSizePx.coerceAtLeast(1f)
+            this.typeface = typeface
+        }
+        StaticLayout.Builder.obtain(text, 0, text.length, paint, widthPx.coerceAtLeast(1))
+            .setAlignment(textAlign.toLayoutAlignment())
+            .setIncludePad(false)
+            .setLineSpacing(0f, lineHeightMultiplier.coerceAtLeast(1f))
+            .build()
+    }.getOrNull()
+}
+
+private fun resolveStaticLayoutHeight(
+    layout: StaticLayout,
+): Int {
+    if (layout.lineCount <= 0) return 0
+    return layout.getLineBottom(layout.lineCount - 1) - layout.getLineTop(0)
+}
+
+private fun resolveStaticLayoutSliceForHeight(
+    text: String,
+    layout: StaticLayout,
+    startLine: Int,
+    availableHeight: Int,
+): StaticLayoutSlice? {
+    if (startLine >= layout.lineCount || availableHeight <= 0) return null
+
+    val startOffset = layout.getLineStart(startLine)
+    var endLineExclusive = startLine
+    while (
+        endLineExclusive < layout.lineCount &&
+        layout.getLineBottom(endLineExclusive) - layout.getLineTop(startLine) <= availableHeight
+    ) {
+        endLineExclusive++
+    }
+    val endLine = if (endLineExclusive > startLine) endLineExclusive - 1 else startLine
+    val endOffset = layout.getLineEnd(endLine).coerceIn(startOffset, text.length)
+    val range = trimTextRange(text, startOffset, endOffset) ?: return null
+    return StaticLayoutSlice(
+        range = range,
+        nextStartLine = endLine + 1,
+        heightPx = layout.getLineBottom(endLine) - layout.getLineTop(startLine),
+    )
+}
+
+private fun measureApproximateTextHeight(
+    text: String,
+    metrics: ApproximateTextMetrics,
+): Int {
+    if (text.isBlank()) return metrics.lineHeightPx
+    val lineCount = text.split('\n').sumOf { line ->
+        ceil(line.length.toDouble() / metrics.charsPerLine.toDouble()).toInt().coerceAtLeast(1)
+    }.coerceAtLeast(1)
+    return lineCount * metrics.lineHeightPx
+}
+
 private fun ReaderTextAlign.toLayoutAlignment(): Layout.Alignment {
     return when (this) {
         ReaderTextAlign.SOURCE -> Layout.Alignment.ALIGN_NORMAL
@@ -6184,7 +7007,6 @@ private fun SystemUIController(
     fullScreenMode: Boolean,
     keepScreenOn: Boolean,
     showReaderUi: Boolean,
-    defaultLightStatusBars: Boolean,
 ) {
     val view = LocalView.current
 
@@ -6227,7 +7049,6 @@ private fun SystemUIController(
             showReaderUi = showReaderUi,
             fullScreenMode = fullScreenMode,
             base = baseSystemBarsState,
-            defaultLightStatusBars = defaultLightStatusBars,
         )
 
         // Keep Screen On
@@ -6266,19 +7087,14 @@ internal fun resolveActiveReaderSystemBarsState(
     showReaderUi: Boolean,
     fullScreenMode: Boolean,
     base: ReaderSystemBarsState,
-    defaultLightStatusBars: Boolean,
 ): ReaderSystemBarsState {
     if (showReaderUi) {
         return base.copy(
-            isLightStatusBars = defaultLightStatusBars,
-            isLightNavigationBars = defaultLightStatusBars,
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE,
         )
     }
     if (!fullScreenMode) {
         return base.copy(
-            isLightStatusBars = defaultLightStatusBars,
-            isLightNavigationBars = defaultLightStatusBars,
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE,
         )
     }

@@ -313,6 +313,12 @@
     <string name="novel_reader_prefer_webview_renderer_summary">По умолчанию открывать главу в WebView. Отключите, чтобы вернуться к нативному рендереру.</string>
     <string name="novel_reader_rich_native_renderer_experimental">Расширенный нативный рендер (экспериментально)</string>
     <string name="novel_reader_rich_native_renderer_experimental_summary">Сохранять базовые HTML-стили в нативном ридере с автоматическим переходом в WebView для неподдерживаемого содержимого.</string>
+    <string name="novel_reader_renderer_disabled_page_mode_summary">Недоступно, пока включён постраничный режим.</string>
+    <string name="novel_reader_renderer_disabled_webview_summary">Недоступно, пока глава открыта в WebView.</string>
+    <string name="novel_reader_renderer_disabled_bionic_summary">Недоступно, пока включено Bionic Reading.</string>
+    <string name="novel_reader_settings_surface_strategy">Доступность настроек</string>
+    <string name="novel_reader_quick_dialog_global_policy_summary">Подробные политики выравнивания текста источника и кэша глав остаются в глобальных настройках; это быстрое меню оставлено для часто меняемых параметров во время чтения.</string>
+    <string name="novel_reader_global_settings_quick_dialog_summary">Глобальные настройки хранят долгоживущие значения по умолчанию, вроде выравнивания текста источника и кэша глав; быстрое меню в ридере оставлено для параметров, которые меняют прямо во время чтения.</string>
     <string name="novel_reader_clear_chapter_cache">Очистить кэш глав</string>
     <string name="novel_reader_clear_chapter_cache_summary">Удалить весь кэш прочитанных глав (не влияет на загрузки)</string>
 
@@ -1154,6 +1160,12 @@
     <string name="pref_show_achievement_notifications_summary">Показывать всплывающее окно при получении достижений</string>
     <string name="pref_animated_aurora_background">Анимированный фон Aurora</string>
     <string name="pref_animated_aurora_background_summary">Показывать мягкие анимированные цветовые переливы на экранах Aurora</string>
+    <string name="pref_fonts_settings">Шрифты</string>
+    <string name="pref_app_font_family">Шрифт приложения</string>
+    <string name="pref_cover_title_font_family">Шрифт карточек тайтлов</string>
+    <string name="pref_font_import">Импорт шрифта</string>
+    <string name="pref_font_import_summary">Загрузить пользовательский TTF/OTF для приложения и карточек тайтлов</string>
+    <string name="pref_font_remove_named">Удалить шрифт: %s</string>
 
     <!-- Shikimori Integration -->
     <string name="pref_use_shikimori_rating">Использовать рейтинг и тип из Shikimori</string>
@@ -1167,6 +1179,42 @@
     <string name="achievement_stats_points">Очки • %d%%</string>
     <string name="achievement_stats_unlocked">Открыто • %d%%</string>
     <string name="achievement_back">Назад</string>
+    <string name="achievement_category_all">ВСЕ</string>
+    <string name="achievement_category_anime">АНИМЕ</string>
+    <string name="achievement_category_manga">МАНГА</string>
+    <string name="achievement_category_novel">РАНОБЭ</string>
+    <string name="achievement_category_secret">СКРЫТЫЕ</string>
+    <string name="achievement_loading">Загрузка достижений...</string>
+    <string name="achievement_empty_title">Нет достижений</string>
+    <string name="achievement_empty_description">В этой категории пока нет достижений</string>
+    <string name="achievement_progress_label">ПРОГРЕСС</string>
+    <string name="achievement_rewards_label">НАГРАДЫ</string>
+    <string name="achievement_points">%d очков</string>
+    <string name="achievement_points_reward">+%d очков</string>
+    <string name="achievement_unlocked_at">Разблокировано: %s</string>
+    <string name="achievement_unlockable_locked_subtitle">Разблокируется при выполнении достижения</string>
+    <string name="achievement_unlockable_unlocked_subtitle">Разблокировано</string>
+    <string name="achievement_group_title">НОВЫЕ ДОСТИЖЕНИЯ!</string>
+    <string name="achievement_group_received">Получено %d достижений</string>
+    <string name="achievement_action_view">Смотреть</string>
+    <string name="achievement_action_close">Закрыть</string>
+    <string name="achievement_list_title">Новые достижения!</string>
+    <string name="achievement_list_summary">%1$d достижений • +%2$d очков</string>
+    <string name="achievement_list_confirm">Отлично!</string>
+    <string name="achievement_banner_rare_title">РЕДКОЕ ДОСТИЖЕНИЕ!</string>
+    <string name="achievement_banner_unlocked_title">ДОСТИЖЕНИЕ РАЗБЛОКИРОВАНО!</string>
+    <string name="reader_navigator_preview">Предпросмотр:</string>
+    <string name="reader_navigator_slider_color_theme">Тема</string>
+    <string name="reader_navigator_slider_color_pink">Розовый</string>
+    <string name="reader_navigator_slider_color_red">Красный</string>
+    <string name="reader_navigator_slider_color_orange">Оранжевый</string>
+    <string name="reader_navigator_slider_color_yellow">Жёлтый</string>
+    <string name="reader_navigator_slider_color_green">Зелёный</string>
+    <string name="reader_navigator_slider_color_blue">Синий</string>
+    <string name="reader_navigator_slider_color_purple">Фиолетовый</string>
+    <string name="reader_navigator_slider_color_turquoise">Бирюзовый</string>
+    <string name="reader_navigator_slider_color_brown">Коричневый</string>
+    <string name="reader_navigator_slider_color_gray">Серый</string>
 
     <!-- Achievement Titles - ANIME -->
     <string name="achievement_anime_marathoner_title">Марафонец-новичок</string>
@@ -1295,6 +1343,7 @@
     <string name="novel_reader_tap_to_scroll">Навигация касанием краев</string>
     <string name="novel_reader_auto_scroll">Автопрокрутка</string>
     <string name="novel_reader_auto_scroll_speed">Скорость автопрокрутки</string>
+    <string name="reader_auto_scroll_speed_value">%1$s: %2$d</string>
     <string name="novel_reader_auto_scroll_interval">Интервал автопрокрутки (сек)</string>
     <string name="novel_reader_auto_scroll_offset">Смещение автопрокрутки (px)</string>
     <string name="novel_reader_prefetch_next_chapter">Предзагрузка следующей главы</string>
@@ -1353,6 +1402,10 @@
     <string name="home_header_layout_editor_show_grid">Показывать сетку</string>
     <string name="home_header_layout_editor_greeting_align_right">Выравнивать приветствие по правому краю блока</string>
     <string name="home_header_layout_editor_nickname_align_right">Выравнивать никнейм по правому краю блока</string>
+    <string name="home_header_layout_editor_streak_style_title">Стиль счетчика стрика</string>
+    <string name="home_header_layout_editor_streak_style_classic_badge">Классический блок</string>
+    <string name="home_header_layout_editor_streak_style_number_badge_only">Блок только для числа</string>
+    <string name="home_header_layout_editor_streak_style_no_badge">Без блока</string>
     <string name="home_header_layout_editor_selected">Выбрано: %s</string>
     <string name="home_header_layout_editor_reset">Сбросить</string>
     <string name="home_header_layout_editor_cancel">Отмена</string>

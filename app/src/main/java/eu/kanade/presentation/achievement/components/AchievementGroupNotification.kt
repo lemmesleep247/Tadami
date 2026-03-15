@@ -52,6 +52,8 @@ import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.theme.AuroraTheme
 import kotlinx.coroutines.delay
 import tachiyomi.domain.achievement.model.Achievement
+import tachiyomi.i18n.aniyomi.AYMR
+import tachiyomi.presentation.core.i18n.stringResource
 
 /**
  * Group notification for multiple achievements shown when user exits reader/player
@@ -153,35 +155,38 @@ private fun AchievementGroupBannerItem(
     modifier: Modifier = Modifier,
 ) {
     val colors = AuroraTheme.colors
+    val mutedGradient = remember(colors.accent, colors.progressCyan, colors.surface) {
+        mutedGroupBannerGradient(
+            accent = colors.accent,
+            secondary = colors.progressCyan,
+            surface = colors.surface,
+        )
+    }
 
     Box(
         modifier = modifier
             .graphicsLayer {
                 shadowElevation = AchievementPopupSizeTokens.groupShadowElevationPx
-                spotShadowColor = colors.accent.copy(alpha = 0.6f)
-                ambientShadowColor = colors.progressCyan.copy(alpha = 0.4f)
+                spotShadowColor = colors.accent.copy(alpha = 0.35f)
+                ambientShadowColor = colors.progressCyan.copy(alpha = 0.24f)
             }
             .shadow(
                 elevation = AchievementPopupSizeTokens.groupShadowElevation,
                 shape = RoundedCornerShape(AchievementPopupSizeTokens.groupContainerCornerRadius),
-                ambientColor = colors.accent.copy(alpha = 0.6f),
-                spotColor = colors.progressCyan.copy(alpha = 0.5f),
+                ambientColor = colors.accent.copy(alpha = 0.32f),
+                spotColor = colors.progressCyan.copy(alpha = 0.24f),
             )
             .clip(RoundedCornerShape(AchievementPopupSizeTokens.groupContainerCornerRadius))
             .background(
                 brush = Brush.linearGradient(
-                    colors = listOf(
-                        colors.accent.copy(alpha = 0.9f),
-                        colors.accent,
-                        colors.progressCyan.copy(alpha = 0.8f),
-                    ),
+                    colors = mutedGradient,
                     start = Offset(0f, 0f),
                     end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
                 ),
             )
             .border(
                 width = AchievementPopupSizeTokens.groupBorderWidth,
-                color = Color.White.copy(alpha = 0.5f),
+                color = Color.White.copy(alpha = 0.35f),
                 shape = RoundedCornerShape(AchievementPopupSizeTokens.groupContainerCornerRadius),
             )
             .clickable { onViewAll(achievements) }
@@ -273,7 +278,7 @@ private fun AchievementGroupBannerItem(
                 modifier = Modifier.weight(1f),
             ) {
                 Text(
-                    text = "НОВЫЕ ДОСТИЖЕНИЯ!",
+                    text = stringResource(AYMR.strings.achievement_group_title),
                     color = Color.White.copy(alpha = 0.95f),
                     fontSize = AchievementPopupSizeTokens.groupHeaderFontSize,
                     fontWeight = FontWeight.ExtraBold,
@@ -289,7 +294,7 @@ private fun AchievementGroupBannerItem(
                 Spacer(modifier = Modifier.height(AchievementPopupSizeTokens.groupSectionSpacing))
 
                 Text(
-                    text = "Получено $count достижений",
+                    text = stringResource(AYMR.strings.achievement_group_received, count),
                     color = Color.White,
                     fontSize = AchievementPopupSizeTokens.groupMiddleFontSize,
                     fontWeight = FontWeight.ExtraBold,
@@ -309,7 +314,7 @@ private fun AchievementGroupBannerItem(
                     horizontalArrangement = Arrangement.spacedBy(AchievementPopupSizeTokens.groupPointsRowSpacing),
                 ) {
                     Text(
-                        text = "+$totalPoints очков",
+                        text = stringResource(AYMR.strings.achievement_points_reward, totalPoints),
                         color = Color(0xFFFFD700),
                         fontSize = AchievementPopupSizeTokens.groupPointsFontSize,
                         fontWeight = FontWeight.ExtraBold,
@@ -326,7 +331,7 @@ private fun AchievementGroupBannerItem(
             // Arrow indicator
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = "Смотреть",
+                contentDescription = stringResource(AYMR.strings.achievement_action_view),
                 tint = Color.White.copy(alpha = 0.8f),
                 modifier = Modifier.size(AchievementPopupSizeTokens.groupArrowSize),
             )

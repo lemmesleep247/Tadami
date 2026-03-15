@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -11,6 +12,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEachIndexed
+import eu.kanade.presentation.more.settings.AURORA_SETTINGS_CARD_HORIZONTAL_INSET
 import eu.kanade.presentation.more.settings.screen.SearchableSettings
 import eu.kanade.presentation.more.settings.widget.PreferenceGroupHeader
 import kotlinx.coroutines.delay
@@ -29,6 +31,9 @@ fun PreferenceScreen(
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
     val state = rememberLazyListState()
+    val isAurora = LocalSettingsUiStyle.current == SettingsUiStyle.Aurora
+    val itemHorizontalPadding = if (isAurora) AURORA_SETTINGS_CARD_HORIZONTAL_INSET else 0.dp
+    val groupGap = if (isAurora) 14.dp else 12.dp
     val highlightKey = SearchableSettings.highlightKey
     if (highlightKey != null) {
         LaunchedEffect(Unit) {
@@ -53,7 +58,9 @@ fun PreferenceScreen(
                     if (!preference.enabled) return@fastForEachIndexed
 
                     item {
-                        Column {
+                        Column(
+                            modifier = Modifier.padding(horizontal = itemHorizontalPadding),
+                        ) {
                             PreferenceGroupHeader(title = preference.title)
                         }
                     }
@@ -61,11 +68,12 @@ fun PreferenceScreen(
                         PreferenceItem(
                             item = item,
                             highlightKey = highlightKey,
+                            modifier = Modifier.padding(horizontal = itemHorizontalPadding),
                         )
                     }
                     item {
                         if (i < items.lastIndex) {
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(groupGap))
                         }
                     }
                 }
@@ -75,6 +83,7 @@ fun PreferenceScreen(
                     PreferenceItem(
                         item = preference,
                         highlightKey = highlightKey,
+                        modifier = Modifier.padding(horizontal = itemHorizontalPadding),
                     )
                 }
             }

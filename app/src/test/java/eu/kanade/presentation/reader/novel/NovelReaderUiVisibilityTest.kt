@@ -4,12 +4,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextIndent
-import androidx.compose.ui.unit.em
 import androidx.core.view.WindowInsetsControllerCompat
 import eu.kanade.tachiyomi.ui.reader.novel.NovelRichBlockTextAlign
 import eu.kanade.tachiyomi.ui.reader.novel.NovelRichContentBlock
@@ -18,7 +19,7 @@ import eu.kanade.tachiyomi.ui.reader.novel.NovelRichTextStyle
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderAppearanceMode
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundSource
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundTexture
-import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderParagraphSpacing
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -377,10 +378,11 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
-    fun `paragraph spacing presets resolve to expected dp values`() {
-        assertTrue(resolveParagraphSpacingDp(NovelReaderParagraphSpacing.COMPACT).value == 8f)
-        assertTrue(resolveParagraphSpacingDp(NovelReaderParagraphSpacing.NORMAL).value == 12f)
-        assertTrue(resolveParagraphSpacingDp(NovelReaderParagraphSpacing.SPACIOUS).value == 16f)
+    fun `paragraph spacing slider resolves exact dp values within bounds`() {
+        assertTrue(resolveParagraphSpacingDp(0).value == 0f)
+        assertTrue(resolveParagraphSpacingDp(12).value == 12f)
+        assertTrue(resolveParagraphSpacingDp(32).value == 32f)
+        assertTrue(resolveParagraphSpacingDp(99).value == 32f)
     }
 
     @Test
@@ -793,7 +795,8 @@ class NovelReaderUiVisibilityTest {
         val blocks = resolvePageReaderBlocks(
             shouldPaginate = false,
             textBlocks = listOf("First", "Second"),
-        ) {
+            paragraphSpacingDp = 12,
+        ) { _, _ ->
             invocationCount++
             listOf("paged")
         }
@@ -803,8 +806,323 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
+    fun `page reader spacing slider changes pagination separator`() {
+        var paginatedInput: String? = null
+
+        resolvePageReaderBlocks(
+            shouldPaginate = true,
+            textBlocks = listOf("First paragraph", "Second paragraph"),
+            paragraphSpacingDp = 24,
+        ) { textBlocks, paragraphSpacingDp ->
+            paginatedInput = textBlocks.joinToString(resolvePageReaderParagraphSeparator(paragraphSpacingDp))
+            listOf(paginatedInput.orEmpty())
+        }
+
+        assertTrue(paginatedInput == "First paragraph\n\nSecond paragraph")
+    }
+
+    @Test
+    fun `paged plain renderer uses exact paragraph spacing when packing pages`() {
+        val textBlocks = listOf("First paragraph", "Second paragraph")
+
+        val compactPages = resolvePageReaderBlocks(
+            shouldPaginate = true,
+            textBlocks = textBlocks,
+            paragraphSpacingDp = 0,
+        ) { blocks, paragraphSpacingPx ->
+            paginatePlainPageBlocks(
+                textBlocks = blocks,
+                paragraphSpacingPx = paragraphSpacingPx,
+                widthPx = 600,
+                heightPx = 76,
+                textSizePx = 20f,
+                lineHeightMultiplier = 1.2f,
+                typeface = null,
+                textAlign = ReaderTextAlign.LEFT,
+            ).map { page ->
+                page.joinToString("\n") { slice ->
+                    blocks[slice.blockIndex].substring(slice.range.start, slice.range.endExclusive)
+                }
+            }
+        }
+        val spacedPages = resolvePageReaderBlocks(
+            shouldPaginate = true,
+            textBlocks = textBlocks,
+            paragraphSpacingDp = 32,
+        ) { blocks, paragraphSpacingPx ->
+            paginatePlainPageBlocks(
+                textBlocks = blocks,
+                paragraphSpacingPx = paragraphSpacingPx,
+                widthPx = 600,
+                heightPx = 76,
+                textSizePx = 20f,
+                lineHeightMultiplier = 1.2f,
+                typeface = null,
+                textAlign = ReaderTextAlign.LEFT,
+            ).map { page ->
+                page.joinToString("\n") { slice ->
+                    blocks[slice.blockIndex].substring(slice.range.start, slice.range.endExclusive)
+                }
+            }
+        }
+
+        assertEquals(1, compactPages.size)
+        assertEquals(2, spacedPages.size)
+        assertEquals("First paragraph", spacedPages.first())
+        assertEquals("Second paragraph", spacedPages.last())
+    }
+
+    @Test
+    fun `long paragraph continuation does not get paragraph spacing`() {
+        val pages = resolvePageReaderBlocks(
+            shouldPaginate = true,
+            textBlocks = listOf("Long paragraph ".repeat(40).trim()),
+            paragraphSpacingDp = 32,
+        ) { blocks, paragraphSpacingPx ->
+            paginatePlainPageBlocks(
+                textBlocks = blocks,
+                paragraphSpacingPx = paragraphSpacingPx,
+                widthPx = 260,
+                heightPx = 120,
+                textSizePx = 24f,
+                lineHeightMultiplier = 1.2f,
+                typeface = null,
+                textAlign = ReaderTextAlign.LEFT,
+            ).map { page ->
+                page.joinToString("\n") { slice ->
+                    blocks[slice.blockIndex].substring(slice.range.start, slice.range.endExclusive)
+                }
+            }
+        }
+
+        assertTrue(pages.size > 1)
+        val renderBlocks = buildPlainPageRenderBlocks(
+            page = paginatePlainPageBlocks(
+                textBlocks = listOf("Long paragraph ".repeat(40).trim()),
+                paragraphSpacingPx = 32,
+                widthPx = 260,
+                heightPx = 120,
+                textSizePx = 24f,
+                lineHeightMultiplier = 1.2f,
+                typeface = null,
+                textAlign = ReaderTextAlign.LEFT,
+            )[1],
+            textBlocks = listOf("Long paragraph ".repeat(40).trim()),
+            paragraphSpacingPx = 32,
+            forceParagraphIndent = true,
+        )
+
+        assertFalse(pages.drop(1).first().startsWith("\n"))
+        assertEquals(0, renderBlocks.first().spacingBeforePx)
+        assertEquals(null, renderBlocks.first().firstLineIndentEm)
+    }
+
+    @Test
+    fun `rich paged renderer uses exact paragraph spacing when packing pages`() {
+        val richBlocks = listOf(
+            NovelRichContentBlock.Paragraph(
+                segments = listOf(NovelRichTextSegment(text = "First paragraph")),
+            ),
+            NovelRichContentBlock.Paragraph(
+                segments = listOf(NovelRichTextSegment(text = "Second paragraph")),
+            ),
+        )
+        val blockTexts = richBlocks.map { block ->
+            buildRichPageReaderBlockText(block = block)
+        }
+
+        val compactPages = paginateRichPageBlocks(
+            blockTexts = blockTexts,
+            paragraphSpacingPx = 0,
+            widthPx = 600,
+            heightPx = 76,
+            textSizePx = 20f,
+            lineHeightMultiplier = 1.2f,
+            typeface = null,
+            textAlign = ReaderTextAlign.LEFT,
+        ).map { page ->
+            buildAnnotatedString {
+                page.forEachIndexed { index, slice ->
+                    if (index > 0) append('\n')
+                    append(
+                        blockTexts[slice.blockIndex].text.subSequence(
+                            TextRange(slice.range.start, slice.range.endExclusive),
+                        ),
+                    )
+                }
+            }
+        }
+        val spacedPages = paginateRichPageBlocks(
+            blockTexts = blockTexts,
+            paragraphSpacingPx = 32,
+            widthPx = 600,
+            heightPx = 76,
+            textSizePx = 20f,
+            lineHeightMultiplier = 1.2f,
+            typeface = null,
+            textAlign = ReaderTextAlign.LEFT,
+        ).map { page ->
+            buildAnnotatedString {
+                page.forEachIndexed { index, slice ->
+                    if (index > 0) append('\n')
+                    append(
+                        blockTexts[slice.blockIndex].text.subSequence(
+                            TextRange(slice.range.start, slice.range.endExclusive),
+                        ),
+                    )
+                }
+            }
+        }
+
+        assertEquals(1, compactPages.size)
+        assertEquals(2, spacedPages.size)
+        assertEquals("First paragraph", spacedPages.first().text)
+        assertEquals("Second paragraph", spacedPages.last().text)
+    }
+
+    @Test
+    fun `rich paragraph continuation does not get paragraph spacing`() {
+        val blockTexts = listOf(
+            buildRichPageReaderBlockText(
+                block = NovelRichContentBlock.Paragraph(
+                    segments = listOf(NovelRichTextSegment(text = "Long paragraph ".repeat(40).trim())),
+                ),
+            ),
+        )
+        val pages = paginateRichPageBlocks(
+            blockTexts = blockTexts,
+            paragraphSpacingPx = 32,
+            widthPx = 260,
+            heightPx = 120,
+            textSizePx = 24f,
+            lineHeightMultiplier = 1.2f,
+            typeface = null,
+            textAlign = ReaderTextAlign.LEFT,
+        ).map { page ->
+            buildAnnotatedString {
+                page.forEachIndexed { index, slice ->
+                    if (index > 0) append('\n')
+                    append(
+                        blockTexts[slice.blockIndex].text.subSequence(
+                            TextRange(slice.range.start, slice.range.endExclusive),
+                        ),
+                    )
+                }
+            }
+        }
+
+        assertTrue(pages.size > 1)
+        assertFalse(pages.drop(1).first().text.startsWith("\n"))
+        val renderBlocks = buildRichPageRenderBlocks(
+            page = paginateRichPageBlocks(
+                blockTexts = blockTexts,
+                paragraphSpacingPx = 32,
+                widthPx = 260,
+                heightPx = 120,
+                textSizePx = 24f,
+                lineHeightMultiplier = 1.2f,
+                typeface = null,
+                textAlign = ReaderTextAlign.LEFT,
+            )[1],
+            blockTexts = blockTexts,
+            paragraphSpacingPx = 32,
+        )
+        assertEquals(0, renderBlocks.first().spacingBeforePx)
+        assertEquals(null, renderBlocks.first().firstLineIndentEm)
+    }
+
+    @Test
+    fun `plain paged page assembly preserves paragraph boundaries`() {
+        val page = paginatePlainPageBlocks(
+            textBlocks = listOf("First paragraph", "Second paragraph"),
+            paragraphSpacingPx = 12,
+            widthPx = 600,
+            heightPx = 76,
+            textSizePx = 20f,
+            lineHeightMultiplier = 1.2f,
+            typeface = null,
+            textAlign = ReaderTextAlign.LEFT,
+        ).first()
+        val renderBlocks = buildPlainPageRenderBlocks(
+            page = page,
+            textBlocks = listOf("First paragraph", "Second paragraph"),
+            paragraphSpacingPx = 12,
+            forceParagraphIndent = true,
+        )
+
+        assertEquals(listOf("First paragraph", "Second paragraph"), renderBlocks.map { it.text })
+        assertEquals(listOf(0, 12), renderBlocks.map { it.spacingBeforePx })
+        assertEquals(listOf(2f, 2f), renderBlocks.map { it.firstLineIndentEm })
+    }
+
+    @Test
+    fun `rich paged page assembly preserves spans and paragraph boundaries`() {
+        val blockTexts = listOf(
+            buildRichPageReaderBlockText(
+                block = NovelRichContentBlock.Paragraph(
+                    segments = listOf(
+                        NovelRichTextSegment(text = "Alpha "),
+                        NovelRichTextSegment(text = "link", linkUrl = "https://example.org"),
+                    ),
+                ),
+            ),
+            buildRichPageReaderBlockText(
+                block = NovelRichContentBlock.Paragraph(
+                    segments = listOf(NovelRichTextSegment(text = "Second paragraph")),
+                ),
+            ),
+        )
+        val renderBlocks = buildRichPageRenderBlocks(
+            page = paginateRichPageBlocks(
+                blockTexts = blockTexts,
+                paragraphSpacingPx = 12,
+                widthPx = 600,
+                heightPx = 76,
+                textSizePx = 20f,
+                lineHeightMultiplier = 1.2f,
+                typeface = null,
+                textAlign = ReaderTextAlign.LEFT,
+            ).first(),
+            blockTexts = blockTexts,
+            paragraphSpacingPx = 12,
+        )
+
+        assertEquals(listOf("Alpha link", "Second paragraph"), renderBlocks.map { it.text.text })
+        assertEquals(listOf(0, 12), renderBlocks.map { it.spacingBeforePx })
+        assertTrue(
+            renderBlocks.first().text.getStringAnnotations(
+                tag = "URL",
+                start = 0,
+                end = renderBlocks.first().text.length,
+            )
+                .any { it.item == "https://example.org" },
+        )
+    }
+
+    @Test
+    fun `page mode no longer depends on separator heuristics`() {
+        var receivedBlocks: List<String>? = null
+        var receivedSpacing: Int? = null
+
+        val pages = resolvePageReaderBlocks(
+            shouldPaginate = true,
+            textBlocks = listOf("First paragraph", "Second paragraph"),
+            paragraphSpacingDp = 12,
+        ) { blocks, paragraphSpacingPx ->
+            receivedBlocks = blocks
+            receivedSpacing = paragraphSpacingPx
+            listOf("paged")
+        }
+
+        assertEquals(listOf("paged"), pages)
+        assertEquals(listOf("First paragraph", "Second paragraph"), receivedBlocks)
+        assertEquals(12, receivedSpacing)
+    }
+
+    @Test
     fun `vertical swipe up near chapter end opens next chapter`() {
         val result = resolveVerticalChapterSwipeAction(
+            swipeGesturesEnabled = true,
             swipeToNextChapter = true,
             swipeToPrevChapter = true,
             deltaX = 40f,
@@ -825,6 +1143,7 @@ class NovelReaderUiVisibilityTest {
     @Test
     fun `vertical swipe down near chapter start opens previous chapter`() {
         val result = resolveVerticalChapterSwipeAction(
+            swipeGesturesEnabled = true,
             swipeToNextChapter = true,
             swipeToPrevChapter = true,
             deltaX = 20f,
@@ -845,6 +1164,7 @@ class NovelReaderUiVisibilityTest {
     @Test
     fun `horizontal dominant swipe does not trigger vertical chapter switch`() {
         val result = resolveVerticalChapterSwipeAction(
+            swipeGesturesEnabled = true,
             swipeToNextChapter = true,
             swipeToPrevChapter = true,
             deltaX = 320f,
@@ -865,6 +1185,7 @@ class NovelReaderUiVisibilityTest {
     @Test
     fun `webview vertical swipe up near chapter end opens next chapter`() {
         val result = resolveWebViewVerticalChapterSwipeAction(
+            swipeGesturesEnabled = true,
             swipeToNextChapter = true,
             swipeToPrevChapter = true,
             deltaX = 8f,
@@ -885,6 +1206,7 @@ class NovelReaderUiVisibilityTest {
     @Test
     fun `webview vertical swipe requires minimum distance`() {
         val result = resolveWebViewVerticalChapterSwipeAction(
+            swipeGesturesEnabled = true,
             swipeToNextChapter = true,
             swipeToPrevChapter = true,
             deltaX = 2f,
@@ -905,6 +1227,7 @@ class NovelReaderUiVisibilityTest {
     @Test
     fun `webview vertical swipe ignores horizontal dominant gesture`() {
         val result = resolveWebViewVerticalChapterSwipeAction(
+            swipeGesturesEnabled = true,
             swipeToNextChapter = true,
             swipeToPrevChapter = true,
             deltaX = 220f,
@@ -925,6 +1248,7 @@ class NovelReaderUiVisibilityTest {
     @Test
     fun `vertical swipe requires deliberate hold duration`() {
         val result = resolveVerticalChapterSwipeAction(
+            swipeGesturesEnabled = true,
             swipeToNextChapter = true,
             swipeToPrevChapter = false,
             deltaX = 4f,
@@ -945,6 +1269,7 @@ class NovelReaderUiVisibilityTest {
     @Test
     fun `webview vertical swipe requires starting near chapter boundary`() {
         val result = resolveWebViewVerticalChapterSwipeAction(
+            swipeGesturesEnabled = true,
             swipeToNextChapter = true,
             swipeToPrevChapter = false,
             deltaX = 2f,
@@ -954,6 +1279,48 @@ class NovelReaderUiVisibilityTest {
             gestureDurationMillis = 220L,
             minHoldDurationMillis = 160L,
             wasNearChapterEndAtDown = false,
+            wasNearChapterStartAtDown = false,
+            isNearChapterEnd = true,
+            isNearChapterStart = false,
+        )
+
+        assertTrue(result == VerticalChapterSwipeAction.NONE)
+    }
+
+    @Test
+    fun `vertical chapter swipe ignores gestures when master switch is off`() {
+        val result = resolveVerticalChapterSwipeAction(
+            swipeGesturesEnabled = false,
+            swipeToNextChapter = true,
+            swipeToPrevChapter = true,
+            deltaX = 8f,
+            deltaY = -260f,
+            minSwipeDistancePx = 140f,
+            horizontalTolerancePx = 24f,
+            gestureDurationMillis = 220L,
+            minHoldDurationMillis = 160L,
+            wasNearChapterEndAtDown = true,
+            wasNearChapterStartAtDown = false,
+            isNearChapterEnd = true,
+            isNearChapterStart = false,
+        )
+
+        assertTrue(result == VerticalChapterSwipeAction.NONE)
+    }
+
+    @Test
+    fun `webview vertical chapter swipe ignores gestures when master switch is off`() {
+        val result = resolveWebViewVerticalChapterSwipeAction(
+            swipeGesturesEnabled = false,
+            swipeToNextChapter = true,
+            swipeToPrevChapter = true,
+            deltaX = 8f,
+            deltaY = -180f,
+            minSwipeDistancePx = 72f,
+            horizontalTolerancePx = 20f,
+            gestureDurationMillis = 220L,
+            minHoldDurationMillis = 160L,
+            wasNearChapterEndAtDown = true,
             wasNearChapterStartAtDown = false,
             isNearChapterEnd = true,
             isNearChapterStart = false,
@@ -1181,7 +1548,55 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
-    fun `native text align uses source alignment when preserve is enabled`() {
+    fun `kindle dependent toggles disable when kindle info block is off`() {
+        assertFalse(areQuickDialogKindleDependentControlsEnabled(showKindleInfoBlock = false))
+        assertTrue(areQuickDialogKindleDependentControlsEnabled(showKindleInfoBlock = true))
+    }
+
+    @Test
+    fun `renderer control state explains disabled combinations`() {
+        val pageModeState = resolveRendererSettingsAvailability(
+            pageReaderEnabled = true,
+            showWebView = false,
+            bionicReadingEnabled = false,
+        )
+        assertFalse(pageModeState.preferWebViewEnabled)
+        assertTrue(pageModeState.preferWebViewReason == RendererSettingDisableReason.PAGE_MODE)
+        assertFalse(pageModeState.richNativeEnabled)
+        assertTrue(pageModeState.richNativeReason == RendererSettingDisableReason.PAGE_MODE)
+
+        val webViewState = resolveRendererSettingsAvailability(
+            pageReaderEnabled = false,
+            showWebView = true,
+            bionicReadingEnabled = false,
+        )
+        assertTrue(webViewState.preferWebViewEnabled)
+        assertTrue(webViewState.preferWebViewReason == null)
+        assertFalse(webViewState.richNativeEnabled)
+        assertTrue(webViewState.richNativeReason == RendererSettingDisableReason.WEBVIEW_ACTIVE)
+
+        val bionicState = resolveRendererSettingsAvailability(
+            pageReaderEnabled = false,
+            showWebView = false,
+            bionicReadingEnabled = true,
+        )
+        assertTrue(bionicState.preferWebViewEnabled)
+        assertFalse(bionicState.richNativeEnabled)
+        assertTrue(bionicState.richNativeReason == RendererSettingDisableReason.BIONIC_READING)
+    }
+
+    @Test
+    fun `settings surface strategy exposes ownership summaries`() {
+        val strategy = resolveNovelReaderSettingsSurfaceStrategy()
+
+        assertTrue(NovelReaderSettingsFamily.SOURCE_ALIGNMENT_POLICY in strategy.globalOnlyFamilies)
+        assertTrue(NovelReaderSettingsFamily.CHAPTER_CACHE_POLICY in strategy.globalOnlyFamilies)
+        assertTrue(NovelReaderSettingsFamily.LIVE_TEXT_STYLING in strategy.quickDialogOnlyFamilies)
+        assertTrue(NovelReaderSettingsFamily.RENDERER_TUNING in strategy.quickDialogOnlyFamilies)
+    }
+
+    @Test
+    fun `native text align uses source alignment with global fallback when preserve is enabled`() {
         assertTrue(
             resolveNativeTextAlign(
                 globalTextAlign = ReaderTextAlign.JUSTIFY,
@@ -1194,7 +1609,7 @@ class NovelReaderUiVisibilityTest {
                 globalTextAlign = ReaderTextAlign.JUSTIFY,
                 preserveSourceTextAlignInNative = true,
                 sourceTextAlign = null,
-            ) == null,
+            ) == TextAlign.Justify,
         )
     }
 
@@ -1239,12 +1654,12 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
-    fun `page reader layout align avoids forced justify when preserve is enabled`() {
+    fun `page reader layout align follows global alignment with source fallback`() {
         assertTrue(
             resolvePageReaderLayoutTextAlign(
                 globalTextAlign = ReaderTextAlign.JUSTIFY,
                 preserveSourceTextAlignInNative = true,
-            ) == ReaderTextAlign.LEFT,
+            ) == ReaderTextAlign.JUSTIFY,
         )
         assertTrue(
             resolvePageReaderLayoutTextAlign(
@@ -1261,8 +1676,27 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
-    fun `reader webview keeps javascript enabled even without plugin script`() {
-        assertTrue(shouldEnableJavaScriptInReaderWebView(pluginRequestsJavaScript = false))
+    fun `page reader render align follows global alignment with source fallback`() {
+        assertTrue(
+            resolvePageReaderRenderTextAlign(
+                globalTextAlign = ReaderTextAlign.CENTER,
+            ) == TextAlign.Center,
+        )
+        assertTrue(
+            resolvePageReaderRenderTextAlign(
+                globalTextAlign = ReaderTextAlign.RIGHT,
+            ) == TextAlign.End,
+        )
+        assertTrue(
+            resolvePageReaderRenderTextAlign(
+                globalTextAlign = ReaderTextAlign.SOURCE,
+            ) == TextAlign.Start,
+        )
+    }
+
+    @Test
+    fun `reader webview javascript follows plugin request flag`() {
+        assertFalse(shouldEnableJavaScriptInReaderWebView(pluginRequestsJavaScript = false))
         assertTrue(shouldEnableJavaScriptInReaderWebView(pluginRequestsJavaScript = true))
     }
 
@@ -1275,6 +1709,7 @@ class NovelReaderUiVisibilityTest {
             paddingHorizontal = 16,
             fontSizePx = 16,
             lineHeightMultiplier = 1.6f,
+            paragraphSpacingPx = 12,
             textAlignCss = "justify",
             firstLineIndentCss = "2em",
             textColorHex = "#111111",
@@ -1286,6 +1721,8 @@ class NovelReaderUiVisibilityTest {
             fontFamilyName = null,
             customCss = "",
             textShadowCss = null,
+            forceBoldText = false,
+            forceItalicText = false,
         )
 
         assertTrue(css.contains("--an-reader-align: justify;"))
@@ -1334,6 +1771,7 @@ class NovelReaderUiVisibilityTest {
             paddingHorizontal = 16,
             fontSizePx = 16,
             lineHeightMultiplier = 1.6f,
+            paragraphSpacingPx = 12,
             textAlignCss = null,
             firstLineIndentCss = null,
             textColorHex = "#EDEDED",
@@ -1345,6 +1783,8 @@ class NovelReaderUiVisibilityTest {
             fontFamilyName = null,
             customCss = "",
             textShadowCss = textShadowCss,
+            forceBoldText = false,
+            forceItalicText = false,
         )
 
         assertTrue(textShadowCss != null)
@@ -1370,6 +1810,7 @@ class NovelReaderUiVisibilityTest {
             paddingHorizontal = 16,
             fontSizePx = 16,
             lineHeightMultiplier = 1.6f,
+            paragraphSpacingPx = 12,
             textAlignCss = null,
             firstLineIndentCss = null,
             textColorHex = "#EDEDED",
@@ -1381,6 +1822,8 @@ class NovelReaderUiVisibilityTest {
             fontFamilyName = null,
             customCss = "",
             textShadowCss = textShadowCss,
+            forceBoldText = false,
+            forceItalicText = false,
         )
 
         assertTrue(textShadowCss == null)
@@ -1419,6 +1862,45 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
+    fun `webview css applies forced bold and italic to body`() {
+        val css = buildWebReaderCssText(
+            fontFaceCss = "",
+            paddingTop = 0,
+            paddingBottom = 0,
+            paddingHorizontal = 16,
+            fontSizePx = 16,
+            lineHeightMultiplier = 1.6f,
+            paragraphSpacingPx = 12,
+            textAlignCss = null,
+            firstLineIndentCss = null,
+            textColorHex = "#111111",
+            backgroundHex = "#FFFFFF",
+            appearanceMode = NovelReaderAppearanceMode.THEME,
+            backgroundTexture = NovelReaderBackgroundTexture.NONE,
+            oledEdgeGradient = false,
+            backgroundImageUrl = null,
+            fontFamilyName = null,
+            customCss = "",
+            textShadowCss = null,
+            forceBoldText = true,
+            forceItalicText = true,
+        )
+
+        assertTrue(css.contains("--an-reader-font-weight: 700;"))
+        assertTrue(css.contains("--an-reader-font-style: italic;"))
+        assertTrue(css.contains("font-weight: var(--an-reader-font-weight) !important;"))
+        assertTrue(css.contains("font-style: var(--an-reader-font-style) !important;"))
+    }
+
+    @Test
+    fun `forced typeface style resolves combined style`() {
+        assertEquals(android.graphics.Typeface.NORMAL, resolveForcedReaderTypefaceStyle(false, false))
+        assertEquals(android.graphics.Typeface.BOLD, resolveForcedReaderTypefaceStyle(true, false))
+        assertEquals(android.graphics.Typeface.ITALIC, resolveForcedReaderTypefaceStyle(false, true))
+        assertEquals(android.graphics.Typeface.BOLD_ITALIC, resolveForcedReaderTypefaceStyle(true, true))
+    }
+
+    @Test
     fun `webview css uses explicit image layer in background mode`() {
         val css = buildWebReaderCssText(
             fontFaceCss = "",
@@ -1427,6 +1909,7 @@ class NovelReaderUiVisibilityTest {
             paddingHorizontal = 16,
             fontSizePx = 16,
             lineHeightMultiplier = 1.6f,
+            paragraphSpacingPx = 12,
             textAlignCss = null,
             firstLineIndentCss = null,
             textColorHex = "#EDEDED",
@@ -1438,6 +1921,8 @@ class NovelReaderUiVisibilityTest {
             fontFamilyName = null,
             customCss = "",
             textShadowCss = null,
+            forceBoldText = false,
+            forceItalicText = false,
         )
 
         assertTrue(css.contains("url('https://reader-background.local/preset/night_velvet')"))
@@ -1453,6 +1938,7 @@ class NovelReaderUiVisibilityTest {
             paddingHorizontal = 16,
             fontSizePx = 16,
             lineHeightMultiplier = 1.6f,
+            paragraphSpacingPx = 12,
             textAlignCss = null,
             firstLineIndentCss = null,
             textColorHex = "#111111",
@@ -1464,6 +1950,8 @@ class NovelReaderUiVisibilityTest {
             fontFamilyName = null,
             customCss = "",
             textShadowCss = null,
+            forceBoldText = false,
+            forceItalicText = false,
         )
         val second = buildWebReaderCssFingerprint(
             chapterId = 1L,
@@ -1472,6 +1960,7 @@ class NovelReaderUiVisibilityTest {
             paddingHorizontal = 16,
             fontSizePx = 16,
             lineHeightMultiplier = 1.6f,
+            paragraphSpacingPx = 12,
             textAlignCss = null,
             firstLineIndentCss = null,
             textColorHex = "#111111",
@@ -1483,6 +1972,8 @@ class NovelReaderUiVisibilityTest {
             fontFamilyName = null,
             customCss = "",
             textShadowCss = null,
+            forceBoldText = false,
+            forceItalicText = false,
         )
 
         assertNotEquals(first, second)
@@ -1620,7 +2111,6 @@ class NovelReaderUiVisibilityTest {
             showReaderUi = false,
             fullScreenMode = true,
             base = base,
-            defaultLightStatusBars = true,
         )
 
         assertFalse(resolved.isLightStatusBars)
@@ -1632,7 +2122,7 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
-    fun `reader active system bars keep base icon appearance when ui is visible`() {
+    fun `reader active system bars preserve base icon appearance when ui is visible`() {
         val base = ReaderSystemBarsState(
             isLightStatusBars = true,
             isLightNavigationBars = false,
@@ -1643,10 +2133,9 @@ class NovelReaderUiVisibilityTest {
             showReaderUi = true,
             fullScreenMode = true,
             base = base,
-            defaultLightStatusBars = false,
         )
 
-        assertFalse(resolved.isLightStatusBars)
+        assertTrue(resolved.isLightStatusBars)
         assertFalse(resolved.isLightNavigationBars)
         assertTrue(
             resolved.systemBarsBehavior ==
@@ -1655,7 +2144,7 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
-    fun `reader active system bars keep base icon appearance when not fullscreen`() {
+    fun `reader active system bars preserve base icon appearance when not fullscreen`() {
         val base = ReaderSystemBarsState(
             isLightStatusBars = false,
             isLightNavigationBars = false,
@@ -1666,11 +2155,10 @@ class NovelReaderUiVisibilityTest {
             showReaderUi = false,
             fullScreenMode = false,
             base = base,
-            defaultLightStatusBars = true,
         )
 
-        assertTrue(resolved.isLightStatusBars)
-        assertTrue(resolved.isLightNavigationBars)
+        assertFalse(resolved.isLightStatusBars)
+        assertFalse(resolved.isLightNavigationBars)
         assertTrue(
             resolved.systemBarsBehavior ==
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE,
@@ -1821,23 +2309,112 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
-    fun `rich page builder preserves first-line indent as paragraph style`() {
-        val chapter = buildRichPageReaderChapterAnnotatedText(
-            listOf(
-                NovelRichContentBlock.Paragraph(
-                    segments = listOf(NovelRichTextSegment(text = "Indented paragraph")),
-                    firstLineIndentEm = 2f,
-                ),
-                NovelRichContentBlock.Paragraph(
-                    segments = listOf(NovelRichTextSegment(text = "No indent paragraph")),
-                    firstLineIndentEm = null,
-                ),
+    fun `rich page block builder preserves first-line indent metadata`() {
+        val block = buildRichPageReaderBlockText(
+            block = NovelRichContentBlock.Paragraph(
+                segments = listOf(NovelRichTextSegment(text = "Indented paragraph")),
+                firstLineIndentEm = 2f,
             ),
         )
 
-        val hasIndent = chapter.paragraphStyles.any { range ->
-            range.item.textIndent == TextIndent(firstLine = 2.em)
-        }
-        assertTrue(hasIndent)
+        assertEquals("Indented paragraph", block.text.text)
+        assertEquals(2f, block.firstLineIndentEm)
+    }
+
+    @Test
+    fun `rich page block builder preserves source text alignment metadata`() {
+        val block = buildRichPageReaderBlockText(
+            block = NovelRichContentBlock.BlockQuote(
+                segments = listOf(NovelRichTextSegment(text = "Centered quote")),
+                textAlign = NovelRichBlockTextAlign.CENTER,
+            ),
+        )
+
+        assertEquals("Centered quote", block.text.text)
+        assertEquals(NovelRichBlockTextAlign.CENTER, block.sourceTextAlign)
+    }
+
+    @Test
+    fun `page reader base text style applies forced bold italic and shadow`() {
+        val style = resolvePageReaderBaseTextStyle(
+            baseStyle = TextStyle.Default,
+            color = Color.Black,
+            backgroundColor = Color.White,
+            fontSize = 22,
+            lineHeight = 1.4f,
+            fontFamily = null,
+            textAlign = TextAlign.Center,
+            forceBoldText = true,
+            forceItalicText = true,
+            textShadow = true,
+            textShadowColor = "",
+            textShadowBlur = 3f,
+            textShadowX = 2f,
+            textShadowY = 1f,
+        )
+
+        assertEquals(FontWeight.Bold, style.fontWeight)
+        assertEquals(FontStyle.Italic, style.fontStyle)
+        assertEquals(TextAlign.Center, style.textAlign)
+        assertEquals(3f, style.shadow?.blurRadius)
+        assertEquals(Offset(2f, 1f), style.shadow?.offset)
+    }
+
+    @Test
+    fun `rich page builder uses slider-based paragraph separator`() {
+        val chapter = buildRichPageReaderChapterAnnotatedText(
+            listOf(
+                NovelRichContentBlock.Paragraph(
+                    segments = listOf(NovelRichTextSegment(text = "First paragraph")),
+                ),
+                NovelRichContentBlock.Paragraph(
+                    segments = listOf(NovelRichTextSegment(text = "Second paragraph")),
+                ),
+            ),
+            paragraphSpacingDp = 24,
+        )
+
+        assertTrue(chapter.text == "First paragraph\n\nSecond paragraph")
+    }
+
+    @Test
+    fun `webview css uses requested paragraph spacing value`() {
+        val css = buildWebReaderCssText(
+            fontFaceCss = "",
+            paddingTop = 0,
+            paddingBottom = 0,
+            paddingHorizontal = 16,
+            fontSizePx = 16,
+            lineHeightMultiplier = 1.6f,
+            paragraphSpacingPx = 18,
+            textAlignCss = null,
+            firstLineIndentCss = null,
+            textColorHex = "#111111",
+            backgroundHex = "#FFFFFF",
+            appearanceMode = NovelReaderAppearanceMode.THEME,
+            backgroundTexture = NovelReaderBackgroundTexture.NONE,
+            oledEdgeGradient = false,
+            backgroundImageUrl = null,
+            fontFamilyName = null,
+            customCss = "",
+            textShadowCss = null,
+            forceBoldText = false,
+            forceItalicText = false,
+        )
+
+        assertTrue(css.contains("margin-bottom: 18px !important;"))
+    }
+
+    @Test
+    fun `webview bionic script does not override selected font family`() {
+        val script = buildWebReaderBionicJavascript(enabled = true)
+
+        assertTrue(script.contains("an-reader-bionic"))
+        assertFalse(script.contains("font-family"))
+    }
+
+    @Test
+    fun `webview bionic script is empty when disabled`() {
+        assertTrue(buildWebReaderBionicJavascript(enabled = false).isBlank())
     }
 }

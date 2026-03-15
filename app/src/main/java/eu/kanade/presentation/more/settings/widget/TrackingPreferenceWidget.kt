@@ -1,5 +1,6 @@
 package eu.kanade.presentation.more.settings.widget
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -14,9 +15,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import eu.kanade.presentation.more.settings.AURORA_SETTINGS_CARD_SHAPE
 import eu.kanade.presentation.more.settings.LocalPreferenceHighlighted
+import eu.kanade.presentation.more.settings.LocalSettingsUiStyle
+import eu.kanade.presentation.more.settings.SettingsUiStyle
+import eu.kanade.presentation.more.settings.settingsCardContainerColor
+import eu.kanade.presentation.more.settings.settingsTitleColor
 import eu.kanade.presentation.track.components.TrackLogoIcon
 import eu.kanade.tachiyomi.data.track.Tracker
 import tachiyomi.i18n.MR
@@ -30,9 +37,20 @@ fun TrackingPreferenceWidget(
     onClick: (() -> Unit)? = null,
 ) {
     val highlighted = LocalPreferenceHighlighted.current
+    val isAurora = LocalSettingsUiStyle.current == SettingsUiStyle.Aurora
     Box(modifier = Modifier.highlightBackground(highlighted)) {
         Row(
             modifier = modifier
+                .then(
+                    if (isAurora) {
+                        Modifier
+                            .padding(vertical = 4.dp)
+                            .clip(AURORA_SETTINGS_CARD_SHAPE)
+                            .background(settingsCardContainerColor())
+                    } else {
+                        Modifier
+                    },
+                )
                 .clickable(enabled = onClick != null, onClick = { onClick?.invoke() })
                 .fillMaxWidth()
                 .padding(horizontal = PrefsHorizontalPadding, vertical = 8.dp),
@@ -46,6 +64,7 @@ fun TrackingPreferenceWidget(
                     .padding(horizontal = 16.dp),
                 maxLines = 1,
                 style = MaterialTheme.typography.titleLarge,
+                color = settingsTitleColor(),
                 fontSize = TitleFontSize,
             )
             if (checked) {
