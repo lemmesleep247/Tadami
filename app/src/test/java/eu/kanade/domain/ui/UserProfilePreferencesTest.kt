@@ -1,7 +1,11 @@
 package eu.kanade.domain.ui
 
+import eu.kanade.domain.ui.model.AuroraTitleHeroCtaMode
 import eu.kanade.domain.ui.model.HomeHeaderLayoutElement
 import eu.kanade.domain.ui.model.HomeHeaderLayoutSpec
+import eu.kanade.domain.ui.model.HomeHeroCtaMode
+import eu.kanade.domain.ui.model.HomeHubRecentCardMode
+import eu.kanade.domain.ui.model.HomeStreakCounterStyle
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.CoroutineScope
@@ -21,6 +25,10 @@ class UserProfilePreferencesTest {
 
         prefs.showHomeGreeting().get() shouldBe true
         prefs.showHomeStreak().get() shouldBe true
+        prefs.homeStreakCounterStyle().get() shouldBe HomeStreakCounterStyle.ClassicBadge.key
+        prefs.homeHeroCtaMode().get() shouldBe HomeHeroCtaMode.Aurora.key
+        prefs.homeHubRecentCardMode().get() shouldBe HomeHubRecentCardMode.Aurora.key
+        prefs.auroraTitleHeroCtaMode().get() shouldBe AuroraTitleHeroCtaMode.Aurora.key
         prefs.homeHeaderNicknameAlignRight().get() shouldBe false
         prefs.homeHubLastSection().get() shouldBe "anime"
         prefs.greetingFont().get() shouldBe "default"

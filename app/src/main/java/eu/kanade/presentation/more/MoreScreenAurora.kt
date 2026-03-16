@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.VideoSettings
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import eu.kanade.domain.ui.model.NavStyle
 import eu.kanade.presentation.components.AuroraBackground
 import eu.kanade.presentation.theme.AuroraTheme
+import eu.kanade.presentation.theme.LocalIsDefaultAppUiFont
 import eu.kanade.tachiyomi.ui.more.DownloadQueueState
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -196,13 +198,14 @@ fun AuroraSettingItem(
     subtitle: String? = null,
 ) {
     val colors = AuroraTheme.colors
+    val useMediumWeight = LocalIsDefaultAppUiFont.current
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(colors.glass)
+            .background(resolveAuroraMoreCardContainerColor(colors.glass, colors.isDark))
             .clickable(onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -218,8 +221,10 @@ fun AuroraSettingItem(
             Text(
                 text = title,
                 color = colors.textPrimary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
+                style = auroraPrimaryMenuTitleTextStyle(
+                    baseStyle = MaterialTheme.typography.bodyLarge,
+                    useMediumWeight = useMediumWeight,
+                ),
             )
             if (subtitle != null) {
                 Text(
@@ -240,13 +245,14 @@ fun AuroraToggleItem(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     val colors = AuroraTheme.colors
+    val useMediumWeight = LocalIsDefaultAppUiFont.current
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(colors.glass)
+            .background(resolveAuroraMoreCardContainerColor(colors.glass, colors.isDark))
             .clickable { onCheckedChange(!checked) }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -263,8 +269,10 @@ fun AuroraToggleItem(
             Text(
                 text = title,
                 color = colors.textPrimary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
+                style = auroraPrimaryMenuTitleTextStyle(
+                    baseStyle = MaterialTheme.typography.bodyLarge,
+                    useMediumWeight = useMediumWeight,
+                ),
             )
         }
 
@@ -274,7 +282,10 @@ fun AuroraToggleItem(
                 onCheckedChange = onCheckedChange,
                 colors = androidx.compose.material3.SwitchDefaults.colors(
                     checkedThumbColor = colors.accent,
-                    checkedTrackColor = colors.accent.copy(alpha = 0.5f),
+                    checkedTrackColor = resolveAuroraMoreCheckedTrackColor(
+                        accent = colors.accent,
+                        isDark = colors.isDark,
+                    ),
                 ),
             )
         }

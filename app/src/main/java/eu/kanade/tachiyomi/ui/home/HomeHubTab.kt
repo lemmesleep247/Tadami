@@ -111,6 +111,8 @@ import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.UserProfilePreferences
 import eu.kanade.domain.ui.model.HomeHeaderLayoutElement
 import eu.kanade.domain.ui.model.HomeHeaderLayoutSpec
+import eu.kanade.domain.ui.model.HomeHeroCtaMode
+import eu.kanade.domain.ui.model.HomeHubRecentCardMode
 import eu.kanade.domain.ui.model.HomeStreakCounterStyle
 import eu.kanade.presentation.components.AuroraCard
 import eu.kanade.presentation.components.AuroraCoverPlaceholderVariant
@@ -119,6 +121,7 @@ import eu.kanade.presentation.components.TabContent
 import eu.kanade.presentation.components.TabbedScreenAurora
 import eu.kanade.presentation.components.auroraMenuRimLightBrush
 import eu.kanade.presentation.components.rememberThemeAwareCoverErrorPainter
+import eu.kanade.presentation.components.resolveAuroraCoverModel
 import eu.kanade.presentation.more.settings.screen.browse.AnimeExtensionReposScreen
 import eu.kanade.presentation.more.settings.screen.browse.MangaExtensionReposScreen
 import eu.kanade.presentation.more.settings.screen.browse.NovelExtensionReposScreen
@@ -143,6 +146,7 @@ import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.launch
 import tachiyomi.domain.achievement.model.DayActivity
+import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
@@ -151,7 +155,7 @@ import java.time.LocalDate
 import kotlin.math.roundToInt
 import android.graphics.Color as AndroidColor
 
-private enum class HomeHubSection {
+internal enum class HomeHubSection {
     Anime,
     Manga,
     Novel,
@@ -222,6 +226,129 @@ internal fun resolveHomeHubHeaderVisibility(
     }
 }
 
+internal enum class HomeHubHeroActionIcon {
+    Play,
+}
+
+internal data class HomeHubHeroActionSpec(
+    val labelRes: dev.icerock.moko.resources.StringResource,
+    val progressLabelRes: dev.icerock.moko.resources.StringResource,
+    val icon: HomeHubHeroActionIcon,
+)
+
+internal enum class HomeHubHeroButtonVisualMode {
+    AuroraGlass,
+    ClassicSolid,
+}
+
+internal fun resolveHomeHubHeroActionSpec(
+    section: HomeHubSection,
+    progressNumber: Double,
+    mode: HomeHeroCtaMode,
+): HomeHubHeroActionSpec {
+    val progressLabelRes = when (section) {
+        HomeHubSection.Anime -> AYMR.strings.aurora_episode_progress
+        HomeHubSection.Manga, HomeHubSection.Novel -> AYMR.strings.aurora_chapter_progress
+    }
+    val hasProgress = progressNumber > 0.0
+
+    return when (mode) {
+        HomeHeroCtaMode.Classic -> {
+            val labelRes = when (section) {
+                HomeHubSection.Anime -> AYMR.strings.aurora_play
+                HomeHubSection.Manga, HomeHubSection.Novel -> AYMR.strings.aurora_read
+            }
+            HomeHubHeroActionSpec(
+                labelRes = labelRes,
+                progressLabelRes = progressLabelRes,
+                icon = HomeHubHeroActionIcon.Play,
+            )
+        }
+        HomeHeroCtaMode.Aurora -> {
+            val labelRes = if (hasProgress) {
+                MR.strings.action_resume
+            } else {
+                when (section) {
+                    HomeHubSection.Anime -> AYMR.strings.aurora_play
+                    HomeHubSection.Manga, HomeHubSection.Novel -> AYMR.strings.aurora_read
+                }
+            }
+            HomeHubHeroActionSpec(
+                labelRes = labelRes,
+                progressLabelRes = progressLabelRes,
+                icon = HomeHubHeroActionIcon.Play,
+            )
+        }
+    }
+}
+
+internal fun resolveHomeHubHeroButtonVisualMode(mode: HomeHeroCtaMode): HomeHubHeroButtonVisualMode {
+    return when (mode) {
+        HomeHeroCtaMode.Aurora -> HomeHubHeroButtonVisualMode.AuroraGlass
+        HomeHeroCtaMode.Classic -> HomeHubHeroButtonVisualMode.ClassicSolid
+    }
+}
+
+internal enum class HomeHubRecentCardRenderMode {
+    AuroraPoster,
+    ClassicAuroraCard,
+}
+
+internal data class HomeHubRecentPosterCardSpec(
+    val posterAspectRatio: Float,
+    val titleMaxLines: Int,
+    val textHorizontalPaddingDp: Int,
+    val textTopSpacingDp: Int,
+    val textBlockMinHeightDp: Int,
+)
+
+internal data class HomeHubRecentPosterSurfaceSpec(
+    val containerAlpha: Float,
+    val posterAlpha: Float,
+)
+
+internal fun resolveHomeHubRecentCardRenderMode(mode: HomeHubRecentCardMode): HomeHubRecentCardRenderMode {
+    return when (mode) {
+        HomeHubRecentCardMode.Aurora -> HomeHubRecentCardRenderMode.AuroraPoster
+        HomeHubRecentCardMode.Classic -> HomeHubRecentCardRenderMode.ClassicAuroraCard
+    }
+}
+
+internal fun resolveHomeHubRecentPosterCardSpec(deviceClass: AuroraDeviceClass): HomeHubRecentPosterCardSpec {
+    return when (deviceClass) {
+        AuroraDeviceClass.Phone -> HomeHubRecentPosterCardSpec(
+            posterAspectRatio = 0.9f,
+            titleMaxLines = 2,
+            textHorizontalPaddingDp = 2,
+            textTopSpacingDp = 8,
+            textBlockMinHeightDp = 58,
+        )
+        AuroraDeviceClass.TabletCompact,
+        AuroraDeviceClass.TabletExpanded,
+        -> HomeHubRecentPosterCardSpec(
+            posterAspectRatio = 0.9f,
+            titleMaxLines = 2,
+            textHorizontalPaddingDp = 2,
+            textTopSpacingDp = 8,
+            textBlockMinHeightDp = 54,
+        )
+    }
+}
+
+internal fun resolveHomeHubRecentPosterSurfaceSpec(isDark: Boolean): HomeHubRecentPosterSurfaceSpec {
+    return if (isDark) {
+        HomeHubRecentPosterSurfaceSpec(
+            containerAlpha = 0.06f,
+            posterAlpha = 0.10f,
+        )
+    } else {
+        HomeHubRecentPosterSurfaceSpec(
+            containerAlpha = 0.02f,
+            posterAlpha = 0.05f,
+        )
+    }
+}
+
 internal fun shouldResetHomeHubScroll(previousPage: Int, currentPage: Int): Boolean {
     return previousPage != currentPage
 }
@@ -256,6 +383,14 @@ internal fun shouldShowNicknameEditHint(
     isNameEdited: Boolean,
 ): Boolean {
     return !isNameEdited && currentName == UserProfilePreferences.DEFAULT_NAME
+}
+
+internal fun resolveHomeStreakStylePickerOptions(): List<HomeStreakCounterStyle> {
+    return listOf(
+        HomeStreakCounterStyle.ClassicBadge,
+        HomeStreakCounterStyle.NumberBadgeOnly,
+        HomeStreakCounterStyle.NoBadge,
+    )
 }
 
 internal fun shouldFillNicknameRowSpace(showNameEditHint: Boolean): Boolean {
@@ -596,6 +731,14 @@ object HomeHubTab : Tab {
         val homeStreakCounterStyle = remember(homeStreakCounterStyleKey) {
             HomeStreakCounterStyle.fromKey(homeStreakCounterStyleKey)
         }
+        val homeHeroCtaModeKey by userProfilePreferences.homeHeroCtaMode().collectAsState()
+        val homeHeroCtaMode = remember(homeHeroCtaModeKey) {
+            HomeHeroCtaMode.fromKey(homeHeroCtaModeKey)
+        }
+        val homeHubRecentCardModeKey by userProfilePreferences.homeHubRecentCardMode().collectAsState()
+        val homeHubRecentCardMode = remember(homeHubRecentCardModeKey) {
+            HomeHubRecentCardMode.fromKey(homeHubRecentCardModeKey)
+        }
         val homeHeaderGreetingAlignRight by userProfilePreferences.homeHeaderGreetingAlignRight().collectAsState()
         val homeHeaderNicknameAlignRight by userProfilePreferences.homeHeaderNicknameAlignRight().collectAsState()
         val homeHeaderLayoutJson by userProfilePreferences.homeHeaderLayoutJson().collectAsState()
@@ -721,6 +864,17 @@ object HomeHubTab : Tab {
                 },
             )
         }
+        var showStreakStyleDialog by remember { mutableStateOf(false) }
+        if (showStreakStyleDialog) {
+            HomeStreakStyleDialog(
+                currentStyle = homeStreakCounterStyle,
+                onDismiss = { showStreakStyleDialog = false },
+                onConfirm = { selectedStyle ->
+                    userProfilePreferences.homeStreakCounterStyle().set(selectedStyle.key)
+                    showStreakStyleDialog = false
+                },
+            )
+        }
 
         // Do not persist collapsed header position across app relaunches.
         var headerOffsetPx by remember { mutableStateOf(0f) }
@@ -747,6 +901,8 @@ object HomeHubTab : Tab {
                         AnimeHomeHub(
                             contentPadding = contentPadding,
                             searchQuery = animeSearchQuery,
+                            heroCtaMode = homeHeroCtaMode,
+                            recentCardMode = homeHubRecentCardMode,
                             activeSection = selectedSection,
                             scrollResetToken = scrollResetToken,
                             onScrollSignal = onScrollSignal,
@@ -760,6 +916,8 @@ object HomeHubTab : Tab {
                         MangaHomeHub(
                             contentPadding = contentPadding,
                             searchQuery = mangaSearchQuery,
+                            heroCtaMode = homeHeroCtaMode,
+                            recentCardMode = homeHubRecentCardMode,
                             activeSection = selectedSection,
                             scrollResetToken = scrollResetToken,
                             onScrollSignal = onScrollSignal,
@@ -773,6 +931,8 @@ object HomeHubTab : Tab {
                         NovelHomeHub(
                             contentPadding = contentPadding,
                             searchQuery = novelSearchQuery,
+                            heroCtaMode = homeHeroCtaMode,
+                            recentCardMode = homeHubRecentCardMode,
                             activeSection = selectedSection,
                             scrollResetToken = scrollResetToken,
                             onScrollSignal = onScrollSignal,
@@ -860,6 +1020,7 @@ object HomeHubTab : Tab {
                     onAvatarClick = { photoPickerLauncher.launch("image/*") },
                     onNameClick = { showNameDialog = true },
                     onGreetingClick = { showGreetingDialog = true },
+                    onStreakClick = { showStreakStyleDialog = true },
                 )
             },
         )
@@ -995,6 +1156,7 @@ private fun HomeHubPinnedHeader(
     onAvatarClick: () -> Unit,
     onNameClick: () -> Unit,
     onGreetingClick: () -> Unit,
+    onStreakClick: () -> Unit,
 ) {
     val colors = AuroraTheme.colors
     val auroraAdaptiveSpec = rememberAuroraAdaptiveSpec()
@@ -1039,6 +1201,7 @@ private fun HomeHubPinnedHeader(
                     onAvatarClick = onAvatarClick,
                     onNameClick = onNameClick,
                     onGreetingClick = onGreetingClick,
+                    onStreakClick = onStreakClick,
                 )
 
                 Spacer(Modifier.height(16.dp))
@@ -1094,6 +1257,7 @@ private fun HomeHubProfileHeaderCanvas(
     onAvatarClick: () -> Unit,
     onNameClick: () -> Unit,
     onGreetingClick: () -> Unit,
+    onStreakClick: () -> Unit,
 ) {
     val colors = AuroraTheme.colors
     val density = LocalDensity.current
@@ -1485,6 +1649,7 @@ private fun HomeHubProfileHeaderCanvas(
                             style = streakStyle,
                             isTabletHeaderLayout = isTabletHeaderLayout,
                             colors = colors,
+                            onClick = onStreakClick,
                         )
                     }
                 }
@@ -1505,6 +1670,7 @@ private fun HomeHubProfileHeaderCanvas(
                                     style = streakStyle,
                                     isTabletHeaderLayout = isTabletHeaderLayout,
                                     colors = colors,
+                                    onClick = onStreakClick,
                                 )
                             }
                         }
@@ -1561,8 +1727,14 @@ private fun HomeStreakCounterContent(
     style: HomeStreakCounterStyle,
     isTabletHeaderLayout: Boolean,
     colors: AuroraColors,
+    onClick: (() -> Unit)? = null,
 ) {
     val contentModifier = Modifier.offset(y = if (isTabletHeaderLayout) (-3).dp else 0.dp)
+    val clickModifier = if (onClick != null) {
+        Modifier.clickable(onClick = onClick)
+    } else {
+        Modifier
+    }
     val labelText = currentStreak.toString()
     when (style) {
         HomeStreakCounterStyle.ClassicBadge -> {
@@ -1575,6 +1747,7 @@ private fun HomeStreakCounterContent(
                         color = colors.accent.copy(alpha = 0.35f),
                         shape = RoundedCornerShape(999.dp),
                     )
+                    .then(clickModifier)
                     .padding(horizontal = 8.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -1595,7 +1768,7 @@ private fun HomeStreakCounterContent(
         }
         HomeStreakCounterStyle.NumberBadgeOnly -> {
             Row(
-                modifier = contentModifier,
+                modifier = contentModifier.then(clickModifier),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
@@ -1627,7 +1800,7 @@ private fun HomeStreakCounterContent(
         }
         HomeStreakCounterStyle.NoBadge -> {
             Row(
-                modifier = contentModifier,
+                modifier = contentModifier.then(clickModifier),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
@@ -1700,13 +1873,75 @@ internal fun HomeHeaderLayoutLivePreview(
         onAvatarClick = {},
         onNameClick = {},
         onGreetingClick = {},
+        onStreakClick = {},
     )
+}
+
+@Composable
+private fun HomeStreakStyleDialog(
+    currentStyle: HomeStreakCounterStyle,
+    onDismiss: () -> Unit,
+    onConfirm: (HomeStreakCounterStyle) -> Unit,
+) {
+    var selectedStyle by remember(currentStyle) { mutableStateOf(currentStyle) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(stringResource(AYMR.strings.home_header_layout_editor_streak_style_title))
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                resolveHomeStreakStylePickerOptions().forEach { style ->
+                    NameStyleChip(
+                        title = homeStreakCounterStyleLabel(style),
+                        selected = selectedStyle == style,
+                        onClick = { selectedStyle = style },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(selectedStyle) },
+            ) {
+                Text(stringResource(AYMR.strings.aurora_nickname_apply))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(AYMR.strings.aurora_nickname_cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun homeStreakCounterStyleLabel(style: HomeStreakCounterStyle): String {
+    return when (style) {
+        HomeStreakCounterStyle.ClassicBadge -> {
+            stringResource(AYMR.strings.home_header_layout_editor_streak_style_classic_badge)
+        }
+        HomeStreakCounterStyle.NumberBadgeOnly -> {
+            stringResource(AYMR.strings.home_header_layout_editor_streak_style_number_badge_only)
+        }
+        HomeStreakCounterStyle.NoBadge -> {
+            stringResource(AYMR.strings.home_header_layout_editor_streak_style_no_badge)
+        }
+    }
 }
 
 @Composable
 private fun AnimeHomeHub(
     contentPadding: PaddingValues,
     searchQuery: String?,
+    heroCtaMode: HomeHeroCtaMode,
+    recentCardMode: HomeHubRecentCardMode,
     activeSection: HomeHubSection,
     scrollResetToken: Int,
     onScrollSignal: (HomeHubSection, Float, Boolean) -> Unit,
@@ -1732,9 +1967,9 @@ private fun AnimeHomeHub(
         state = state.toUiState(),
         searchQuery = searchQuery,
         lastSourceName = lastSourceName,
+        heroCtaMode = heroCtaMode,
+        recentCardMode = recentCardMode,
         contentPadding = contentPadding,
-        heroActionLabelRes = AYMR.strings.aurora_play,
-        heroProgressLabelRes = AYMR.strings.aurora_episode_progress,
         onEntryClick = { navigator.push(AnimeScreen(it)) },
         onPlayHero = { screenModel.playHeroEpisode(context) },
         onSourceClick = {
@@ -1759,6 +1994,8 @@ private fun AnimeHomeHub(
 private fun MangaHomeHub(
     contentPadding: PaddingValues,
     searchQuery: String?,
+    heroCtaMode: HomeHeroCtaMode,
+    recentCardMode: HomeHubRecentCardMode,
     activeSection: HomeHubSection,
     scrollResetToken: Int,
     onScrollSignal: (HomeHubSection, Float, Boolean) -> Unit,
@@ -1784,9 +2021,9 @@ private fun MangaHomeHub(
         state = state.toUiState(),
         searchQuery = searchQuery,
         lastSourceName = lastSourceName,
+        heroCtaMode = heroCtaMode,
+        recentCardMode = recentCardMode,
         contentPadding = contentPadding,
-        heroActionLabelRes = AYMR.strings.aurora_read,
-        heroProgressLabelRes = AYMR.strings.aurora_chapter_progress,
         onEntryClick = { navigator.push(MangaScreen(it)) },
         onPlayHero = { screenModel.readHeroChapter(context) },
         onSourceClick = {
@@ -1811,6 +2048,8 @@ private fun MangaHomeHub(
 private fun NovelHomeHub(
     contentPadding: PaddingValues,
     searchQuery: String?,
+    heroCtaMode: HomeHeroCtaMode,
+    recentCardMode: HomeHubRecentCardMode,
     activeSection: HomeHubSection,
     scrollResetToken: Int,
     onScrollSignal: (HomeHubSection, Float, Boolean) -> Unit,
@@ -1835,9 +2074,9 @@ private fun NovelHomeHub(
         state = state.toUiState(),
         searchQuery = searchQuery,
         lastSourceName = lastSourceName,
+        heroCtaMode = heroCtaMode,
+        recentCardMode = recentCardMode,
         contentPadding = contentPadding,
-        heroActionLabelRes = AYMR.strings.aurora_read,
-        heroProgressLabelRes = AYMR.strings.aurora_chapter_progress,
         onEntryClick = { navigator.push(NovelScreen(it)) },
         onPlayHero = {
             screenModel.getHeroChapterId()?.let { chapterId ->
@@ -1874,9 +2113,9 @@ private fun HomeHubScreen(
     state: HomeHubUiState,
     searchQuery: String?,
     lastSourceName: String?,
+    heroCtaMode: HomeHeroCtaMode,
+    recentCardMode: HomeHubRecentCardMode,
     contentPadding: PaddingValues,
-    heroActionLabelRes: dev.icerock.moko.resources.StringResource,
-    heroProgressLabelRes: dev.icerock.moko.resources.StringResource,
     onEntryClick: (Long) -> Unit,
     onPlayHero: () -> Unit,
     onSourceClick: () -> Unit,
@@ -1949,8 +2188,8 @@ private fun HomeHubScreen(
                     hero?.let { heroData ->
                         HeroSection(
                             hero = heroData,
-                            actionLabelRes = heroActionLabelRes,
-                            progressLabelRes = heroProgressLabelRes,
+                            section = section,
+                            ctaMode = heroCtaMode,
                             onPlayClick = onPlayHero,
                             onEntryClick = { onEntryClick(heroData.entryId) },
                         )
@@ -1966,6 +2205,7 @@ private fun HomeHubScreen(
                 item(key = "history") {
                     HistoryRow(
                         history = history,
+                        recentCardMode = recentCardMode,
                         onEntryClick = onEntryClick,
                         onViewAllClick = onHistoryClick,
                     )
@@ -1976,6 +2216,7 @@ private fun HomeHubScreen(
                 item(key = "recommendations") {
                     RecommendationsGrid(
                         recommendations = recommendations,
+                        recentCardMode = recentCardMode,
                         onEntryClick = onEntryClick,
                         onMoreClick = onLibraryClick,
                     )
@@ -2094,12 +2335,22 @@ internal fun homeHubRimLightBrush(): Brush {
 @Composable
 private fun HeroSection(
     hero: HomeHubHero,
-    actionLabelRes: dev.icerock.moko.resources.StringResource,
-    progressLabelRes: dev.icerock.moko.resources.StringResource,
+    section: HomeHubSection,
+    ctaMode: HomeHeroCtaMode,
     onPlayClick: () -> Unit,
     onEntryClick: () -> Unit,
 ) {
     val colors = AuroraTheme.colors
+    val actionSpec = remember(section, hero.progressNumber, ctaMode) {
+        resolveHomeHubHeroActionSpec(
+            section = section,
+            progressNumber = hero.progressNumber,
+            mode = ctaMode,
+        )
+    }
+    val buttonVisualMode = remember(ctaMode) {
+        resolveHomeHubHeroButtonVisualMode(ctaMode)
+    }
     val auroraAdaptiveSpec = rememberAuroraAdaptiveSpec()
     val contentMaxWidthDp = auroraAdaptiveSpec.updatesMaxWidthDp ?: auroraAdaptiveSpec.entryMaxWidthDp
     val heroCardShape = RoundedCornerShape(24.dp)
@@ -2133,15 +2384,46 @@ private fun HeroSection(
     }
     val rimLightBrush = remember { homeHubRimLightBrush() }
     val actionButtonShape = RoundedCornerShape(12.dp)
-    val actionButtonBrush = remember(colors.accent) {
-        Brush.linearGradient(
-            colors = listOf(
-                lerp(colors.accent, Color.White, 0.16f),
-                lerp(colors.accent, Color.Black, 0.08f),
-            ),
-            start = Offset(0f, 0f),
-            end = Offset(0f, 420f),
-        )
+    val actionButtonBrush = remember(colors, buttonVisualMode) {
+        when (buttonVisualMode) {
+            HomeHubHeroButtonVisualMode.ClassicSolid -> {
+                Brush.linearGradient(
+                    colors = listOf(
+                        lerp(colors.accent, Color.White, 0.16f),
+                        lerp(colors.accent, Color.Black, 0.08f),
+                    ),
+                    start = Offset(0f, 0f),
+                    end = Offset(0f, 420f),
+                )
+            }
+            HomeHubHeroButtonVisualMode.AuroraGlass -> {
+                Brush.linearGradient(
+                    colors = listOf(
+                        lerp(colors.accent, Color.White, 0.28f).copy(alpha = 0.28f),
+                        lerp(colors.accent, colors.glass, 0.42f).copy(alpha = 0.88f),
+                        lerp(colors.accent, colors.glass, 0.20f).copy(alpha = 0.94f),
+                    ),
+                    start = Offset(0f, 0f),
+                    end = Offset(0f, 420f),
+                )
+            }
+        }
+    }
+    val actionButtonBorderColor = when (buttonVisualMode) {
+        HomeHubHeroButtonVisualMode.ClassicSolid -> Color.White.copy(alpha = 0.12f)
+        HomeHubHeroButtonVisualMode.AuroraGlass -> Color.Transparent
+    }
+    val actionButtonContentColor = when (buttonVisualMode) {
+        HomeHubHeroButtonVisualMode.ClassicSolid -> colors.textOnAccent
+        HomeHubHeroButtonVisualMode.AuroraGlass -> Color.White
+    }
+    val actionButtonPadding = when (buttonVisualMode) {
+        HomeHubHeroButtonVisualMode.ClassicSolid -> {
+            PaddingValues(start = 22.dp, end = 24.dp, top = 8.dp, bottom = 8.dp)
+        }
+        HomeHubHeroButtonVisualMode.AuroraGlass -> {
+            PaddingValues(start = 20.dp, end = 22.dp, top = 8.dp, bottom = 8.dp)
+        }
     }
 
     Box(
@@ -2186,7 +2468,7 @@ private fun HeroSection(
                 Box(Modifier.size(6.dp).background(colors.accent, CircleShape))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    stringResource(progressLabelRes, (hero.progressNumber % 1000).toInt()),
+                    stringResource(actionSpec.progressLabelRes, (hero.progressNumber % 1000).toInt()),
                     color = Color.White.copy(alpha = 0.92f),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
@@ -2200,18 +2482,25 @@ private fun HeroSection(
                 onClick = onPlayClick,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
                 shape = actionButtonShape,
-                contentPadding = PaddingValues(start = 22.dp, end = 24.dp, top = 8.dp, bottom = 8.dp),
+                contentPadding = actionButtonPadding,
                 modifier = Modifier
                     .height(52.dp)
                     .clip(actionButtonShape)
                     .background(actionButtonBrush)
-                    .border(1.dp, Color.White.copy(alpha = 0.12f), actionButtonShape),
+                    .border(1.dp, actionButtonBorderColor, actionButtonShape),
             ) {
-                Icon(Icons.Filled.PlayArrow, null, tint = colors.textOnAccent, modifier = Modifier.size(21.dp))
+                Icon(
+                    imageVector = when (actionSpec.icon) {
+                        HomeHubHeroActionIcon.Play -> Icons.Filled.PlayArrow
+                    },
+                    contentDescription = null,
+                    tint = actionButtonContentColor,
+                    modifier = Modifier.size(21.dp),
+                )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    stringResource(actionLabelRes),
-                    color = colors.textOnAccent,
+                    stringResource(actionSpec.labelRes),
+                    color = actionButtonContentColor,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                 )
@@ -2283,6 +2572,7 @@ private fun QuickSourceButton(sourceName: String?, onClick: () -> Unit) {
 @Composable
 private fun HistoryRow(
     history: List<HomeHubHistory>,
+    recentCardMode: HomeHubRecentCardMode,
     onEntryClick: (Long) -> Unit,
     onViewAllClick: () -> Unit,
 ) {
@@ -2305,6 +2595,9 @@ private fun HistoryRow(
         AuroraDeviceClass.TabletExpanded -> 18.dp
     }
     val useWrappedSections = shouldUseHomeHubWrappedSections(auroraAdaptiveSpec.deviceClass)
+    val cardRenderMode = remember(recentCardMode) {
+        resolveHomeHubRecentCardRenderMode(recentCardMode)
+    }
 
     Column(modifier = Modifier.padding(top = 24.dp)) {
         Row(
@@ -2340,8 +2633,9 @@ private fun HistoryRow(
                 verticalArrangement = Arrangement.spacedBy(rowSpacing),
             ) {
                 history.forEach { item ->
-                    AuroraCard(
-                        modifier = Modifier.width(cardWidth).aspectRatio(0.68f),
+                    HomeHubRecentCard(
+                        mode = cardRenderMode,
+                        modifier = Modifier.width(cardWidth),
                         title = item.title,
                         coverData = item.coverData,
                         subtitle = stringResource(
@@ -2349,7 +2643,7 @@ private fun HistoryRow(
                             (item.progressNumber % 1000).toInt().toString(),
                         ),
                         onClick = { onEntryClick(item.entryId) },
-                        imagePadding = 6.dp,
+                        deviceClass = auroraAdaptiveSpec.deviceClass,
                     )
                 }
             }
@@ -2362,8 +2656,9 @@ private fun HistoryRow(
                 horizontalArrangement = Arrangement.spacedBy(rowSpacing),
             ) {
                 items(history, key = { it.entryId }) { item ->
-                    AuroraCard(
-                        modifier = Modifier.width(cardWidth).aspectRatio(0.68f),
+                    HomeHubRecentCard(
+                        mode = cardRenderMode,
+                        modifier = Modifier.width(cardWidth),
                         title = item.title,
                         coverData = item.coverData,
                         subtitle = stringResource(
@@ -2371,7 +2666,7 @@ private fun HistoryRow(
                             (item.progressNumber % 1000).toInt().toString(),
                         ),
                         onClick = { onEntryClick(item.entryId) },
-                        imagePadding = 6.dp,
+                        deviceClass = auroraAdaptiveSpec.deviceClass,
                     )
                 }
             }
@@ -2383,6 +2678,7 @@ private fun HistoryRow(
 @Composable
 private fun RecommendationsGrid(
     recommendations: List<HomeHubRecommendation>,
+    recentCardMode: HomeHubRecentCardMode,
     onEntryClick: (Long) -> Unit,
     onMoreClick: () -> Unit,
 ) {
@@ -2405,6 +2701,9 @@ private fun RecommendationsGrid(
         AuroraDeviceClass.TabletExpanded -> 18.dp
     }
     val useWrappedSections = shouldUseHomeHubWrappedSections(auroraAdaptiveSpec.deviceClass)
+    val cardRenderMode = remember(recentCardMode) {
+        resolveHomeHubRecentCardRenderMode(recentCardMode)
+    }
 
     Column(modifier = Modifier.padding(top = 32.dp)) {
         Row(
@@ -2441,13 +2740,14 @@ private fun RecommendationsGrid(
                 verticalArrangement = Arrangement.spacedBy(rowSpacing),
             ) {
                 recommendations.forEach { item ->
-                    AuroraCard(
-                        modifier = Modifier.width(cardWidth).aspectRatio(0.68f),
+                    HomeHubRecentCard(
+                        mode = cardRenderMode,
+                        modifier = Modifier.width(cardWidth),
                         title = item.title,
                         coverData = item.coverData,
                         subtitle = item.subtitle,
                         onClick = { onEntryClick(item.entryId) },
-                        imagePadding = 6.dp,
+                        deviceClass = auroraAdaptiveSpec.deviceClass,
                     )
                 }
             }
@@ -2461,15 +2761,137 @@ private fun RecommendationsGrid(
                 horizontalArrangement = Arrangement.spacedBy(rowSpacing),
             ) {
                 items(recommendations, key = { it.entryId }) { item ->
-                    AuroraCard(
-                        modifier = Modifier.width(cardWidth).aspectRatio(0.68f),
+                    HomeHubRecentCard(
+                        mode = cardRenderMode,
+                        modifier = Modifier.width(cardWidth),
                         title = item.title,
                         coverData = item.coverData,
                         subtitle = item.subtitle,
                         onClick = { onEntryClick(item.entryId) },
-                        imagePadding = 6.dp,
+                        deviceClass = auroraAdaptiveSpec.deviceClass,
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeHubRecentCard(
+    mode: HomeHubRecentCardRenderMode,
+    title: String,
+    coverData: Any?,
+    subtitle: String?,
+    deviceClass: AuroraDeviceClass,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    when (mode) {
+        HomeHubRecentCardRenderMode.ClassicAuroraCard -> {
+            AuroraCard(
+                modifier = modifier.aspectRatio(0.68f),
+                title = title,
+                coverData = coverData,
+                subtitle = subtitle,
+                onClick = onClick,
+                imagePadding = 6.dp,
+            )
+        }
+        HomeHubRecentCardRenderMode.AuroraPoster -> {
+            HomeHubRecentPosterCard(
+                modifier = modifier,
+                title = title,
+                coverData = coverData,
+                subtitle = subtitle,
+                deviceClass = deviceClass,
+                onClick = onClick,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeHubRecentPosterCard(
+    title: String,
+    coverData: Any?,
+    subtitle: String?,
+    deviceClass: AuroraDeviceClass,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = AuroraTheme.colors
+    val posterSpec = remember(deviceClass) {
+        resolveHomeHubRecentPosterCardSpec(deviceClass)
+    }
+    val surfaceSpec = remember(colors.isDark) {
+        resolveHomeHubRecentPosterSurfaceSpec(colors.isDark)
+    }
+    val cardShape = RoundedCornerShape(18.dp)
+    val posterShape = RoundedCornerShape(16.dp)
+    val fallbackPainter = rememberThemeAwareCoverErrorPainter(
+        variant = AuroraCoverPlaceholderVariant.Portrait,
+    )
+
+    Column(
+        modifier = modifier
+            .clip(cardShape)
+            .clickable(onClick = onClick)
+            .background(colors.glass.copy(alpha = surfaceSpec.containerAlpha))
+            .padding(6.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(posterSpec.posterAspectRatio)
+                .clip(posterShape)
+                .background(colors.cardBackground.copy(alpha = surfaceSpec.posterAlpha))
+                .border(
+                    width = 1.dp,
+                    color = if (colors.isDark) {
+                        Color.White.copy(alpha = 0.06f)
+                    } else {
+                        Color.Black.copy(alpha = 0.04f)
+                    },
+                    shape = posterShape,
+                ),
+        ) {
+            AsyncImage(
+                model = resolveAuroraCoverModel(coverData),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+                error = fallbackPainter,
+                fallback = fallbackPainter,
+            )
+        }
+
+        Spacer(Modifier.height(posterSpec.textTopSpacingDp.dp))
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = posterSpec.textBlockMinHeightDp.dp)
+                .padding(horizontal = posterSpec.textHorizontalPaddingDp.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = title,
+                color = colors.textPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = posterSpec.titleMaxLines,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 17.sp,
+            )
+
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    color = colors.textSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }

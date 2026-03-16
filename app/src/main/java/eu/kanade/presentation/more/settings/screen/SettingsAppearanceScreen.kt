@@ -4,6 +4,10 @@ import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
@@ -13,13 +17,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.UserProfilePreferences
 import eu.kanade.domain.ui.model.AnimeMetadataSource
+import eu.kanade.domain.ui.model.AuroraTitleHeroCtaMode
+import eu.kanade.domain.ui.model.HomeHeroCtaMode
+import eu.kanade.domain.ui.model.HomeHubRecentCardMode
 import eu.kanade.domain.ui.model.NavStyle
 import eu.kanade.domain.ui.model.StartScreen
 import eu.kanade.domain.ui.model.TabletUiMode
@@ -27,6 +37,7 @@ import eu.kanade.domain.ui.model.ThemeMode
 import eu.kanade.domain.ui.model.setAppCompatDelegateThemeMode
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.appearance.AppLanguageScreen
+import eu.kanade.presentation.more.settings.settingsSubtitleColor
 import eu.kanade.presentation.more.settings.widget.AppThemeModePreferenceWidget
 import eu.kanade.presentation.more.settings.widget.AppThemePreferenceWidget
 import eu.kanade.presentation.more.settings.widget.ListPreferenceWidget
@@ -154,6 +165,10 @@ object SettingsAppearanceScreen : SearchableSettings {
         val showNovelSection by showNovelSectionPref.collectAsState()
         val appUiFontId by appUiFontPref.collectAsState()
         val coverTitleFontId by coverTitleFontPref.collectAsState()
+        val canResetAppearanceFonts = shouldEnableAppearanceFontsReset(
+            appUiFontId = appUiFontId,
+            coverTitleFontId = coverTitleFontId,
+        )
         var fontCatalogVersion by rememberSaveable { mutableIntStateOf(0) }
         val fontCatalog = remember(context, fontCatalogVersion) {
             buildNovelReaderFontCatalog(context)
@@ -179,17 +194,11 @@ object SettingsAppearanceScreen : SearchableSettings {
         val greetingAlpha by greetingAlphaPref.collectAsState()
         val greetingColorPref = userProfilePreferences.greetingColor()
         val greetingColor by greetingColorPref.collectAsState()
+        var isAuroraCustomizationExpanded by rememberSaveable { mutableStateOf(false) }
         var isGreetingSettingsExpanded by rememberSaveable { mutableStateOf(false) }
-        val greetingSettingsToggleTitle = if (isGreetingSettingsExpanded) {
-            "▼ ${stringResource(AYMR.strings.aurora_change_greeting_style)}"
-        } else {
-            "► ${stringResource(AYMR.strings.aurora_change_greeting_style)}"
-        }
-        val fontSettingsToggleTitle = if (isFontSettingsExpanded) {
-            "[-] ${stringResource(AYMR.strings.pref_fonts_settings)}"
-        } else {
-            "[+] ${stringResource(AYMR.strings.pref_fonts_settings)}"
-        }
+        val auroraCustomizationTitle = stringResource(AYMR.strings.pref_aurora_customization)
+        val greetingSettingsToggleTitle = stringResource(AYMR.strings.aurora_change_greeting_style)
+        val fontSettingsToggleTitle = stringResource(AYMR.strings.pref_fonts_settings)
         val greetingCustomizationItems = if (isGreetingSettingsExpanded) {
             listOf(
                 Preference.PreferenceItem.ListPreference(
@@ -419,8 +428,66 @@ object SettingsAppearanceScreen : SearchableSettings {
                 )
                 add(
                     Preference.PreferenceItem.TextPreference(
+                        title = auroraCustomizationTitle,
+                        onClick = {
+                            isAuroraCustomizationExpanded =
+                                toggleAuroraCustomizationExpanded(isAuroraCustomizationExpanded)
+                        },
+                        widget = { ExpandablePreferenceChevron(expanded = isAuroraCustomizationExpanded) },
+                    ),
+                )
+                if (isAuroraCustomizationExpanded) {
+                    add(
+                        Preference.PreferenceItem.ListPreference(
+                            preference = userProfilePreferences.homeHubRecentCardMode(),
+                            entries = resolveHomeHubRecentCardModeOptions()
+                                .associate { it.key to stringResource(it.titleRes) }
+                                .toImmutableMap(),
+                            title = stringResource(AYMR.strings.pref_home_recent_card_mode),
+                            subtitleProvider = { value, entries ->
+                                stringResource(
+                                    AYMR.strings.pref_home_recent_card_mode_summary,
+                                    entries[value].orEmpty(),
+                                )
+                            },
+                        ),
+                    )
+                    add(
+                        Preference.PreferenceItem.ListPreference(
+                            preference = userProfilePreferences.homeHeroCtaMode(),
+                            entries = resolveHomeHeroCtaModeOptions()
+                                .associate { it.key to stringResource(it.titleRes) }
+                                .toImmutableMap(),
+                            title = stringResource(AYMR.strings.pref_home_hero_cta_mode),
+                            subtitleProvider = { value, entries ->
+                                stringResource(
+                                    AYMR.strings.pref_home_hero_cta_mode_summary,
+                                    entries[value].orEmpty(),
+                                )
+                            },
+                        ),
+                    )
+                    add(
+                        Preference.PreferenceItem.ListPreference(
+                            preference = userProfilePreferences.auroraTitleHeroCtaMode(),
+                            entries = resolveAuroraTitleHeroCtaModeOptions()
+                                .associate { it.key to stringResource(it.titleRes) }
+                                .toImmutableMap(),
+                            title = stringResource(AYMR.strings.pref_aurora_title_hero_cta_mode),
+                            subtitleProvider = { value, entries ->
+                                stringResource(
+                                    AYMR.strings.pref_aurora_title_hero_cta_mode_summary,
+                                    entries[value].orEmpty(),
+                                )
+                            },
+                        ),
+                    )
+                }
+                add(
+                    Preference.PreferenceItem.TextPreference(
                         title = fontSettingsToggleTitle,
                         onClick = { isFontSettingsExpanded = !isFontSettingsExpanded },
+                        widget = { ExpandablePreferenceChevron(expanded = isFontSettingsExpanded) },
                     ),
                 )
                 if (isFontSettingsExpanded) {
@@ -447,6 +514,17 @@ object SettingsAppearanceScreen : SearchableSettings {
                                 onValueChange = { coverTitleFontPref.set(it) },
                             )
                         },
+                    )
+                    add(
+                        Preference.PreferenceItem.TextPreference(
+                            title = stringResource(AYMR.strings.pref_font_reset_defaults),
+                            subtitle = stringResource(AYMR.strings.pref_font_reset_defaults_summary),
+                            enabled = canResetAppearanceFonts,
+                            onClick = {
+                                appUiFontPref.set(UiPreferences.DEFAULT_APP_UI_FONT_ID)
+                                coverTitleFontPref.set(UiPreferences.DEFAULT_COVER_TITLE_FONT_ID)
+                            },
+                        ),
                     )
                     add(
                         Preference.PreferenceItem.TextPreference(
@@ -490,6 +568,7 @@ object SettingsAppearanceScreen : SearchableSettings {
                         onClick = {
                             isGreetingSettingsExpanded = toggleGreetingSettingsExpanded(isGreetingSettingsExpanded)
                         },
+                        widget = { ExpandablePreferenceChevron(expanded = isGreetingSettingsExpanded) },
                     ),
                 )
                 addAll(greetingCustomizationItems)
@@ -561,8 +640,53 @@ private fun FontListPreferenceWidget(
     )
 }
 
+@Composable
+private fun ExpandablePreferenceChevron(expanded: Boolean) {
+    Icon(
+        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        contentDescription = null,
+        tint = settingsSubtitleColor(),
+        modifier = Modifier
+            .rotate(if (expanded) 90f else 0f)
+            .size(20.dp),
+    )
+}
+
 internal fun toggleGreetingSettingsExpanded(currentlyExpanded: Boolean): Boolean {
     return !currentlyExpanded
+}
+
+internal fun toggleAuroraCustomizationExpanded(currentlyExpanded: Boolean): Boolean {
+    return !currentlyExpanded
+}
+
+internal fun resolveHomeHeroCtaModeOptions(): List<HomeHeroCtaMode> {
+    return listOf(
+        HomeHeroCtaMode.Aurora,
+        HomeHeroCtaMode.Classic,
+    )
+}
+
+internal fun resolveHomeHubRecentCardModeOptions(): List<HomeHubRecentCardMode> {
+    return listOf(
+        HomeHubRecentCardMode.Aurora,
+        HomeHubRecentCardMode.Classic,
+    )
+}
+
+internal fun resolveAuroraTitleHeroCtaModeOptions(): List<AuroraTitleHeroCtaMode> {
+    return listOf(
+        AuroraTitleHeroCtaMode.Aurora,
+        AuroraTitleHeroCtaMode.Classic,
+    )
+}
+
+internal fun shouldEnableAppearanceFontsReset(
+    appUiFontId: String,
+    coverTitleFontId: String,
+): Boolean {
+    return appUiFontId != UiPreferences.DEFAULT_APP_UI_FONT_ID ||
+        coverTitleFontId != UiPreferences.DEFAULT_COVER_TITLE_FONT_ID
 }
 
 private val DateFormats = listOf(
