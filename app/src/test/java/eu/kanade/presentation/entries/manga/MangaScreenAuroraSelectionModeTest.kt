@@ -6,6 +6,17 @@ import org.junit.jupiter.api.Test
 class MangaScreenAuroraSelectionModeTest {
 
     @Test
+    fun `hero content hides while chapter selection mode is active`() {
+        shouldShowMangaAuroraHeroContent(
+            useTwoPaneLayout = false,
+            firstVisibleItemIndex = 0,
+            scrollOffset = 0,
+            heroThreshold = 100,
+            isSelectionMode = true,
+        ) shouldBe false
+    }
+
+    @Test
     fun `chapter click opens chapter when nothing is selected`() {
         resolveAuroraChapterClickAction(
             isChapterSelected = false,
@@ -45,6 +56,27 @@ class MangaScreenAuroraSelectionModeTest {
         ) shouldBe false
 
         shouldAutoExpandAuroraChaptersList(
+            chaptersExpanded = false,
+            totalChapters = 5,
+        ) shouldBe false
+    }
+
+    @Test
+    fun `fast scroll expands collapsed chapters list when more than five items`() {
+        shouldAutoExpandAuroraChaptersListForFastScroll(
+            chaptersExpanded = false,
+            totalChapters = 10,
+        ) shouldBe true
+    }
+
+    @Test
+    fun `fast scroll does not expand when chapters list is already expanded or short`() {
+        shouldAutoExpandAuroraChaptersListForFastScroll(
+            chaptersExpanded = true,
+            totalChapters = 10,
+        ) shouldBe false
+
+        shouldAutoExpandAuroraChaptersListForFastScroll(
             chaptersExpanded = false,
             totalChapters = 5,
         ) shouldBe false

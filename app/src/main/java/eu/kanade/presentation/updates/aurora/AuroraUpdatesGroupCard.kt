@@ -23,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -31,7 +30,10 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.components.rememberAuroraCoverPlaceholderPainter
 import eu.kanade.presentation.components.resolveAuroraCoverModel
+import eu.kanade.presentation.entries.components.aurora.rememberAuroraPosterColorFilter
 import eu.kanade.presentation.theme.AuroraTheme
+import eu.kanade.presentation.theme.resolveAuroraBorderColor
+import eu.kanade.presentation.theme.resolveAuroraControlContainerColor
 
 @Composable
 fun AuroraUpdatesGroupCard(
@@ -43,6 +45,7 @@ fun AuroraUpdatesGroupCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = AuroraTheme.colors
+    val tabContainerColor = resolveAuroraControlContainerColor(colors)
     val placeholderPainter = rememberAuroraCoverPlaceholderPainter()
 
     Card(
@@ -51,14 +54,10 @@ fun AuroraUpdatesGroupCard(
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 6.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.glass),
+        colors = CardDefaults.cardColors(containerColor = tabContainerColor),
         border = BorderStroke(
             width = 1.dp,
-            color = if (colors.isDark) {
-                Color.White.copy(alpha = 0.08f)
-            } else {
-                colors.accent.copy(alpha = 0.14f)
-            },
+            color = resolveAuroraBorderColor(colors, emphasized = colors.isEInk),
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
@@ -70,6 +69,7 @@ fun AuroraUpdatesGroupCard(
                 model = resolveAuroraCoverModel(coverData),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                colorFilter = rememberAuroraPosterColorFilter(),
                 modifier = Modifier
                     .width(48.dp)
                     .height(72.dp)

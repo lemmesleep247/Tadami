@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.ui.library.novel
 import android.content.Context
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.entries.novel.interactor.UpdateNovel
+import eu.kanade.presentation.components.SEARCH_DEBOUNCE_MILLIS
 import eu.kanade.tachiyomi.source.model.SManga
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -13,9 +14,12 @@ import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.TestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -104,6 +108,36 @@ class NovelLibraryScreenModelTest {
     }
 
     @Test
+    fun `search waits for debounce before filtering items`() = runTest(testDispatcher) {
+        val first = libraryNovel(id = 1L, title = "First Novel")
+        val second = libraryNovel(id = 2L, title = "Second Story")
+        libraryFlow.value = listOf(first, second)
+
+        val downloadCacheChanges = MutableSharedFlow<Unit>(replay = 1).also { it.tryEmit(Unit) }
+        val screenModel = trackedNovelLibraryScreenModel(
+            getLibraryNovel = getLibraryNovel,
+            chapterRepository = chapterRepository,
+            basePreferences = basePreferences,
+            libraryPreferences = libraryPreferences,
+            hasDownloadedChapters = { false },
+            downloadedIdsDispatcher = testDispatcher,
+            downloadCacheChanges = downloadCacheChanges,
+            searchDebounceMillis = SEARCH_DEBOUNCE_MILLIS,
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+        screenModel.search("Second")
+        advanceTimeBy(SEARCH_DEBOUNCE_MILLIS - 1)
+
+        screenModel.state.value.items.shouldContainExactly(first, second)
+
+        advanceTimeBy(1)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        screenModel.state.value.items.shouldContainExactly(second)
+    }
+
+    @Test
     fun `unread filter keeps only unread entries`() = runTest(testDispatcher) {
         val unread = libraryNovel(id = 1L, title = "Unread", total = 10L, read = 1L)
         val read = libraryNovel(id = 2L, title = "Read", total = 10L, read = 10L)
@@ -172,6 +206,37 @@ class NovelLibraryScreenModelTest {
     }
 
     @Test
+    fun `downloaded filter refreshes when download cache changes`() = runTest(testDispatcher) {
+        val downloaded = libraryNovel(id = 1L, title = "Downloaded")
+        libraryFlow.value = listOf(downloaded)
+        var isDownloaded = false
+        val downloadCacheChanges = MutableSharedFlow<Unit>(replay = 1).also { it.tryEmit(Unit) }
+
+        val screenModel = trackedNovelLibraryScreenModel(
+            getLibraryNovel = getLibraryNovel,
+            chapterRepository = chapterRepository,
+            basePreferences = basePreferences,
+            libraryPreferences = libraryPreferences,
+            hasDownloadedChapters = { isDownloaded },
+            downloadedIdsDispatcher = testDispatcher,
+            downloadCacheChanges = downloadCacheChanges,
+            searchDebounceMillis = 0L,
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+        screenModel.toggleDownloadedFilter()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        screenModel.state.value.items.shouldContainExactly()
+
+        isDownloaded = true
+        downloadCacheChanges.emit(Unit)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        screenModel.state.value.items.shouldContainExactly(downloaded)
+    }
+
+    @Test
     fun `sort preference reorders entries`() = runTest(testDispatcher) {
         val older = libraryNovel(id = 1L, title = "Older", lastRead = 10L)
         val newer = libraryNovel(id = 2L, title = "Newer", lastRead = 50L)
@@ -194,6 +259,29 @@ class NovelLibraryScreenModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         screenModel.state.value.items.shouldContainExactly(newer, older)
+    }
+
+    @Test
+    fun `library updates do not wait on download dispatcher when downloaded filter is disabled`() = runTest(
+        testDispatcher,
+    ) {
+        val first = libraryNovel(id = 1L, title = "First Novel")
+        val second = libraryNovel(id = 2L, title = "Second Story")
+        libraryFlow.value = listOf(first, second)
+        val blockedDownloadDispatcher = StandardTestDispatcher(TestCoroutineScheduler())
+
+        val screenModel = trackedNovelLibraryScreenModel(
+            getLibraryNovel = getLibraryNovel,
+            chapterRepository = chapterRepository,
+            basePreferences = basePreferences,
+            libraryPreferences = libraryPreferences,
+            hasDownloadedChapters = { false },
+            downloadedIdsDispatcher = blockedDownloadDispatcher,
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        screenModel.state.value.items.shouldContainExactly(first, second)
     }
 
     @Test
@@ -265,6 +353,52 @@ class NovelLibraryScreenModelTest {
         screenModel.getNextUnreadChapter(novel)?.id shouldBe 102L
     }
 
+    @Test
+    fun `fully read series resumes the last touched chapter`() = runTest(testDispatcher) {
+        val novel = Novel.create().copy(
+            id = 10L,
+            title = "Novel",
+            source = 1L,
+            chapterFlags = Novel.CHAPTER_SORTING_NUMBER or Novel.CHAPTER_SORT_DESC,
+        )
+        coEvery {
+            chapterRepository.getChapterByNovelId(novelId = novel.id, applyScanlatorFilter = true)
+        } returns listOf(
+            novelChapter(
+                id = 101L,
+                novelId = novel.id,
+                sourceOrder = 0L,
+                chapterNumber = 100.0,
+                read = true,
+            ),
+            novelChapter(
+                id = 102L,
+                novelId = novel.id,
+                sourceOrder = 1L,
+                chapterNumber = 1.0,
+                read = true,
+            ),
+            novelChapter(
+                id = 103L,
+                novelId = novel.id,
+                sourceOrder = 2L,
+                chapterNumber = 2.0,
+                read = true,
+            ),
+        )
+
+        val screenModel = trackedNovelLibraryScreenModel(
+            getLibraryNovel = getLibraryNovel,
+            chapterRepository = chapterRepository,
+            basePreferences = basePreferences,
+            libraryPreferences = libraryPreferences,
+            hasDownloadedChapters = { false },
+            downloadedIdsDispatcher = testDispatcher,
+        )
+
+        screenModel.getNextUnreadChapter(novel)?.id shouldBe 103L
+    }
+
     private fun trackedNovelLibraryScreenModel(
         getLibraryNovel: GetLibraryNovel,
         chapterRepository: NovelChapterRepository,
@@ -272,6 +406,8 @@ class NovelLibraryScreenModelTest {
         libraryPreferences: LibraryPreferences,
         hasDownloadedChapters: (Novel) -> Boolean,
         downloadedIdsDispatcher: TestDispatcher,
+        downloadCacheChanges: Flow<Unit> = MutableStateFlow(Unit),
+        searchDebounceMillis: Long = 0L,
     ): NovelLibraryScreenModel {
         return NovelLibraryScreenModel(
             getLibraryNovel = getLibraryNovel,
@@ -283,6 +419,8 @@ class NovelLibraryScreenModelTest {
             libraryPreferences = libraryPreferences,
             hasDownloadedChapters = hasDownloadedChapters,
             downloadedIdsDispatcher = downloadedIdsDispatcher,
+            downloadCacheChanges = downloadCacheChanges,
+            searchDebounceMillis = searchDebounceMillis,
         ).also(activeScreenModels::add)
     }
 

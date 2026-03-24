@@ -39,6 +39,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -75,6 +76,8 @@ import eu.kanade.presentation.entries.components.EntryBottomActionMenu
 import eu.kanade.presentation.entries.components.EntryToolbar
 import eu.kanade.presentation.entries.components.ItemHeader
 import eu.kanade.presentation.entries.components.MissingItemCountListItem
+import eu.kanade.presentation.entries.resolveEntryAutoJumpTargetIndex
+import eu.kanade.presentation.entries.resolveTitleListFastScrollSpec
 import eu.kanade.presentation.util.formatEpisodeNumber
 import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.animesource.model.FetchType
@@ -198,6 +201,17 @@ fun AnimeScreen(
     val uiPreferences = Injekt.get<eu.kanade.domain.ui.UiPreferences>()
     val theme by uiPreferences.appTheme().collectAsState()
     val metadataSource by uiPreferences.animeMetadataSource().collectAsState()
+    val autoJumpToNextEnabled by uiPreferences.entryAutoJumpToNextAnime().collectAsState()
+    val autoJumpToNextLabel = stringResource(
+        if (autoJumpToNextEnabled) {
+            AYMR.strings.action_disable_auto_jump_next_episode
+        } else {
+            AYMR.strings.action_enable_auto_jump_next_episode
+        },
+    )
+    val onToggleAutoJumpToNext = {
+        uiPreferences.entryAutoJumpToNextAnime().set(!autoJumpToNextEnabled)
+    }
 
     val navigator = LocalNavigator.currentOrThrow
     val onSettingsClicked: (() -> Unit)? = {
@@ -249,6 +263,9 @@ fun AnimeScreen(
             onDownloadLongClick = onDownloadLongClick,
             onRetryMetadata = onRetryMetadata,
             onSettingsClicked = onSettingsClicked,
+            isAutoJumpToNextEnabled = autoJumpToNextEnabled,
+            autoJumpToNextLabel = autoJumpToNextLabel,
+            onToggleAutoJumpToNext = onToggleAutoJumpToNext,
         )
         return
     }
@@ -302,6 +319,9 @@ fun AnimeScreen(
             onClickContinueWatching = onContinueWatchingClicked,
             onDubbingClicked = onDubbingClicked,
             selectedDubbing = selectedDubbing,
+            isAutoJumpToNextEnabled = autoJumpToNextEnabled,
+            autoJumpToNextLabel = autoJumpToNextLabel,
+            onToggleAutoJumpToNext = onToggleAutoJumpToNext,
         )
     } else {
         AnimeScreenLargeImpl(
@@ -346,6 +366,9 @@ fun AnimeScreen(
             onClickContinueWatching = onContinueWatchingClicked,
             onDubbingClicked = onDubbingClicked,
             selectedDubbing = selectedDubbing,
+            isAutoJumpToNextEnabled = autoJumpToNextEnabled,
+            autoJumpToNextLabel = autoJumpToNextLabel,
+            onToggleAutoJumpToNext = onToggleAutoJumpToNext,
         )
     }
 }
@@ -388,6 +411,9 @@ private fun AnimeScreenSmallImpl(
     onMigrateClicked: (() -> Unit)?,
     changeAnimeSkipIntro: (() -> Unit)?,
     onSettingsClicked: (() -> Unit)?,
+    isAutoJumpToNextEnabled: Boolean,
+    autoJumpToNextLabel: String,
+    onToggleAutoJumpToNext: () -> Unit,
 
     // For bottom action menu
     onMultiBookmarkClicked: (List<Episode>, bookmarked: Boolean) -> Unit,
@@ -411,6 +437,7 @@ private fun AnimeScreenSmallImpl(
     // Dubbing selection
     onDubbingClicked: (() -> Unit)?,
     selectedDubbing: String?,
+    onSaveScrollPosition: (Int, Int) -> Unit = { _, _ -> },
 ) {
     val uiPreferences = remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }
     val metadataSource by uiPreferences.animeMetadataSource().collectAsState()
@@ -439,6 +466,30 @@ private fun AnimeScreenSmallImpl(
     val gridSize = remember(state.anime) { state.anime.seasonDisplayGridSize }
 
     val itemListState = rememberLazyGridState()
+
+    // Save scroll position when it changes
+    LaunchedEffect(itemListState.firstVisibleItemIndex, itemListState.firstVisibleItemScrollOffset) {
+        onSaveScrollPosition(
+            itemListState.firstVisibleItemIndex,
+            itemListState.firstVisibleItemScrollOffset,
+        )
+    }
+
+    // Restore saved scroll position or auto-scroll to target episode
+    var hasScrolledToTarget: Boolean by remember { mutableStateOf(false) }
+    LaunchedEffect(state.scrollIndex, state.targetEpisodeIndex) {
+        if (!hasScrolledToTarget) {
+            hasScrolledToTarget = true
+            val targetIndex = resolveEntryAutoJumpTargetIndex(
+                enabled = isAutoJumpToNextEnabled,
+                targetIndex = state.targetEpisodeIndex,
+                restoredScrollIndex = state.scrollIndex,
+            )
+            if (targetIndex != null) {
+                itemListState.animateScrollToItem(targetIndex)
+            }
+        }
+    }
 
     val seasons = remember(state) { state.processedSeasons }
     val episodes = remember(state) { state.processedEpisodes }
@@ -499,6 +550,8 @@ private fun AnimeScreenSmallImpl(
                     onClickRefresh = onRefresh,
                     onClickMigrate = onMigrateClicked,
                     onClickSettings = onSettingsClicked,
+                    onToggleAutoJumpToNext = onToggleAutoJumpToNext,
+                    autoJumpToNextLabel = autoJumpToNextLabel,
                     changeAnimeSkipIntro = changeAnimeSkipIntro,
                     actionModeCounter = selectedEpisodeCount,
                     onCancelActionMode = { onAllEpisodeSelected(false) },
@@ -569,15 +622,36 @@ private fun AnimeScreenSmallImpl(
                 indicatorPadding = PaddingValues(top = topPadding),
             ) {
                 val layoutDirection = LocalLayoutDirection.current
+                val baseTopPaddingPx = with(density) { topPadding.roundToPx() }
+                val fastScrollBlockStartIndex = resolveAnimeClassicFastScrollBlockStartIndex(
+                    fetchType = state.anime.fetchType,
+                    hasAiringTimeItem = state.airingTime > 0L,
+                )
+                val fastScrollSpec by remember(baseTopPaddingPx, fastScrollBlockStartIndex) {
+                    derivedStateOf {
+                        resolveTitleListFastScrollSpec(
+                            baseTopPaddingPx = baseTopPaddingPx,
+                            firstVisibleItemIndex = itemListState.firstVisibleItemIndex,
+                            blockStartIndex = fastScrollBlockStartIndex,
+                            blockStartOffsetPx = itemListState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.index == fastScrollBlockStartIndex }
+                                ?.offset
+                                ?.y
+                                ?.plus(with(density) { ANIME_CLASSIC_FAST_SCROLL_ITEM_TOP_INSET.roundToPx() }),
+                        )
+                    }
+                }
                 FastScrollLazyVerticalGrid(
                     modifier = Modifier.fillMaxHeight(),
                     state = itemListState,
+                    thumbAllowed = { fastScrollSpec.thumbAllowed },
                     columns = if (gridSize == 0) GridCells.Adaptive(128.dp) else GridCells.Fixed(gridSize),
                     contentPadding = PaddingValues(
                         start = GRID_PADDING + contentPadding.calculateStartPadding(layoutDirection),
                         end = GRID_PADDING + contentPadding.calculateEndPadding(layoutDirection),
                         bottom = contentPadding.calculateBottomPadding(),
                     ),
+                    topContentPadding = with(density) { fastScrollSpec.topPaddingPx.toDp() },
                 ) {
                     item(
                         key = EntryScreenItem.INFO_BOX,
@@ -724,6 +798,16 @@ private fun AnimeScreenSmallImpl(
     }
 }
 
+internal fun resolveAnimeClassicFastScrollBlockStartIndex(
+    fetchType: FetchType,
+    hasAiringTimeItem: Boolean,
+): Int {
+    val baseIndex = 4
+    return if (fetchType == FetchType.Episodes && hasAiringTimeItem) baseIndex + 1 else baseIndex
+}
+
+private val ANIME_CLASSIC_FAST_SCROLL_ITEM_TOP_INSET = 5.dp
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnimeScreenLargeImpl(
@@ -762,6 +846,9 @@ fun AnimeScreenLargeImpl(
     onMigrateClicked: (() -> Unit)?,
     changeAnimeSkipIntro: (() -> Unit)?,
     onSettingsClicked: (() -> Unit)?,
+    isAutoJumpToNextEnabled: Boolean,
+    autoJumpToNextLabel: String,
+    onToggleAutoJumpToNext: () -> Unit,
 
     // For bottom action menu
     onMultiBookmarkClicked: (List<Episode>, bookmarked: Boolean) -> Unit,
@@ -827,6 +914,23 @@ fun AnimeScreenLargeImpl(
     val gridSize = remember(state.anime) { state.anime.seasonDisplayGridSize }
 
     val itemListState = rememberLazyGridState()
+
+    // Auto-scroll to target episode on initial load (large impl)
+    var hasScrolledToTargetLarge: Boolean by remember { mutableStateOf(false) }
+    LaunchedEffect(state.targetEpisodeIndex) {
+        if (!hasScrolledToTargetLarge) {
+            hasScrolledToTargetLarge = true
+            val targetIndex = resolveEntryAutoJumpTargetIndex(
+                enabled = isAutoJumpToNextEnabled,
+                targetIndex = state.targetEpisodeIndex,
+                restoredScrollIndex = state.scrollIndex,
+            )
+            if (targetIndex != null) {
+                itemListState.animateScrollToItem(targetIndex)
+            }
+        }
+    }
+
     val hasFilters = remember(state) {
         when (state.anime.fetchType) {
             FetchType.Seasons -> state.anime.seasonsFiltered()
@@ -861,10 +965,12 @@ fun AnimeScreenLargeImpl(
                     onClickEditCategory = onEditCategoryClicked,
                     onClickRefresh = onRefresh,
                     onClickMigrate = onMigrateClicked,
-                    onCancelActionMode = { onAllEpisodeSelected(false) },
                     onClickSettings = onSettingsClicked,
+                    onToggleAutoJumpToNext = onToggleAutoJumpToNext,
+                    autoJumpToNextLabel = autoJumpToNextLabel,
                     changeAnimeSkipIntro = changeAnimeSkipIntro,
                     actionModeCounter = selectedChapterCount,
+                    onCancelActionMode = { onAllEpisodeSelected(false) },
                     onSelectAll = { onAllEpisodeSelected(true) },
                     onInvertSelection = { onInvertSelection() },
                     titleAlphaProvider = { 1f },

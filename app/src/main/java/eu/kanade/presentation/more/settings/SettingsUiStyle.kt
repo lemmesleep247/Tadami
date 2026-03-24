@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.more.resolveAuroraMoreCardContainerColor
+import eu.kanade.presentation.theme.AuroraColors
 import eu.kanade.presentation.theme.AuroraTheme
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
@@ -65,8 +66,16 @@ internal fun resolveAuroraSelectionBorderColor(accent: Color): Color {
     return accent.copy(alpha = AURORA_SETTINGS_SELECTION_BORDER_ALPHA)
 }
 
-internal fun resolveAuroraCardBorderColor(accent: Color): Color {
-    return Color.Transparent
+internal fun resolveAuroraCardBorderColor(
+    colors: AuroraColors,
+): Color {
+    return if (colors.isEInk) {
+        Color(0xFFBDBDBD)
+    } else if (colors.isDark) {
+        Color.Transparent
+    } else {
+        Color(0xFFD7E3F1)
+    }
 }
 
 @Composable
@@ -86,10 +95,7 @@ fun rememberResolvedSettingsUiStyle(
 @Composable
 fun settingsCardContainerColor(): Color {
     return if (LocalSettingsUiStyle.current == SettingsUiStyle.Aurora) {
-        resolveAuroraMoreCardContainerColor(
-            glass = AuroraTheme.colors.glass,
-            isDark = AuroraTheme.colors.isDark,
-        )
+        resolveAuroraMoreCardContainerColor(AuroraTheme.colors)
     } else {
         Color.Transparent
     }
@@ -98,7 +104,7 @@ fun settingsCardContainerColor(): Color {
 @Composable
 fun settingsCardBorderColor(): Color {
     return if (LocalSettingsUiStyle.current == SettingsUiStyle.Aurora) {
-        resolveAuroraCardBorderColor(AuroraTheme.colors.accent)
+        resolveAuroraCardBorderColor(AuroraTheme.colors)
     } else {
         Color.Transparent
     }

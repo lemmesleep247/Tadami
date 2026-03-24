@@ -8,6 +8,7 @@ import eu.kanade.domain.entries.novel.interactor.UpdateNovel
 import eu.kanade.domain.items.novelchapter.interactor.GetAvailableNovelScanlators
 import eu.kanade.domain.items.novelchapter.interactor.GetNovelScanlatorChapterCounts
 import eu.kanade.domain.items.novelchapter.interactor.SyncNovelChaptersWithSource
+import eu.kanade.tachiyomi.data.download.novel.NovelDownloadQueueState
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.novelsource.NovelSource
 import io.kotest.matchers.shouldBe
@@ -16,14 +17,17 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import kotlinx.serialization.json.Json
-import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
+import tachiyomi.core.common.preference.Preference
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
 import tachiyomi.domain.category.novel.interactor.GetNovelCategories
 import tachiyomi.domain.category.novel.interactor.SetNovelCategories
@@ -33,15 +37,22 @@ import tachiyomi.domain.entries.novel.interactor.SetNovelChapterFlags
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.NovelUpdate
 import tachiyomi.domain.items.novelchapter.interactor.SetNovelDefaultChapterFlags
+import tachiyomi.domain.items.novelchapter.interactor.ShouldUpdateDbNovelChapter
 import tachiyomi.domain.items.novelchapter.model.NovelChapter
+import tachiyomi.domain.items.novelchapter.repository.NovelChapterRepository
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.domain.track.novel.interactor.GetNovelTracks
+import tachiyomi.domain.track.novel.model.NovelTrack
 
 class NovelScreenModelTest {
 
-    @BeforeEach
-    fun setup() {
-        Dispatchers.setMain(Dispatchers.Unconfined)
+    companion object {
+        @JvmStatic
+        @BeforeAll
+        fun setupMainDispatcher() {
+            Dispatchers.setMain(Dispatchers.Unconfined)
+        }
     }
 
     @Test
@@ -275,6 +286,162 @@ class NovelScreenModelTest {
         }
     }
 
+    @Test
+    fun `in progress unread chapter wins over earlier read chapters`() {
+        runBlocking {
+            val novel = novelForResumeTests(101L)
+            val chapter1 = novelChapter(id = 1L, novelId = novel.id, chapterNumber = 1.0, read = true)
+            val chapter2 = novelChapter(
+                id = 2L,
+                novelId = novel.id,
+                chapterNumber = 2.0,
+                read = false,
+                lastPageRead = 8L,
+            )
+            val chapter3 = novelChapter(id = 3L, novelId = novel.id, chapterNumber = 3.0, read = false)
+            val screenModel = createResumeScreenModel(novel, listOf(chapter1, chapter2, chapter3))
+
+            try {
+                awaitResumeScreenModel(screenModel)
+                screenModel.getResumeOrNextChapter()?.id shouldBe chapter2.id
+            } finally {
+                screenModel.onDispose()
+            }
+        }
+    }
+
+    @Test
+    fun `next unread chapter follows the last touched chapter`() {
+        runBlocking {
+            val novel = novelForResumeTests(102L)
+            val chapter1 = novelChapter(id = 1L, novelId = novel.id, chapterNumber = 1.0, read = true)
+            val chapter2 = novelChapter(id = 2L, novelId = novel.id, chapterNumber = 2.0, read = true)
+            val chapter3 = novelChapter(id = 3L, novelId = novel.id, chapterNumber = 3.0, read = false)
+            val screenModel = createResumeScreenModel(novel, listOf(chapter1, chapter2, chapter3))
+
+            try {
+                awaitResumeScreenModel(screenModel)
+                screenModel.getResumeOrNextChapter()?.id shouldBe chapter3.id
+            } finally {
+                screenModel.onDispose()
+            }
+        }
+    }
+
+    @Test
+    fun `fully read novel resumes the last touched chapter`() {
+        runBlocking {
+            val novel = novelForResumeTests(103L)
+            val chapter1 = novelChapter(id = 1L, novelId = novel.id, chapterNumber = 1.0, read = true)
+            val chapter2 = novelChapter(id = 2L, novelId = novel.id, chapterNumber = 2.0, read = true)
+            val screenModel = createResumeScreenModel(novel, listOf(chapter1, chapter2))
+
+            try {
+                awaitResumeScreenModel(screenModel)
+                screenModel.getResumeOrNextChapter()?.id shouldBe chapter2.id
+            } finally {
+                screenModel.onDispose()
+            }
+        }
+    }
+
+    @Test
+    fun `cached novel state does not restore saved chapter list scroll position`() {
+        runBlocking {
+            val novel = novelForResumeTests(104L)
+            val chapters = listOf(
+                novelChapter(id = 1L, novelId = novel.id, chapterNumber = 1.0, read = false),
+                novelChapter(id = 2L, novelId = novel.id, chapterNumber = 2.0, read = false),
+            )
+            val firstModel = createResumeScreenModel(novel, chapters)
+
+            try {
+                awaitResumeScreenModel(firstModel)
+                firstModel.saveScrollPosition(index = 12, offset = 34)
+            } finally {
+                firstModel.onDispose()
+            }
+
+            val restoredModel = createResumeScreenModel(novel, chapters)
+
+            try {
+                awaitResumeScreenModel(restoredModel)
+                val restoredState = restoredModel.state.value as NovelScreenModel.State.Success
+                restoredState.scrollIndex shouldBe 0
+                restoredState.scrollOffset shouldBe 0
+            } finally {
+                restoredModel.onDispose()
+            }
+        }
+    }
+
+    @Test
+    fun `chapter status updates do not rescan downloaded ids when chapter ids are unchanged`() {
+        runBlocking {
+            val novel = novelForResumeTests(105L)
+            val initialChapters = listOf(
+                novelChapter(id = 1L, novelId = novel.id, chapterNumber = 1.0, read = false),
+                novelChapter(id = 2L, novelId = novel.id, chapterNumber = 2.0, read = false),
+            )
+            val chapterRepository = FakeNovelChapterRepository(initialChapters)
+            val downloadCacheChanges = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+            var resolveDownloadedIdsCalls = 0
+
+            val screenModel = createResumeScreenModel(
+                novel = novel,
+                chapters = initialChapters,
+                chapterRepository = chapterRepository,
+                downloadCacheChanges = downloadCacheChanges,
+                downloadQueueState = MutableStateFlow(NovelDownloadQueueState()),
+                resolveDownloadedChapterIds = { _, chapters ->
+                    resolveDownloadedIdsCalls++
+                    chapters
+                        .asSequence()
+                        .map { it.id }
+                        .filter { it == 1L }
+                        .toSet()
+                },
+            )
+
+            try {
+                awaitResumeScreenModel(screenModel)
+                downloadCacheChanges.emit(Unit)
+                withTimeout(1_000) {
+                    while ((screenModel.state.value as? NovelScreenModel.State.Success)?.downloadedChapterIds !=
+                        setOf(1L)
+                    ) {
+                        yield()
+                    }
+                }
+
+                val callsAfterInit = resolveDownloadedIdsCalls
+                chapterRepository.updateChapters(
+                    initialChapters.map { chapter ->
+                        if (chapter.id == 2L) {
+                            chapter.copy(read = true)
+                        } else {
+                            chapter
+                        }
+                    },
+                )
+
+                withTimeout(1_000) {
+                    while ((screenModel.state.value as? NovelScreenModel.State.Success)
+                            ?.chapters
+                            ?.firstOrNull { it.id == 2L }
+                            ?.read != true
+                    ) {
+                        yield()
+                    }
+                }
+
+                resolveDownloadedIdsCalls shouldBe callsAfterInit
+            } finally {
+                screenModel.onDispose()
+            }
+        }
+    }
+
     private class FakeLifecycleOwner : LifecycleOwner {
         private class NoopStartedLifecycle : Lifecycle() {
             override val currentState: State
@@ -286,6 +453,209 @@ class NovelScreenModelTest {
         }
 
         override val lifecycle: Lifecycle = NoopStartedLifecycle()
+    }
+
+    private fun createResumeScreenModel(
+        novel: Novel,
+        chapters: List<NovelChapter>,
+        chapterRepository: FakeNovelChapterRepository = FakeNovelChapterRepository(chapters),
+        downloadCacheChanges: Flow<Unit> = MutableSharedFlow(extraBufferCapacity = 1),
+        downloadQueueState: Flow<NovelDownloadQueueState> = MutableStateFlow(NovelDownloadQueueState()),
+        resolveDownloadedChapterIds: (Novel, List<NovelChapter>) -> Set<Long> = { _, _ -> emptySet() },
+    ): NovelScreenModel {
+        val novelRepository = FakeNovelRepository(novel)
+        val preferenceStore = FakePreferenceStore()
+        val libraryPreferences = LibraryPreferences(preferenceStore)
+        val sourceManager = FakeNovelSourceManager()
+        val trackerManager = mockk<TrackerManager>().also { manager ->
+            every { manager.loggedInTrackersFlow() } returns MutableStateFlow(emptyList())
+        }
+        val getNovelTracks = mockk<GetNovelTracks>().also { tracks ->
+            every { tracks.subscribe(any()) } returns MutableStateFlow(emptyList<NovelTrack>())
+        }
+        val categoryRepository = object : tachiyomi.domain.category.novel.repository.NovelCategoryRepository {
+            override suspend fun getCategory(id: Long) = null
+            override suspend fun getCategories() = emptyList<tachiyomi.domain.category.novel.model.NovelCategory>()
+            override suspend fun getVisibleCategories() =
+                emptyList<tachiyomi.domain.category.novel.model.NovelCategory>()
+            override suspend fun getCategoriesByNovelId(novelId: Long) =
+                emptyList<tachiyomi.domain.category.novel.model.NovelCategory>()
+            override suspend fun getVisibleCategoriesByNovelId(novelId: Long) =
+                emptyList<tachiyomi.domain.category.novel.model.NovelCategory>()
+            override fun getCategoriesAsFlow() = MutableStateFlow(
+                emptyList<tachiyomi.domain.category.novel.model.NovelCategory>(),
+            )
+            override fun getVisibleCategoriesAsFlow() = MutableStateFlow(
+                emptyList<tachiyomi.domain.category.novel.model.NovelCategory>(),
+            )
+            override suspend fun insertCategory(
+                category: tachiyomi.domain.category.novel.model.NovelCategory,
+            ) = null
+            override suspend fun updatePartialCategory(
+                update: tachiyomi.domain.category.novel.model.NovelCategoryUpdate,
+            ) = Unit
+            override suspend fun updateAllFlags(flags: Long) = Unit
+            override suspend fun deleteCategory(categoryId: Long) = Unit
+            override suspend fun setNovelCategories(novelId: Long, categoryIds: List<Long>) = Unit
+        }
+        val databaseHandler = mockk<NovelDatabaseHandler>().also { handler ->
+            coEvery { handler.awaitList<String>(any(), any()) } returns emptyList()
+            every { handler.subscribeToList<String>(any()) } returns MutableStateFlow(emptyList())
+        }
+        val getNovelWithChapters = GetNovelWithChapters(novelRepository, chapterRepository)
+        val updateNovel = UpdateNovel(novelRepository)
+        val syncNovelChaptersWithSource = SyncNovelChaptersWithSource(
+            novelChapterRepository = chapterRepository,
+            shouldUpdateDbNovelChapter = ShouldUpdateDbNovelChapter(),
+            updateNovel = updateNovel,
+            libraryPreferences = libraryPreferences,
+        )
+
+        return NovelScreenModel(
+            lifecycle = FakeLifecycleOwner().lifecycle,
+            novelId = novel.id,
+            libraryPreferences = libraryPreferences,
+            getNovelWithChapters = getNovelWithChapters,
+            updateNovel = updateNovel,
+            syncNovelChaptersWithSource = syncNovelChaptersWithSource,
+            novelChapterRepository = chapterRepository,
+            setNovelChapterFlags = SetNovelChapterFlags(novelRepository),
+            setNovelDefaultChapterFlags = SetNovelDefaultChapterFlags(
+                libraryPreferences = libraryPreferences,
+                setNovelChapterFlags = SetNovelChapterFlags(novelRepository),
+                getFavorites = GetNovelFavorites(novelRepository),
+            ),
+            getAvailableNovelScanlators = GetAvailableNovelScanlators(chapterRepository),
+            getNovelScanlatorChapterCounts = GetNovelScanlatorChapterCounts(chapterRepository),
+            getNovelExcludedScanlators = GetNovelExcludedScanlators(databaseHandler),
+            setNovelExcludedScanlators = SetNovelExcludedScanlators(
+                mockk<NovelDatabaseHandler>(relaxed = true),
+            ),
+            getNovelCategories = GetNovelCategories(categoryRepository),
+            setNovelCategories = SetNovelCategories(categoryRepository),
+            sourceManager = sourceManager,
+            trackerManager = trackerManager,
+            getTracks = getNovelTracks,
+            downloadCacheChanges = downloadCacheChanges,
+            downloadQueueState = downloadQueueState,
+            resolveDownloadedChapterIds = resolveDownloadedChapterIds,
+            novelReaderPreferences = eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderPreferences(
+                preferenceStore = preferenceStore,
+                json = Json { encodeDefaults = true },
+            ),
+        )
+    }
+
+    private suspend fun awaitResumeScreenModel(screenModel: NovelScreenModel) {
+        withTimeout(1_000) {
+            while (screenModel.state.value is NovelScreenModel.State.Loading) {
+                yield()
+            }
+        }
+    }
+
+    private fun novelForResumeTests(id: Long): Novel {
+        return Novel.create().copy(
+            id = id,
+            source = 10L,
+            title = "Novel",
+            chapterFlags = Novel.CHAPTER_SORTING_NUMBER or Novel.CHAPTER_SORT_ASC,
+            initialized = true,
+        )
+    }
+
+    private fun novelChapter(
+        id: Long,
+        novelId: Long,
+        chapterNumber: Double,
+        read: Boolean,
+        lastPageRead: Long = 0L,
+    ): NovelChapter {
+        return NovelChapter.create().copy(
+            id = id,
+            novelId = novelId,
+            chapterNumber = chapterNumber,
+            read = read,
+            lastPageRead = lastPageRead,
+            url = "https://example.org/ch$id",
+            name = "Chapter $id",
+        )
+    }
+
+    private class FakeNovelChapterRepository(
+        chapters: List<NovelChapter>,
+    ) : NovelChapterRepository {
+        private val chapterFlow = MutableStateFlow(chapters)
+
+        fun updateChapters(chapters: List<NovelChapter>) {
+            chapterFlow.value = chapters
+        }
+
+        override suspend fun addAllChapters(chapters: List<NovelChapter>): List<NovelChapter> = chapters
+        override suspend fun updateChapter(
+            chapterUpdate: tachiyomi.domain.items.novelchapter.model.NovelChapterUpdate,
+        ) = Unit
+        override suspend fun updateAllChapters(
+            chapterUpdates: List<tachiyomi.domain.items.novelchapter.model.NovelChapterUpdate>,
+        ) = Unit
+        override suspend fun removeChaptersWithIds(chapterIds: List<Long>) = Unit
+        override suspend fun getChapterByNovelId(
+            novelId: Long,
+            applyScanlatorFilter: Boolean,
+        ): List<NovelChapter> = chapterFlow.value
+        override suspend fun getScanlatorsByNovelId(novelId: Long): List<String> = emptyList()
+        override fun getScanlatorsByNovelIdAsFlow(novelId: Long): Flow<List<String>> =
+            MutableStateFlow(emptyList())
+        override suspend fun getBookmarkedChaptersByNovelId(novelId: Long): List<NovelChapter> =
+            chapterFlow.value.filter { it.bookmark }
+        override suspend fun getChapterById(id: Long): NovelChapter? =
+            chapterFlow.value.firstOrNull { it.id == id }
+        override suspend fun getChapterByNovelIdAsFlow(
+            novelId: Long,
+            applyScanlatorFilter: Boolean,
+        ): Flow<List<NovelChapter>> = chapterFlow
+        override suspend fun getChapterByUrlAndNovelId(url: String, novelId: Long): NovelChapter? =
+            chapterFlow.value.firstOrNull { it.url == url }
+    }
+
+    private class FakePreferenceStore : PreferenceStore {
+        private val strings = mutableMapOf<String, Preference<String>>()
+        private val longs = mutableMapOf<String, Preference<Long>>()
+        private val ints = mutableMapOf<String, Preference<Int>>()
+        private val floats = mutableMapOf<String, Preference<Float>>()
+        private val booleans = mutableMapOf<String, Preference<Boolean>>()
+        private val stringSets = mutableMapOf<String, Preference<Set<String>>>()
+        private val objects = mutableMapOf<String, Preference<Any>>()
+
+        override fun getString(key: String, defaultValue: String): Preference<String> =
+            strings.getOrPut(key) { FakePreference(defaultValue) }
+
+        override fun getLong(key: String, defaultValue: Long): Preference<Long> =
+            longs.getOrPut(key) { FakePreference(defaultValue) }
+
+        override fun getInt(key: String, defaultValue: Int): Preference<Int> =
+            ints.getOrPut(key) { FakePreference(defaultValue) }
+
+        override fun getFloat(key: String, defaultValue: Float): Preference<Float> =
+            floats.getOrPut(key) { FakePreference(defaultValue) }
+
+        override fun getBoolean(key: String, defaultValue: Boolean): Preference<Boolean> =
+            booleans.getOrPut(key) { FakePreference(defaultValue) }
+
+        override fun getStringSet(key: String, defaultValue: Set<String>): Preference<Set<String>> =
+            stringSets.getOrPut(key) { FakePreference(defaultValue) }
+
+        override fun <T> getObject(
+            key: String,
+            defaultValue: T,
+            serializer: (T) -> String,
+            deserializer: (String) -> T,
+        ): Preference<T> {
+            @Suppress("UNCHECKED_CAST")
+            return objects.getOrPut(key) { FakePreference(defaultValue as Any) as Preference<Any> } as Preference<T>
+        }
+
+        override fun getAll(): Map<String, *> = emptyMap<String, Any>()
     }
 
     private class FakeNovelRepository(

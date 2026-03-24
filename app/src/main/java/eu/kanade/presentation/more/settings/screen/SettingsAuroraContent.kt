@@ -38,6 +38,9 @@ import eu.kanade.presentation.components.AuroraBackground
 import eu.kanade.presentation.more.settings.AURORA_SETTINGS_CARD_HORIZONTAL_INSET
 import eu.kanade.presentation.more.settings.AURORA_SETTINGS_CARD_SHAPE
 import eu.kanade.presentation.theme.AuroraTheme
+import eu.kanade.presentation.theme.resolveAuroraBorderColor
+import eu.kanade.presentation.theme.resolveAuroraControlContainerColor
+import eu.kanade.presentation.theme.resolveAuroraIconSurfaceColor
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 
@@ -71,6 +74,7 @@ fun SettingsAuroraContent(
 
 @Composable
 private fun SettingsAuroraHeader(onBackClick: () -> Unit) {
+    val colors = AuroraTheme.colors
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -80,13 +84,13 @@ private fun SettingsAuroraHeader(onBackClick: () -> Unit) {
         IconButton(
             onClick = onBackClick,
             modifier = Modifier
-                .background(AuroraTheme.colors.glass, CircleShape)
+                .background(resolveAuroraControlContainerColor(colors), CircleShape)
                 .size(40.dp),
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = stringResource(AYMR.strings.aurora_back),
-                tint = AuroraTheme.colors.textPrimary,
+                tint = colors.textPrimary,
             )
         }
 
@@ -96,13 +100,13 @@ private fun SettingsAuroraHeader(onBackClick: () -> Unit) {
             Text(
                 text = stringResource(AYMR.strings.aurora_settings),
                 style = MaterialTheme.typography.headlineSmall,
-                color = AuroraTheme.colors.textPrimary,
+                color = colors.textPrimary,
                 fontWeight = FontWeight.Bold,
             )
             Text(
                 text = stringResource(AYMR.strings.aurora_customize_experience),
                 style = MaterialTheme.typography.bodySmall,
-                color = AuroraTheme.colors.textSecondary,
+                color = colors.textSecondary,
             )
         }
     }
@@ -115,6 +119,7 @@ private fun SettingsAuroraItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,
 ) {
+    val colors = AuroraTheme.colors
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -122,7 +127,11 @@ private fun SettingsAuroraItem(
             .clickable(onClick = onClick),
         shape = AURORA_SETTINGS_CARD_SHAPE,
         colors = CardDefaults.cardColors(
-            containerColor = AuroraTheme.colors.glass,
+            containerColor = resolveAuroraControlContainerColor(colors),
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = resolveAuroraBorderColor(colors, emphasized = false),
         ),
     ) {
         Row(
@@ -135,7 +144,7 @@ private fun SettingsAuroraItem(
                 modifier = Modifier
                     .size(48.dp)
                     .background(
-                        AuroraTheme.colors.accent.copy(alpha = 0.15f),
+                        resolveAuroraIconSurfaceColor(colors),
                         RoundedCornerShape(12.dp),
                     ),
                 contentAlignment = Alignment.Center,
@@ -143,7 +152,7 @@ private fun SettingsAuroraItem(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = AuroraTheme.colors.accent,
+                    tint = colors.textPrimary,
                     modifier = Modifier.size(24.dp),
                 )
             }
@@ -153,14 +162,14 @@ private fun SettingsAuroraItem(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    color = AuroraTheme.colors.textPrimary,
+                    color = colors.textPrimary,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp,
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
-                    color = AuroraTheme.colors.textSecondary,
+                    color = colors.textSecondary,
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
                 )
@@ -169,7 +178,7 @@ private fun SettingsAuroraItem(
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = AuroraTheme.colors.textSecondary,
+                tint = colors.textSecondary,
                 modifier = Modifier.size(24.dp),
             )
         }

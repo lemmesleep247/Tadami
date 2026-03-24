@@ -9,10 +9,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import eu.kanade.presentation.theme.AuroraTheme
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 
@@ -24,6 +24,8 @@ fun EpisodesHeader(
     episodeCount: Int,
     modifier: Modifier = Modifier,
 ) {
+    val colors = AuroraTheme.colors
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -31,13 +33,13 @@ fun EpisodesHeader(
     ) {
         Text(
             text = stringResource(AYMR.strings.episodes) + " ($episodeCount)",
-            color = Color.White,
+            color = colors.textPrimary,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
         )
         Spacer(modifier = Modifier.height(8.dp))
         HorizontalDivider(
-            color = Color.White.copy(alpha = 0.2f),
+            color = colors.divider,
             thickness = 1.dp,
         )
     }

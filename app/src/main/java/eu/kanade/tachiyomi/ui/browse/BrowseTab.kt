@@ -168,6 +168,7 @@ data object BrowseTab : Tab {
         val isMangaSection = effectiveSection == BrowseSection.Manga
         val auroraAdaptiveSpec = rememberAuroraAdaptiveSpec()
         val useWideBrowseTabs = auroraAdaptiveSpec.deviceClass != AuroraDeviceClass.Phone
+        val globalSearchTitle = stringResource(MR.strings.action_global_search)
 
         Column(modifier = Modifier.fillMaxSize()) {
             TabbedScreenAurora(
@@ -189,9 +190,12 @@ data object BrowseTab : Tab {
                     }
                 },
                 isMangaTab = { isMangaSection },
-                scrollable = !useWideBrowseTabs,
+                // Keep browse sub-tabs content-sized to avoid the full-width stretched segmented bar.
+                scrollable = true,
                 applyStatusBarsPadding = true,
-                highlightedActionTitle = stringResource(MR.strings.action_global_search),
+                highlightSearchAction = false,
+                highlightedActionTitle = null,
+                extraActionGapAfterTitle = globalSearchTitle,
                 extraHeaderContent = {
                     if (sections.size > 1) {
                         Column {
@@ -222,6 +226,8 @@ data object BrowseTab : Tab {
                             )
                             Spacer(modifier = Modifier.height(if (useWideBrowseTabs) 15.dp else 16.dp))
                         }
+                    } else {
+                        Spacer(modifier = Modifier.height(4.dp))
                     }
                 },
             )

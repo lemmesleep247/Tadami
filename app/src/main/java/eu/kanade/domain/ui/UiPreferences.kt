@@ -42,6 +42,12 @@ class UiPreferences(
 
     fun showMangaScanlatorBranches() = preferenceStore.getBoolean("show_manga_scanlator_branches", false)
 
+    fun entryAutoJumpToNextAnime() = preferenceStore.getBoolean("entry_auto_jump_to_next_anime", false)
+
+    fun entryAutoJumpToNextManga() = preferenceStore.getBoolean("entry_auto_jump_to_next_manga", false)
+
+    fun entryAutoJumpToNextNovel() = preferenceStore.getBoolean("entry_auto_jump_to_next_novel", false)
+
     fun navStyle() = preferenceStore.getEnum("bottom_rail_nav_style", NavStyle.MOVE_HISTORY_TO_MORE)
 
     fun navigationTransitionMode() = preferenceStore.getEnum(
@@ -75,6 +81,8 @@ class UiPreferences(
     fun showAchievementNotifications() = preferenceStore.getBoolean("show_achievement_notifications", true)
 
     fun animatedAuroraBackground() = preferenceStore.getBoolean("animated_aurora_background", true)
+
+    fun eInkMode() = preferenceStore.getBoolean("e_ink_mode", false)
 
     fun appUiFontId() = preferenceStore.getString("app_ui_font_id", DEFAULT_APP_UI_FONT_ID)
 

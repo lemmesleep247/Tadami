@@ -21,18 +21,18 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import kotlinx.serialization.json.Json
-import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -78,12 +78,6 @@ class NovelReaderScreenModelTest {
         @BeforeAll
         fun setupMainDispatcher() {
             Dispatchers.setMain(Dispatchers.Unconfined)
-        }
-
-        @JvmStatic
-        @AfterAll
-        fun resetMainDispatcher() {
-            Dispatchers.resetMain()
         }
     }
 
@@ -1170,7 +1164,7 @@ class NovelReaderScreenModelTest {
             yield()
 
             chapterRepo.lastUpdate?.read shouldBe true
-            chapterRepo.lastUpdate?.lastPageRead shouldBe 0L
+            chapterRepo.lastUpdate?.lastPageRead shouldBe 9L
         }
     }
 
@@ -1210,7 +1204,7 @@ class NovelReaderScreenModelTest {
             screenModel.updateReadingProgress(currentIndex = 99, totalItems = 100, persistedProgress = 99L)
             yield()
             chapterRepo.lastUpdate?.read shouldBe true
-            chapterRepo.lastUpdate?.lastPageRead shouldBe 0L
+            chapterRepo.lastUpdate?.lastPageRead shouldBe 99L
         }
     }
 
@@ -1281,18 +1275,55 @@ class NovelReaderScreenModelTest {
             screenModel.updateReadingProgress(currentIndex = 99, totalItems = 100)
             yield()
             chapterRepo.lastUpdate?.read shouldBe true
-            chapterRepo.lastUpdate?.lastPageRead shouldBe 0L
+            chapterRepo.lastUpdate?.lastPageRead shouldBe 99L
 
             screenModel.updateReadingProgress(currentIndex = 0, totalItems = 100)
             yield()
 
             chapterRepo.lastUpdate?.read shouldBe true
-            chapterRepo.lastUpdate?.lastPageRead shouldBe 0L
+            chapterRepo.lastUpdate?.lastPageRead shouldBe 99L
         }
     }
 
     @Test
-    fun `records history when chapter is opened and progressed`() {
+    fun `read chapter keeps saved progress when stale callback arrives`() {
+        runBlocking {
+            val novel = Novel.create().copy(id = 1L, source = 10L, title = "Novel")
+            val chapter = NovelChapter.create().copy(
+                id = 5L,
+                novelId = 1L,
+                name = "Chapter 1",
+                url = "https://example.org/ch1",
+                read = true,
+                lastPageRead = 99L,
+            )
+            val chapterRepo = FakeNovelChapterRepository(chapter)
+
+            val screenModel = trackedNovelReaderScreenModel(
+                chapterId = chapter.id,
+                novelChapterRepository = chapterRepo,
+                getNovel = GetNovel(FakeNovelRepository(novel)),
+                sourceManager = FakeNovelSourceManager(sourceId = novel.source, chapterHtml = "<p>Hello</p>"),
+                pluginStorage = FakeNovelPluginStorage(emptyList()),
+                novelReaderPreferences = createNovelReaderPreferences(),
+                isSystemDark = { false },
+            )
+
+            withTimeout(1_000) {
+                while (screenModel.state.value is NovelReaderScreenModel.State.Loading) {
+                    yield()
+                }
+            }
+
+            screenModel.updateReadingProgress(currentIndex = 0, totalItems = 100)
+            yield()
+
+            chapterRepo.lastUpdate shouldBe null
+        }
+    }
+
+    @Test
+    fun `defers history writes for progress updates until reader is disposed`() {
         runBlocking {
             val novel = Novel.create().copy(id = 1L, source = 10L, title = "Novel")
             val chapter = NovelChapter.create().copy(
@@ -1322,11 +1353,20 @@ class NovelReaderScreenModelTest {
             }
 
             historyRepository.lastUpdate?.chapterId shouldBe chapter.id
+            historyRepository.updates.size shouldBe 1
 
             screenModel.updateReadingProgress(currentIndex = 1, totalItems = 10)
             yield()
 
             historyRepository.lastUpdate?.chapterId shouldBe chapter.id
+            historyRepository.updates.size shouldBe 1
+
+            delay(5)
+            screenModel.onDispose()
+            yield()
+
+            historyRepository.lastUpdate?.chapterId shouldBe chapter.id
+            historyRepository.updates.size shouldBe 2
             (historyRepository.lastUpdate?.readAt != null) shouldBe true
         }
     }
@@ -1406,7 +1446,7 @@ class NovelReaderScreenModelTest {
             screenModel.updateReadingProgress(currentIndex = 9, totalItems = 10)
             yield()
             chapterRepo.lastUpdate?.read shouldBe true
-            chapterRepo.lastUpdate?.lastPageRead shouldBe 0L
+            chapterRepo.lastUpdate?.lastPageRead shouldBe 9L
         }
     }
 
@@ -1499,6 +1539,57 @@ class NovelReaderScreenModelTest {
             state.shouldBeInstanceOf<NovelReaderScreenModel.State.Success>()
             state.previousChapterId shouldBe chapter1.id
             state.nextChapterId shouldBe chapter3.id
+            chapterRepo.lastApplyScanlatorFilter shouldBe true
+        }
+    }
+
+    @Test
+    fun `computes previous and next chapter ids from the active branch subset`() {
+        runBlocking {
+            val novel = Novel.create().copy(id = 992001L, source = 992010L, title = "Novel")
+            val selectedBranchChapter1 = NovelChapter.create().copy(
+                id = 992101L,
+                novelId = novel.id,
+                name = "Chapter 1 - SeRa",
+                url = "https://example.org/ch1-sera",
+                sourceOrder = 10L,
+                chapterNumber = 1.0,
+                scanlator = "SeRa",
+            )
+            val selectedBranchChapter2 = NovelChapter.create().copy(
+                id = 992102L,
+                novelId = novel.id,
+                name = "Chapter 2 - SeRa",
+                url = "https://example.org/ch2-sera",
+                sourceOrder = 20L,
+                chapterNumber = 2.0,
+                scanlator = "SeRa",
+            )
+            val chapterRepo = FakeNovelChapterRepository(
+                chapter = selectedBranchChapter1,
+                chaptersByNovel = listOf(selectedBranchChapter1, selectedBranchChapter2),
+            )
+
+            val screenModel = trackedNovelReaderScreenModel(
+                chapterId = selectedBranchChapter1.id,
+                novelChapterRepository = chapterRepo,
+                getNovel = GetNovel(FakeNovelRepository(novel)),
+                sourceManager = FakeNovelSourceManager(sourceId = novel.source, chapterHtml = "<p>Hello</p>"),
+                pluginStorage = FakeNovelPluginStorage(emptyList()),
+                novelReaderPreferences = createNovelReaderPreferences(),
+                isSystemDark = { false },
+            )
+
+            withTimeout(1_000) {
+                while (screenModel.state.value is NovelReaderScreenModel.State.Loading) {
+                    yield()
+                }
+            }
+
+            val state = screenModel.state.value
+            state.shouldBeInstanceOf<NovelReaderScreenModel.State.Success>()
+            state.previousChapterId shouldBe null
+            state.nextChapterId shouldBe selectedBranchChapter2.id
             chapterRepo.lastApplyScanlatorFilter shouldBe true
         }
     }
@@ -1610,6 +1701,67 @@ class NovelReaderScreenModelTest {
         }
     }
 
+    @Test
+    fun `rapid progress updates coalesce while repository write is in flight`() {
+        runBlocking {
+            val novel = Novel.create().copy(id = 1L, source = 10L, title = "Novel")
+            val chapter = NovelChapter.create().copy(
+                id = 5L,
+                novelId = 1L,
+                name = "Chapter 1",
+                url = "https://example.org/ch1",
+            )
+            val chapterRepo = BlockingNovelChapterRepository(chapter)
+
+            val screenModel = trackedNovelReaderScreenModel(
+                chapterId = chapter.id,
+                novelChapterRepository = chapterRepo,
+                getNovel = GetNovel(FakeNovelRepository(novel)),
+                sourceManager = FakeNovelSourceManager(sourceId = novel.source, chapterHtml = "<p>Hello</p>"),
+                pluginStorage = FakeNovelPluginStorage(emptyList()),
+                novelReaderPreferences = createNovelReaderPreferences(),
+                isSystemDark = { false },
+            )
+
+            withTimeout(1_000) {
+                while (screenModel.state.value is NovelReaderScreenModel.State.Loading) {
+                    yield()
+                }
+            }
+
+            screenModel.updateReadingProgress(currentIndex = 1, totalItems = 10)
+            withTimeout(1_000) {
+                while (chapterRepo.startedUpdates.isEmpty()) {
+                    yield()
+                }
+            }
+
+            screenModel.updateReadingProgress(currentIndex = 2, totalItems = 10)
+            screenModel.updateReadingProgress(currentIndex = 3, totalItems = 10)
+            yield()
+
+            chapterRepo.startedUpdates.size shouldBe 1
+
+            chapterRepo.allowNextUpdate()
+            withTimeout(1_000) {
+                while (chapterRepo.startedUpdates.size < 2) {
+                    yield()
+                }
+            }
+
+            chapterRepo.allowNextUpdate()
+            withTimeout(1_000) {
+                while (chapterRepo.completedUpdates.size < 2) {
+                    yield()
+                }
+            }
+
+            chapterRepo.completedUpdates.size shouldBe 2
+            chapterRepo.completedUpdates[0].lastPageRead shouldBe 1L
+            chapterRepo.completedUpdates[1].lastPageRead shouldBe 3L
+        }
+    }
+
     private class FakeNovelChapterRepository(
         private val chapter: NovelChapter?,
         private val chaptersByNovel: List<NovelChapter> = emptyList(),
@@ -1637,6 +1789,50 @@ class NovelReaderScreenModelTest {
         override suspend fun getChapterByUrlAndNovelId(url: String, novelId: Long): NovelChapter? = null
     }
 
+    private class BlockingNovelChapterRepository(
+        private val chapter: NovelChapter?,
+    ) : NovelChapterRepository {
+        val startedUpdates = mutableListOf<NovelChapterUpdate>()
+        val completedUpdates = mutableListOf<NovelChapterUpdate>()
+        private val updatePermits = Channel<Unit>(capacity = Channel.UNLIMITED)
+
+        fun allowNextUpdate() {
+            updatePermits.trySend(Unit)
+        }
+
+        override suspend fun addAllChapters(chapters: List<NovelChapter>): List<NovelChapter> = chapters
+
+        override suspend fun updateChapter(chapterUpdate: NovelChapterUpdate) {
+            startedUpdates += chapterUpdate
+            updatePermits.receive()
+            completedUpdates += chapterUpdate
+        }
+
+        override suspend fun updateAllChapters(chapterUpdates: List<NovelChapterUpdate>) = Unit
+
+        override suspend fun removeChaptersWithIds(chapterIds: List<Long>) = Unit
+
+        override suspend fun getChapterByNovelId(
+            novelId: Long,
+            applyScanlatorFilter: Boolean,
+        ): List<NovelChapter> = emptyList()
+
+        override suspend fun getScanlatorsByNovelId(novelId: Long): List<String> = emptyList()
+
+        override fun getScanlatorsByNovelIdAsFlow(novelId: Long): Flow<List<String>> = MutableStateFlow(emptyList())
+
+        override suspend fun getBookmarkedChaptersByNovelId(novelId: Long): List<NovelChapter> = emptyList()
+
+        override suspend fun getChapterById(id: Long): NovelChapter? = chapter?.takeIf { it.id == id }
+
+        override suspend fun getChapterByNovelIdAsFlow(
+            novelId: Long,
+            applyScanlatorFilter: Boolean,
+        ): Flow<List<NovelChapter>> = MutableStateFlow(emptyList())
+
+        override suspend fun getChapterByUrlAndNovelId(url: String, novelId: Long): NovelChapter? = null
+    }
+
     private class FakeNovelPluginStorage(
         private val packages: List<NovelPluginPackage>,
     ) : NovelPluginStorage {
@@ -1647,7 +1843,9 @@ class NovelReaderScreenModelTest {
     }
 
     private class FakeNovelHistoryRepository : NovelHistoryRepository {
-        var lastUpdate: NovelHistoryUpdate? = null
+        val updates = mutableListOf<NovelHistoryUpdate>()
+        val lastUpdate: NovelHistoryUpdate?
+            get() = updates.lastOrNull()
 
         override fun getNovelHistory(query: String): Flow<List<NovelHistoryWithRelations>> =
             MutableStateFlow(emptyList())
@@ -1665,7 +1863,7 @@ class NovelReaderScreenModelTest {
         override suspend fun deleteAllNovelHistory(): Boolean = true
 
         override suspend fun upsertNovelHistory(historyUpdate: NovelHistoryUpdate) {
-            lastUpdate = historyUpdate
+            updates += historyUpdate
         }
     }
 

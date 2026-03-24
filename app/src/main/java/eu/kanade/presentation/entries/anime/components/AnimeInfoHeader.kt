@@ -87,6 +87,7 @@ import eu.kanade.presentation.components.DropdownMenu
 import eu.kanade.presentation.components.rememberThemeAwareCoverErrorPainter
 import eu.kanade.presentation.entries.components.DotSeparatorText
 import eu.kanade.presentation.entries.components.ItemCover
+import eu.kanade.presentation.entries.components.aurora.rememberAuroraPosterColorFilter
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.data.coil.staticBlur
@@ -139,6 +140,7 @@ fun AnimeInfoBox(
                 fallback = fallbackPainter,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                colorFilter = rememberAuroraPosterColorFilter(),
                 modifier = Modifier
                     .matchParentSize()
                     .alpha(0.2f),

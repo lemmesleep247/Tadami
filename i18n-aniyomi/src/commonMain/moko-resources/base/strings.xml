@@ -439,6 +439,12 @@
     <string name="novel_reader_advanced">Advanced</string>
     <string name="novel_reader_tab_general">General</string>
     <string name="novel_reader_tab_reading">Reading</string>
+    <string name="novel_reader_section_reading_behavior">Reading behavior</string>
+    <string name="novel_reader_section_translation">Translation</string>
+    <string name="novel_reader_section_advanced">Advanced</string>
+    <string name="novel_reader_section_typography">Typography</string>
+    <string name="novel_reader_section_appearance">Appearance</string>
+    <string name="novel_reader_section_backgrounds">Backgrounds</string>
 
     <!-- Text Align -->
     <string name="novel_reader_text_align">Text alignment</string>
@@ -613,6 +619,9 @@
     <string name="novel_reader_gemini_visibility_off">OFF</string>
     <string name="novel_reader_gemini_show_original">Show original</string>
     <string name="novel_reader_gemini_show_translation">Show translation</string>
+    <string name="novel_reader_gemini_advanced_show">Advanced settings</string>
+    <string name="novel_reader_gemini_advanced_hide">Hide advanced settings</string>
+    <string name="novel_reader_gemini_private_python_like_mode">Python-like mode (full chapter, answer to ***)</string>
     <string name="novel_reader_gemini_action_start">Start</string>
     <string name="novel_reader_gemini_action_clear">Clear</string>
     <string name="novel_reader_gemini_action_close">Close</string>
@@ -1304,6 +1313,8 @@
     <string name="pref_show_achievement_notifications_summary">Show popup when unlocking achievements</string>
     <string name="pref_animated_aurora_background">Animated Aurora background</string>
     <string name="pref_animated_aurora_background_summary">Show soft animated color glows on Aurora screens</string>
+    <string name="pref_e_ink_mode">E-ink mode</string>
+    <string name="pref_e_ink_mode_summary">Use a high-contrast monochrome profile for e-ink displays</string>
     <string name="pref_aurora_customization">Aurora customization</string>
     <string name="pref_home_recent_card_mode">Recent blocks on Home</string>
     <string name="pref_home_recent_card_mode_summary">Style for the recent cards on the Home screen: %s</string>
@@ -1397,4 +1408,11 @@
     <string name="home_header_layout_element_streak">Streak</string>
     <string name="home_header_layout_editor_preview_greeting">Hello, welcome</string>
     <string name="home_header_layout_editor_preview_nickname">Viewer</string>
+    <string name="action_show_less">Show less</string>
+    <string name="action_show_all_episodes">Show all %d episodes</string>
+    <string name="action_show_all_chapters">Show all %d chapters</string>
+    <string name="action_enable_auto_jump_next_episode">Enable auto-jump to next episode</string>
+    <string name="action_disable_auto_jump_next_episode">Disable auto-jump to next episode</string>
+    <string name="action_enable_auto_jump_next_chapter">Enable auto-jump to next chapter</string>
+    <string name="action_disable_auto_jump_next_chapter">Disable auto-jump to next chapter</string>
 </resources>

@@ -2,10 +2,12 @@ package eu.kanade.presentation.components
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -20,7 +22,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import dev.icerock.moko.resources.StringResource
@@ -42,6 +46,8 @@ fun TabbedScreen(
     scrollable: Boolean = false,
     animeSearchQuery: String? = null,
     onChangeAnimeSearchQuery: (String?) -> Unit = {},
+    searchActionIconTint: Color? = null,
+    extraSearchToActionsGap: Dp = 0.dp,
 
 ) {
     val scope = rememberCoroutineScope()
@@ -73,9 +79,15 @@ fun TabbedScreen(
                         )
                     },
                     searchEnabled = searchEnabled,
+                    searchActionIconTint = searchActionIconTint,
                     searchQuery = if (searchEnabled) actualQuery else null,
                     onChangeSearchQuery = actualOnChange,
-                    actions = { AppBarActions(tab.actions) },
+                    actions = {
+                        if (tab.actions.isNotEmpty()) {
+                            Spacer(modifier = Modifier.width(4.dp + extraSearchToActionsGap))
+                        }
+                        AppBarActions(tab.actions)
+                    },
                     navigateUp = tab.navigateUp,
                 )
             }

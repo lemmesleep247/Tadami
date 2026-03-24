@@ -39,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,12 +48,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAny
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import eu.kanade.presentation.components.AuroraCard
@@ -63,17 +66,21 @@ import eu.kanade.presentation.components.resolveAuroraCardOverlaySpec
 import eu.kanade.presentation.components.resolveAuroraCoverModel
 import eu.kanade.presentation.entries.components.AuroraEntryDropdownMenu
 import eu.kanade.presentation.entries.components.AuroraEntryDropdownMenuItem
+import eu.kanade.presentation.entries.components.aurora.rememberAuroraPosterColorFilter
 import eu.kanade.presentation.library.components.EntryCompactGridItem
 import eu.kanade.presentation.library.components.GlowContourLibraryGridItem
 import eu.kanade.presentation.library.components.LanguageBadge
 import eu.kanade.presentation.library.components.LazyLibraryGrid
 import eu.kanade.presentation.library.components.UnviewedBadge
+import eu.kanade.presentation.library.components.resolveGlowContourCornerIndicatorState
 import eu.kanade.presentation.library.components.resolveGlowContourLibraryTextSpec
 import eu.kanade.presentation.library.resolveNovelLibraryCardProgressPercent
+import eu.kanade.presentation.novel.sourceAwareNovelCoverModel
 import eu.kanade.presentation.theme.AuroraTheme
 import eu.kanade.presentation.theme.aurora.adaptive.auroraCenteredMaxWidth
 import eu.kanade.presentation.theme.aurora.adaptive.rememberAuroraAdaptiveSpec
-import eu.kanade.tachiyomi.data.download.novel.NovelDownloadManager
+import eu.kanade.tachiyomi.data.download.novel.NovelDownloadCache
+import eu.kanade.tachiyomi.source.model.SManga
 import tachiyomi.domain.entries.novel.model.asNovelCover
 import tachiyomi.domain.library.model.AuroraLibraryCardStyle
 import tachiyomi.domain.library.model.LibraryDisplayMode
@@ -116,6 +123,7 @@ fun NovelLibraryAuroraContent(
     val configuration = LocalConfiguration.current
     val libraryPreferences = remember { Injekt.get<LibraryPreferences>() }
     val sourceManager = remember { Injekt.get<NovelSourceManager>() }
+    val downloadCache = remember { Injekt.get<NovelDownloadCache>() }
     val useSeparateDisplayModePerMedia by libraryPreferences
         .separateDisplayModePerMedia()
         .collectAsState()
@@ -148,13 +156,13 @@ fun NovelLibraryAuroraContent(
     val showDownloadBadge by libraryPreferences.downloadBadge().collectAsState()
     val showUnreadBadge by libraryPreferences.unreadBadge().collectAsState()
     val showLanguageBadge by libraryPreferences.languageBadge().collectAsState()
-    val downloadedNovelIds = remember(items, showDownloadBadge) {
+    val downloadCacheSignal by downloadCache.changes.collectAsStateWithLifecycle(initialValue = Unit)
+    val downloadedNovelIds = remember(items, showDownloadBadge, downloadCacheSignal) {
         if (!showDownloadBadge) return@remember emptySet()
 
-        val downloadManager = NovelDownloadManager()
         items.asSequence()
             .mapNotNull { item ->
-                item.novel.id.takeIf { downloadManager.hasAnyDownloadedChapter(item.novel) }
+                item.novel.id.takeIf { downloadCache.hasAnyDownloadedChapter(item.novel) }
             }
             .toSet()
     }
@@ -369,6 +377,12 @@ private fun NovelLibraryCompactGridItem(
     )
 }
 
+internal fun resolveNovelLibraryCornerIndicatorIsFinished(status: Long): Boolean {
+    return status == SManga.COMPLETED.toLong() ||
+        status == SManga.PUBLISHING_FINISHED.toLong() ||
+        status == SManga.CANCELLED.toLong()
+}
+
 @Composable
 private fun NovelLibraryAuroraCard(
     item: LibraryNovel,
@@ -398,9 +412,14 @@ private fun NovelLibraryAuroraCard(
         totalCount = item.totalChapters,
     )
     val textSpec = resolveGlowContourLibraryTextSpec(glowDisplayMode)
+    val cornerIndicatorState = resolveGlowContourCornerIndicatorState(
+        hasContinueAction = onClickContinueReading != null,
+        remainingCount = item.unreadCount,
+        isFinished = resolveNovelLibraryCornerIndicatorIsFinished(item.novel.status),
+    )
     val coverRequest = remember(item.novel.id, item.novel.thumbnailUrl, item.novel.coverLastModified) {
         ImageRequest.Builder(context)
-            .data(resolveAuroraCoverModel(item.novel.thumbnailUrl))
+            .data(sourceAwareNovelCoverModel(item.novel))
             .placeholderMemoryCacheKey(item.novel.thumbnailUrl)
             .build()
     }
@@ -413,6 +432,7 @@ private fun NovelLibraryAuroraCard(
             coverData = coverRequest,
             progressPercent = progressPercent,
             cardAspectRatio = 0.76f,
+            cornerIndicatorState = cornerIndicatorState,
             textSpec = textSpec,
             badge = if (badgeState.hasBadge()) {
                 {
@@ -538,6 +558,11 @@ private fun NovelLibraryAuroraCoverOnlyCard(
     onLongClick: (() -> Unit)?,
 ) {
     val colors = AuroraTheme.colors
+    val tabContainerColor = if (colors.background.luminance() < 0.5f) {
+        Color.White.copy(alpha = 0.05f)
+    } else {
+        Color.Black.copy(alpha = 0.03f)
+    }
     val placeholderPainter = rememberAuroraCoverPlaceholderPainter()
     Card(
         modifier = modifier.combinedClickable(
@@ -545,7 +570,7 @@ private fun NovelLibraryAuroraCoverOnlyCard(
             onLongClick = onLongClick,
         ),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.glass),
+        colors = CardDefaults.cardColors(containerColor = tabContainerColor),
         border = BorderStroke(
             width = if (isSelected) 2.dp else 1.dp,
             color = if (isSelected) {
@@ -572,6 +597,7 @@ private fun NovelLibraryAuroraCoverOnlyCard(
                 model = resolveAuroraCoverModel(coverData),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                colorFilter = rememberAuroraPosterColorFilter(),
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(RoundedCornerShape(12.dp)),
@@ -679,7 +705,7 @@ private fun InlineNovelLibraryHeader(
                             color = colors.textSecondary,
                         )
                     },
-                    leadingIcon = { Icon(Icons.Filled.Search, null, tint = colors.accent) },
+                    leadingIcon = { Icon(Icons.Filled.Search, null, tint = colors.textPrimary) },
                     trailingIcon = {
                         IconButton(onClick = onSearchClose) {
                             Icon(Icons.Filled.Close, null, tint = colors.textSecondary)
@@ -708,7 +734,7 @@ private fun InlineNovelLibraryHeader(
 
                 Row {
                     IconButton(onClick = onSearchClick) {
-                        Icon(Icons.Filled.Search, null, tint = colors.accent)
+                        Icon(Icons.Filled.Search, null, tint = colors.textPrimary)
                     }
                     IconButton(onClick = onFilterClicked) {
                         Icon(

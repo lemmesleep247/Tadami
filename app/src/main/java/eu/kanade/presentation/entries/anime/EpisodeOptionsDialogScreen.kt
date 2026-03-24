@@ -62,8 +62,10 @@ import eu.kanade.tachiyomi.ui.player.controls.components.sheets.HosterState
 import eu.kanade.tachiyomi.ui.player.controls.components.sheets.QualitySheetHosterContent
 import eu.kanade.tachiyomi.ui.player.controls.components.sheets.QualitySheetVideoContent
 import eu.kanade.tachiyomi.ui.player.controls.components.sheets.getChangedAt
+import eu.kanade.tachiyomi.ui.player.hasVisiblePlaybackPreferences
 import eu.kanade.tachiyomi.ui.player.loader.EpisodeLoader
 import eu.kanade.tachiyomi.ui.player.loader.HosterLoader
+import eu.kanade.tachiyomi.ui.player.sanitizeVisiblePlaybackPreferences
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -172,27 +174,29 @@ class EpisodeOptionsDialogScreenModel(
     val showAllQualities = _showAllQualities.asStateFlow()
 
     private fun getPlaybackSelectionPreferences(): PlaybackSelectionPreferences {
-        return PlaybackSelectionPreferences(
-            preferredPlayer = PlaybackPlayerPreference.fromPreference(
-                preferenceStore.getString("anime_player_pref_$animeId", PlaybackPlayerPreference.AUTO.name).get(),
+        return sanitizeVisiblePlaybackPreferences(
+            PlaybackSelectionPreferences(
+                preferredPlayer = PlaybackPlayerPreference.fromPreference(
+                    preferenceStore.getString("anime_player_pref_$animeId", PlaybackPlayerPreference.AUTO.name).get(),
+                ),
+                preferredDubbingCdn = preferenceStore.getString("anime_dubbing_pref_cdn_$animeId", "").get(),
+                preferredDubbingKodik = preferenceStore.getString("anime_dubbing_pref_kodik_$animeId", "").get(),
+                preferredDubbingParlorate = preferenceStore.getString(
+                    "anime_dubbing_pref_parlorate_$animeId",
+                    "",
+                ).get(),
+                preferredQualityCdn = preferenceStore.getString("anime_quality_pref_cdn_$animeId", "best").get(),
+                preferredQualityKodik = preferenceStore.getString("anime_quality_pref_kodik_$animeId", "best").get(),
+                preferredQualityParlorate = preferenceStore.getString(
+                    "anime_quality_pref_parlorate_$animeId",
+                    "best",
+                ).get(),
             ),
-            preferredDubbingCdn = preferenceStore.getString("anime_dubbing_pref_cdn_$animeId", "").get(),
-            preferredDubbingKodik = preferenceStore.getString("anime_dubbing_pref_kodik_$animeId", "").get(),
-            preferredDubbingAlloha = preferenceStore.getString("anime_dubbing_pref_alloha_$animeId", "").get(),
-            preferredQualityCdn = preferenceStore.getString("anime_quality_pref_cdn_$animeId", "best").get(),
-            preferredQualityKodik = preferenceStore.getString("anime_quality_pref_kodik_$animeId", "best").get(),
-            preferredQualityAlloha = preferenceStore.getString("anime_quality_pref_alloha_$animeId", "best").get(),
         )
     }
 
     private fun hasExplicitPlaybackPreferences(preferences: PlaybackSelectionPreferences): Boolean {
-        return preferences.preferredPlayer != PlaybackPlayerPreference.AUTO ||
-            preferences.preferredDubbingCdn.isNotBlank() ||
-            preferences.preferredDubbingKodik.isNotBlank() ||
-            preferences.preferredDubbingAlloha.isNotBlank() ||
-            !preferences.preferredQualityCdn.equals("best", ignoreCase = true) ||
-            !preferences.preferredQualityKodik.equals("best", ignoreCase = true) ||
-            !preferences.preferredQualityAlloha.equals("best", ignoreCase = true)
+        return hasVisiblePlaybackPreferences(preferences)
     }
 
     private fun findVideoByPlaybackPreferences(

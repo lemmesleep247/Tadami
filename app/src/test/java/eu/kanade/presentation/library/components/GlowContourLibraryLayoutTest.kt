@@ -4,6 +4,8 @@ import androidx.compose.ui.unit.dp
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.i18n.MR
+import tachiyomi.i18n.aniyomi.AYMR
 
 class GlowContourLibraryLayoutTest {
 
@@ -72,10 +74,60 @@ class GlowContourLibraryLayoutTest {
         resolveGlowContourTextBlockRenderSpec() shouldBe GlowContourTextBlockRenderSpec(
             topSpacing = 8.dp,
             titleSubtitleSpacing = 2.dp,
-            horizontalPadding = 0.dp,
+            horizontalPadding = 6.dp,
             verticalPadding = 0.dp,
             useSurfaceBlend = false,
+            titleMinLines = 1,
+            minTextBlockHeight = 34.dp,
         )
+    }
+
+    @Test
+    fun `anime indicator prefers continue action when handler is available and unseen remains`() {
+        resolveGlowContourCornerIndicatorState(
+            hasContinueAction = true,
+            remainingCount = 4L,
+            isFinished = true,
+        ) shouldBe GlowContourCornerIndicatorState.ContinueAction
+    }
+
+    @Test
+    fun `anime indicator uses check jewel when completed and caught up`() {
+        resolveGlowContourCornerIndicatorState(
+            hasContinueAction = false,
+            remainingCount = 0L,
+            isFinished = true,
+        ) shouldBe GlowContourCornerIndicatorState.CompletedJewel
+    }
+
+    @Test
+    fun `manga indicator uses update jewel when unread remains and continue is unavailable`() {
+        resolveGlowContourCornerIndicatorState(
+            hasContinueAction = false,
+            remainingCount = 7L,
+            isFinished = false,
+        ) shouldBe GlowContourCornerIndicatorState.NewContentJewel
+    }
+
+    @Test
+    fun `indicator falls back to neutral jewel when entry is neither completed nor new`() {
+        resolveGlowContourCornerIndicatorState(
+            hasContinueAction = false,
+            remainingCount = 0L,
+            isFinished = false,
+        ) shouldBe GlowContourCornerIndicatorState.NeutralJewel
+    }
+
+    @Test
+    fun `indicator content descriptions stay mapped for accessibility`() {
+        listOf(
+            GlowContourCornerIndicatorState.ContinueAction to MR.strings.action_resume,
+            GlowContourCornerIndicatorState.CompletedJewel to MR.strings.completed,
+            GlowContourCornerIndicatorState.NewContentJewel to AYMR.strings.aurora_new_badge,
+            GlowContourCornerIndicatorState.NeutralJewel to MR.strings.status,
+        ).forEach { (state, expectedRes) ->
+            resolveGlowContourCornerIndicatorContentDescriptionRes(state) shouldBe expectedRes
+        }
     }
 
     @Test
@@ -126,7 +178,7 @@ class GlowContourLibraryLayoutTest {
 
     @Test
     fun `action button render spec uses glass accent instead of solid fill`() {
-        resolveGlowContourActionButtonRenderSpec() shouldBe GlowContourActionButtonRenderSpec(
+        resolveGlowContourActionButtonRenderSpec(isDark = true) shouldBe GlowContourActionButtonRenderSpec(
             containerTopAlpha = 0.22f,
             containerBottomAlpha = 0.08f,
             borderTopAlpha = 0.42f,

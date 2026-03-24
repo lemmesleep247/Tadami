@@ -13,9 +13,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -24,7 +24,11 @@ import coil3.request.ImageRequest
 import eu.kanade.presentation.components.AuroraCoverPlaceholderVariant
 import eu.kanade.presentation.components.rememberAuroraCoverPlaceholderPainter
 import eu.kanade.presentation.components.resolveAuroraCoverModel
-import eu.kanade.tachiyomi.data.coil.staticBlur
+import eu.kanade.presentation.entries.components.aurora.applyAuroraBlurBackground
+import eu.kanade.presentation.entries.components.aurora.auroraPosterBackgroundSpec
+import eu.kanade.presentation.entries.components.aurora.rememberAuroraPosterColorFilter
+import eu.kanade.presentation.entries.components.aurora.resolveAuroraPosterScrimBrush
+import eu.kanade.presentation.theme.AuroraTheme
 import tachiyomi.domain.entries.anime.model.Anime
 
 /**
@@ -45,6 +49,8 @@ fun FullscreenPosterBackground(
     resolvedCoverUrlFallback: String? = null,
 ) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
     val placeholderPainter = rememberAuroraCoverPlaceholderPainter(AuroraCoverPlaceholderVariant.Wide)
     val initialModel = resolveAuroraCoverModel(resolvedCoverUrl) as? String
     val fallbackModel = resolveAuroraCoverModel(resolvedCoverUrlFallback) as? String
@@ -67,18 +73,38 @@ fun FullscreenPosterBackground(
         ),
         label = "blurOverlayAlpha",
     )
-    val blurRadiusPx = with(LocalDensity.current) { 20.dp.roundToPx() }
+    val blurRadiusPx = with(density) { 20.dp.roundToPx() }
+    val containerWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
+    val containerHeightPx = with(density) { configuration.screenHeightDp.dp.roundToPx() }
 
     Box(modifier = modifier.fillMaxSize()) {
+        val colors = AuroraTheme.colors
+
         if (initialModel != null) {
             var model by remember(initialModel) { mutableStateOf(initialModel) }
             val resolvedModel = resolveAuroraCoverModel(model) as? String
 
             if (resolvedModel != null) {
+                val backgroundSpec = remember(
+                    anime.id,
+                    anime.coverLastModified,
+                    resolvedModel,
+                    containerWidthPx,
+                    containerHeightPx,
+                    blurRadiusPx,
+                ) {
+                    auroraPosterBackgroundSpec(
+                        baseCacheKey = "anime-bg;${anime.id};${anime.coverLastModified};${resolvedModel.hashCode()}",
+                        containerWidthPx = containerWidthPx,
+                        containerHeightPx = containerHeightPx,
+                        blurRadiusPx = blurRadiusPx,
+                    )
+                }
                 AsyncImage(
-                    model = remember(resolvedModel, anime.id, anime.coverLastModified) {
+                    model = remember(resolvedModel, backgroundSpec.sharpMemoryCacheKey) {
                         ImageRequest.Builder(context)
                             .data(resolvedModel)
+                            .memoryCacheKey(backgroundSpec.sharpMemoryCacheKey)
                             .build()
                     },
                     onError = {
@@ -90,14 +116,18 @@ fun FullscreenPosterBackground(
                     fallback = placeholderPainter,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    colorFilter = rememberAuroraPosterColorFilter(),
                     modifier = Modifier.fillMaxSize(),
                 )
 
                 AsyncImage(
-                    model = remember(resolvedModel, anime.id, anime.coverLastModified, blurRadiusPx) {
+                    model = remember(resolvedModel, backgroundSpec, blurRadiusPx) {
                         ImageRequest.Builder(context)
                             .data(resolvedModel)
-                            .staticBlur(blurRadiusPx, intensityFactor = 0.6f)
+                            .applyAuroraBlurBackground(
+                                spec = backgroundSpec,
+                                blurRadiusPx = blurRadiusPx,
+                            )
                             .build()
                     },
                     onError = {
@@ -109,6 +139,7 @@ fun FullscreenPosterBackground(
                     fallback = placeholderPainter,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    colorFilter = rememberAuroraPosterColorFilter(),
                     alpha = blurOverlayAlpha,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -132,21 +163,19 @@ fun FullscreenPosterBackground(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0.0f to Color.Transparent,
-                        0.3f to Color.Black.copy(alpha = 0.1f),
-                        0.5f to Color.Black.copy(alpha = 0.4f),
-                        0.7f to Color.Black.copy(alpha = 0.7f),
-                        1.0f to Color.Black.copy(alpha = 0.9f),
-                    ),
-                ),
+                .background(resolveAuroraPosterScrimBrush(colors)),
         )
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = dimAlpha)),
+                .background(
+                    if (colors.isDark) {
+                        Color.Black.copy(alpha = dimAlpha)
+                    } else {
+                        colors.background.copy(alpha = dimAlpha * 0.18f)
+                    },
+                ),
         )
     }
 }

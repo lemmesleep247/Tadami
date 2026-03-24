@@ -29,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -59,10 +60,12 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.components.UpIcon
 import eu.kanade.presentation.more.settings.AURORA_SETTINGS_CARD_HORIZONTAL_INSET
 import eu.kanade.presentation.more.settings.AURORA_SETTINGS_CARD_SHAPE
+import eu.kanade.presentation.more.settings.AuroraSettingsTopBarChrome
 import eu.kanade.presentation.more.settings.LocalSettingsUiStyle
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.SettingsAuroraBackground
 import eu.kanade.presentation.more.settings.SettingsUiStyle
+import eu.kanade.presentation.more.settings.canScroll
 import eu.kanade.presentation.more.settings.rememberResolvedSettingsUiStyle
 import eu.kanade.presentation.more.settings.screen.player.PlayerSettingsAdvancedScreen
 import eu.kanade.presentation.more.settings.screen.player.PlayerSettingsAudioScreen
@@ -96,6 +99,15 @@ class SettingsSearchScreen(
         val focusManager = LocalFocusManager.current
         val focusRequester = remember { FocusRequester() }
         val listState = rememberLazyListState()
+        val topBarState = rememberTopAppBarState()
+        val topBarScrollBehavior = if (isAurora) {
+            TopAppBarDefaults.enterAlwaysScrollBehavior(
+                state = topBarState,
+                canScroll = { listState.canScroll() },
+            )
+        } else {
+            TopAppBarDefaults.pinnedScrollBehavior(topBarState)
+        }
 
         // Hide keyboard on change screen
         DisposableEffect(Unit) {
@@ -120,109 +132,142 @@ class SettingsSearchScreen(
         CompositionLocalProvider(LocalSettingsUiStyle provides uiStyle) {
             Scaffold(
                 containerColor = if (isAurora) Color.Transparent else MaterialTheme.colorScheme.background,
+                topBarScrollBehavior = topBarScrollBehavior,
                 topBar = {
-                    Column {
-                        TopAppBar(
-                            colors = if (isAurora) {
-                                TopAppBarDefaults.topAppBarColors(
-                                    containerColor = Color.Transparent,
+                    if (isAurora) {
+                        AuroraSettingsTopBarChrome(topBarScrollBehavior) {
+                            Column {
+                                TopAppBar(
+                                    colors = TopAppBarDefaults.topAppBarColors(
+                                        containerColor = Color.Transparent,
+                                    ),
+                                    navigationIcon = {
+                                        val canPop = remember { navigator.canPop }
+                                        if (canPop) {
+                                            IconButton(onClick = navigator::pop) {
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                                                    contentDescription = stringResource(
+                                                        MR.strings.action_bar_up_description,
+                                                    ),
+                                                    tint = auroraColors.accent,
+                                                )
+                                            }
+                                        }
+                                    },
+                                    title = {
+                                        BasicTextField(
+                                            state = textFieldState,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(AURORA_SETTINGS_CARD_SHAPE)
+                                                .background(settingsCardContainerColor())
+                                                .padding(horizontal = 16.dp, vertical = 10.dp)
+                                                .focusRequester(focusRequester)
+                                                .runOnEnterKeyPressed(action = focusManager::clearFocus),
+                                            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                                color = auroraColors.textPrimary,
+                                            ),
+                                            lineLimits = TextFieldLineLimits.SingleLine,
+                                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                            onKeyboardAction = { focusManager.clearFocus() },
+                                            cursorBrush = SolidColor(auroraColors.accent),
+                                            decorator = {
+                                                if (textFieldState.text.isEmpty()) {
+                                                    Text(
+                                                        text = stringResource(
+                                                            resource = if (isPlayer) {
+                                                                AYMR.strings.action_search_player_settings
+                                                            } else {
+                                                                MR.strings.action_search_settings
+                                                            },
+                                                        ),
+                                                        color = auroraColors.textSecondary,
+                                                        style = MaterialTheme.typography.bodyLarge,
+                                                    )
+                                                }
+                                                it()
+                                            },
+                                        )
+                                    },
+                                    actions = {
+                                        if (textFieldState.text.isNotEmpty()) {
+                                            IconButton(onClick = { textFieldState.clearText() }) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Close,
+                                                    contentDescription = null,
+                                                    tint = auroraColors.accent,
+                                                )
+                                            }
+                                        }
+                                    },
                                 )
-                            } else {
-                                TopAppBarDefaults.topAppBarColors()
-                            },
-                            navigationIcon = {
-                                val canPop = remember { navigator.canPop }
-                                if (canPop) {
-                                    IconButton(onClick = navigator::pop) {
-                                        if (isAurora) {
-                                            Icon(
-                                                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                                                contentDescription = stringResource(
-                                                    MR.strings.action_bar_up_description,
-                                                ),
-                                                tint = auroraColors.textPrimary,
-                                            )
-                                        } else {
+                                HorizontalDivider(
+                                    color = auroraColors.textSecondary.copy(alpha = 0.18f),
+                                )
+                            }
+                        }
+                    } else {
+                        Column {
+                            TopAppBar(
+                                colors = TopAppBarDefaults.topAppBarColors(),
+                                navigationIcon = {
+                                    val canPop = remember { navigator.canPop }
+                                    if (canPop) {
+                                        IconButton(onClick = navigator::pop) {
                                             UpIcon()
                                         }
                                     }
-                                }
-                            },
-                            title = {
-                                BasicTextField(
-                                    state = textFieldState,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(if (isAurora) AURORA_SETTINGS_CARD_SHAPE else RoundedCornerShape(0.dp))
-                                        .then(
-                                            if (isAurora) {
-                                                Modifier
-                                                    .background(settingsCardContainerColor())
-                                                    .padding(horizontal = 16.dp, vertical = 10.dp)
-                                            } else {
-                                                Modifier
-                                            },
-                                        )
-                                        .focusRequester(focusRequester)
-                                        .runOnEnterKeyPressed(action = focusManager::clearFocus),
-                                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                        color = if (isAurora) {
-                                            auroraColors.textPrimary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurface
+                                },
+                                title = {
+                                    BasicTextField(
+                                        state = textFieldState,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(0.dp))
+                                            .focusRequester(focusRequester)
+                                            .runOnEnterKeyPressed(action = focusManager::clearFocus),
+                                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                        ),
+                                        lineLimits = TextFieldLineLimits.SingleLine,
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                        onKeyboardAction = { focusManager.clearFocus() },
+                                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                        decorator = {
+                                            if (textFieldState.text.isEmpty()) {
+                                                Text(
+                                                    text = stringResource(
+                                                        resource = if (isPlayer) {
+                                                            AYMR.strings.action_search_player_settings
+                                                        } else {
+                                                            MR.strings.action_search_settings
+                                                        },
+                                                    ),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                )
+                                            }
+                                            it()
                                         },
-                                    ),
-                                    lineLimits = TextFieldLineLimits.SingleLine,
-                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                    onKeyboardAction = { focusManager.clearFocus() },
-                                    cursorBrush = SolidColor(
-                                        if (isAurora) auroraColors.accent else MaterialTheme.colorScheme.primary,
-                                    ),
-                                    decorator = {
-                                        if (textFieldState.text.isEmpty()) {
-                                            Text(
-                                                text = stringResource(
-                                                    resource = if (isPlayer) {
-                                                        AYMR.strings.action_search_player_settings
-                                                    } else {
-                                                        MR.strings.action_search_settings
-                                                    },
-                                                ),
-                                                color = if (isAurora) {
-                                                    auroraColors.textSecondary
-                                                } else {
-                                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                                },
-                                                style = MaterialTheme.typography.bodyLarge,
+                                    )
+                                },
+                                actions = {
+                                    if (textFieldState.text.isNotEmpty()) {
+                                        IconButton(onClick = { textFieldState.clearText() }) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Close,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
-                                        it()
-                                    },
-                                )
-                            },
-                            actions = {
-                                if (textFieldState.text.isNotEmpty()) {
-                                    IconButton(onClick = { textFieldState.clearText() }) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Close,
-                                            contentDescription = null,
-                                            tint = if (isAurora) {
-                                                auroraColors.textSecondary
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                            },
-                                        )
                                     }
-                                }
-                            },
-                        )
-                        HorizontalDivider(
-                            color = if (isAurora) {
-                                auroraColors.textSecondary.copy(alpha = 0.18f)
-                            } else {
-                                MaterialTheme.colorScheme.outlineVariant
-                            },
-                        )
+                                },
+                            )
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            )
+                        }
                     }
                 },
             ) { contentPadding ->

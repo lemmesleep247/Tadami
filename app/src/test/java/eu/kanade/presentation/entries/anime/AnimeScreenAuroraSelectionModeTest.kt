@@ -8,6 +8,17 @@ import org.junit.jupiter.api.Test
 class AnimeScreenAuroraSelectionModeTest {
 
     @Test
+    fun `hero content hides while episode selection mode is active`() {
+        shouldShowAnimeAuroraHeroContent(
+            useTwoPaneLayout = false,
+            firstVisibleItemIndex = 0,
+            scrollOffset = 0,
+            heroThreshold = 100,
+            isSelectionMode = true,
+        ) shouldBe false
+    }
+
+    @Test
     fun `aurora selection controls are rendered in bottom stack`() {
         auroraSelectionControlsPlacement() shouldBe AuroraSelectionControlsPlacement.BottomStack
     }
@@ -52,6 +63,27 @@ class AnimeScreenAuroraSelectionModeTest {
         ) shouldBe false
 
         shouldAutoExpandAuroraEpisodesList(
+            episodesExpanded = false,
+            totalEpisodes = 5,
+        ) shouldBe false
+    }
+
+    @Test
+    fun `fast scroll expands collapsed episodes list when more than five items`() {
+        shouldAutoExpandAuroraEpisodesListForFastScroll(
+            episodesExpanded = false,
+            totalEpisodes = 10,
+        ) shouldBe true
+    }
+
+    @Test
+    fun `fast scroll does not expand when episodes list is already expanded or short`() {
+        shouldAutoExpandAuroraEpisodesListForFastScroll(
+            episodesExpanded = true,
+            totalEpisodes = 10,
+        ) shouldBe false
+
+        shouldAutoExpandAuroraEpisodesListForFastScroll(
             episodesExpanded = false,
             totalEpisodes = 5,
         ) shouldBe false

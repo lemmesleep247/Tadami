@@ -183,6 +183,7 @@ class NovelReaderScreenModel(
     private var initialProgressIndex: Int = 0
     private var hasProgressChanged: Boolean = false
     private var chapterReadStartTimeMs: Long = System.currentTimeMillis()
+    private var pendingHistoryReadDurationMs: Long = 0L
     private var nextChapterPrefetchJob: Job? = null
     private var hasTriggeredNextChapterPrefetch: Boolean = false
     private var nextChapterGeminiPrefetchJob: Job? = null
@@ -206,6 +207,9 @@ class NovelReaderScreenModel(
     private var deepSeekModelIds: List<String> = emptyList()
     private var isDeepSeekModelsLoading: Boolean = false
     private var isTestingDeepSeekConnection: Boolean = false
+    private val progressPersistenceMutex = Mutex()
+    private var pendingProgressPersistence: PendingProgressPersistence? = null
+    private var progressPersistenceJob: Job? = null
     private val structuredJson = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -265,10 +269,12 @@ class NovelReaderScreenModel(
         }
         val sourceSiteUrl = (source as? NovelSiteSource)?.siteUrl
         rawHtml = withContext(Dispatchers.Default) {
-            prependChapterHeadingIfMissing(
+            val normalizedChapterHtml = prependChapterHeadingIfMissing(
                 rawHtml = html.normalizeStructuredChapterPayload(),
                 chapterName = chapter.name,
             )
+            val sanitizedChapterHtml = sanitizeChapterHtmlForReader(normalizedChapterHtml)
+            if (sanitizedChapterHtml.isBlank()) normalizedChapterHtml else sanitizedChapterHtml
         }
         currentNovel = novel
         currentChapter = chapter
@@ -687,7 +693,11 @@ class NovelReaderScreenModel(
         val reachedReadThreshold = totalItems > 1 &&
             ((currentIndex + 1).toFloat() / totalItems.toFloat()) >= readThreshold
         val shouldPersistRead = (lastSavedRead == true) || chapter.read || reachedReadThreshold
-        val newProgress = if (shouldPersistRead) 0L else resolvedPersistedProgress
+        val newProgress = if (shouldPersistRead) {
+            maxOf(lastSavedProgress ?: 0L, resolvedPersistedProgress)
+        } else {
+            resolvedPersistedProgress
+        }
 
         maybePrefetchNextChapterOnProgress(
             currentIndex = currentIndex,
@@ -712,27 +722,67 @@ class NovelReaderScreenModel(
         )
         val shouldEmitNovelCompleted = becameRead && chapterOrderList.all { it.read }
 
+        enqueueProgressPersistence(
+            PendingProgressPersistence(
+                chapterId = chapter.id,
+                novelId = chapter.novelId,
+                chapterNumber = chapter.chapterNumber.toInt(),
+                read = shouldPersistRead,
+                lastPageRead = newProgress,
+                emitReadEvent = becameRead,
+                emitNovelCompleted = shouldEmitNovelCompleted,
+                sessionReadDurationMs = System.currentTimeMillis() - chapterReadStartTimeMs,
+            ),
+        )
+    }
+
+    private fun enqueueProgressPersistence(update: PendingProgressPersistence) {
         screenModelScope.launch(NonCancellable) {
-            novelChapterRepository.updateChapter(
-                NovelChapterUpdate(
-                    id = chapter.id,
-                    read = shouldPersistRead,
-                    lastPageRead = newProgress,
-                ),
-            )
-            if (becameRead) {
-                eventBus?.tryEmit(
-                    AchievementEvent.NovelChapterRead(
-                        novelId = chapter.novelId,
-                        chapterNumber = chapter.chapterNumber.toInt(),
-                    ),
-                )
-                if (shouldEmitNovelCompleted) {
-                    eventBus?.tryEmit(AchievementEvent.NovelCompleted(chapter.novelId))
+            progressPersistenceMutex.withLock {
+                pendingProgressPersistence = pendingProgressPersistence?.merge(update) ?: update
+                if (progressPersistenceJob?.isActive == true) {
+                    return@launch
+                }
+                progressPersistenceJob = screenModelScope.launch(NonCancellable) {
+                    flushPendingProgressPersistence()
                 }
             }
+        }
+    }
+
+    private suspend fun flushPendingProgressPersistence() {
+        while (true) {
+            val nextUpdate = progressPersistenceMutex.withLock {
+                val next = pendingProgressPersistence ?: return
+                pendingProgressPersistence = null
+                next
+            }
+
+            novelChapterRepository.updateChapter(
+                NovelChapterUpdate(
+                    id = nextUpdate.chapterId,
+                    read = nextUpdate.read,
+                    lastPageRead = nextUpdate.lastPageRead,
+                ),
+            )
+
+            if (nextUpdate.emitReadEvent) {
+                eventBus?.tryEmit(
+                    AchievementEvent.NovelChapterRead(
+                        novelId = nextUpdate.novelId,
+                        chapterNumber = nextUpdate.chapterNumber,
+                    ),
+                )
+                if (nextUpdate.emitNovelCompleted) {
+                    eventBus?.tryEmit(AchievementEvent.NovelCompleted(nextUpdate.novelId))
+                }
+            }
+
             val now = System.currentTimeMillis()
-            saveHistorySnapshot(chapter.id, now - chapterReadStartTimeMs)
+            pendingHistoryReadDurationMs += nextUpdate.sessionReadDurationMs.coerceAtLeast(0L)
+            if (nextUpdate.emitReadEvent) {
+                flushPendingHistorySnapshot(nextUpdate.chapterId)
+            }
             chapterReadStartTimeMs = now
         }
     }
@@ -824,7 +874,9 @@ class NovelReaderScreenModel(
                     rawHtml = nextHtml.normalizeStructuredChapterPayload(),
                     chapterName = nextChapter.name,
                 )
-                val nextTextBlocks = extractTextBlocks(normalizedNextHtml)
+                val sanitizedNextHtml = sanitizeChapterHtmlForReader(normalizedNextHtml)
+                    .ifBlank { normalizedNextHtml }
+                val nextTextBlocks = extractTextBlocks(sanitizedNextHtml)
                 if (nextTextBlocks.isEmpty()) return@runCatching
 
                 val chunkSize = settings.geminiBatchSize.coerceIn(1, 80)
@@ -962,6 +1014,16 @@ class NovelReaderScreenModel(
     }
 
     override fun onDispose() {
+        val chapterId = currentChapter?.id
+        if (chapterId != null) {
+            val finalReadDurationMs = (System.currentTimeMillis() - chapterReadStartTimeMs).coerceAtLeast(0L)
+            screenModelScope.launch(NonCancellable) {
+                flushPendingHistorySnapshot(
+                    chapterId = chapterId,
+                    additionalReadDurationMs = finalReadDurationMs,
+                )
+            }
+        }
         settingsJob?.cancel()
         nextChapterPrefetchJob?.cancel()
         nextChapterGeminiPrefetchJob?.cancel()
@@ -2666,6 +2728,17 @@ class NovelReaderScreenModel(
         }
     }
 
+    private suspend fun flushPendingHistorySnapshot(
+        chapterId: Long,
+        additionalReadDurationMs: Long = 0L,
+    ) {
+        val readDurationMs = (pendingHistoryReadDurationMs + additionalReadDurationMs).coerceAtLeast(0L)
+        if (readDurationMs <= 0L) return
+
+        pendingHistoryReadDurationMs = 0L
+        saveHistorySnapshot(chapterId, readDurationMs)
+    }
+
     sealed interface State {
         data object Loading : State
         data class Error(val message: String?) : State
@@ -2707,6 +2780,30 @@ class NovelReaderScreenModel(
         data class Image(val url: String, val alt: String?) : ContentBlock
     }
 
+    private data class PendingProgressPersistence(
+        val chapterId: Long,
+        val novelId: Long,
+        val chapterNumber: Int,
+        val read: Boolean,
+        val lastPageRead: Long,
+        val emitReadEvent: Boolean,
+        val emitNovelCompleted: Boolean,
+        val sessionReadDurationMs: Long,
+    ) {
+        fun merge(other: PendingProgressPersistence): PendingProgressPersistence {
+            require(chapterId == other.chapterId) {
+                "Pending progress persistence can only merge updates for the same chapter"
+            }
+            return copy(
+                read = other.read,
+                lastPageRead = other.lastPageRead,
+                emitReadEvent = emitReadEvent || other.emitReadEvent,
+                emitNovelCompleted = emitNovelCompleted || other.emitNovelCompleted,
+                sessionReadDurationMs = maxOf(sessionReadDurationMs, other.sessionReadDurationMs),
+            )
+        }
+    }
+
     companion object {
         private const val JAOMIX_PAGE_SOURCE_ORDER_STRIDE = 1_000L
         private const val MAX_DEEPSEEK_CONCURRENCY = 32
@@ -2733,6 +2830,57 @@ class NovelReaderScreenModel(
             "text",
         )
     }
+}
+
+internal fun sanitizeChapterHtmlForReader(rawHtml: String): String {
+    if (rawHtml.isBlank()) return rawHtml
+
+    val document = Jsoup.parseBodyFragment(rawHtml)
+    document.outputSettings().prettyPrint(false)
+    document.select(
+        "script, style, iframe, svg, canvas, object, embed, form, input, button, select, textarea, noscript, meta, link",
+    ).remove()
+
+    document.select("*").forEach { element ->
+        val attributesToRemove = element.attributes()
+            .asList()
+            .map { it.key }
+            .filter { attributeName -> attributeName.startsWith("on", ignoreCase = true) }
+        attributesToRemove.forEach { attributeName ->
+            element.removeAttr(attributeName)
+        }
+
+        sanitizeReaderInlineStyle(element.attr("style"))?.let { sanitizedStyle ->
+            element.attr("style", sanitizedStyle)
+        } ?: element.removeAttr("style")
+    }
+
+    return document.body().html()
+}
+
+internal fun sanitizeReaderInlineStyle(rawStyle: String): String? {
+    if (rawStyle.isBlank()) return null
+
+    val allowedProperties = setOf(
+        "text-align",
+        "text-indent",
+        "font-style",
+        "font-weight",
+        "text-decoration",
+        "color",
+        "background-color",
+    )
+    val sanitizedDeclarations = rawStyle.split(';')
+        .mapNotNull { declaration ->
+            val delimiterIndex = declaration.indexOf(':')
+            if (delimiterIndex <= 0) return@mapNotNull null
+            val propertyName = declaration.substring(0, delimiterIndex).trim().lowercase(Locale.US)
+            val propertyValue = declaration.substring(delimiterIndex + 1).trim()
+            if (propertyName !in allowedProperties || propertyValue.isBlank()) return@mapNotNull null
+            "$propertyName: $propertyValue"
+        }
+
+    return sanitizedDeclarations.joinToString("; ").ifBlank { null }
 }
 
 internal fun isGeminiSourceLanguageEnglish(sourceLang: String): Boolean {

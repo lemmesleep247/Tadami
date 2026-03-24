@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,14 +45,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.browse.anime.AnimeSourceUiModel
 import eu.kanade.presentation.components.AuroraBackground
+import eu.kanade.presentation.more.resolveAuroraMoreCardBorderColor
+import eu.kanade.presentation.more.resolveAuroraMoreCardContainerColor
+import eu.kanade.presentation.more.settings.AURORA_SETTINGS_CARD_HORIZONTAL_INSET
+import eu.kanade.presentation.more.settings.AURORA_SETTINGS_CARD_SHAPE
 import eu.kanade.presentation.theme.AuroraTheme
+import eu.kanade.presentation.theme.LocalIsDefaultAppUiFont
 import eu.kanade.presentation.theme.aurora.adaptive.AuroraDeviceClass
 import eu.kanade.presentation.theme.aurora.adaptive.auroraCenteredMaxWidth
 import eu.kanade.presentation.theme.aurora.adaptive.resolveAuroraAdaptiveSpec
+import eu.kanade.presentation.theme.resolveAuroraBorderColor
+import eu.kanade.presentation.theme.resolveAuroraControlContainerColor
+import eu.kanade.presentation.theme.resolveAuroraIconSurfaceColor
+import eu.kanade.presentation.theme.resolveAuroraSelectionContainerColor
 import eu.kanade.presentation.util.isTabletUi
 import kotlinx.collections.immutable.ImmutableList
 import tachiyomi.domain.source.anime.model.AnimeSource
@@ -104,7 +115,6 @@ fun BrowseScreenAurora(
 
                 item(span = { GridItemSpan(columnCount) }) {
                     QuickActionsSection(
-                        useFullWidthActions = auroraAdaptiveSpec.deviceClass != AuroraDeviceClass.Phone,
                         onGlobalSearchClick = onGlobalSearchClick,
                         onExtensionsClick = onExtensionsClick,
                         onMigrateClick = onMigrateClick,
@@ -162,11 +172,32 @@ fun BrowseScreenAurora(
     }
 }
 
+internal data class BrowseQuickActionsRenderSpec(
+    val horizontalInset: Dp,
+    val verticalInset: Dp,
+    val itemGap: Dp,
+    val primaryBreakGap: Dp,
+    val minCardHeight: Dp,
+    val leadingIconContainerSize: Dp,
+)
+
+internal fun resolveBrowseQuickActionsRenderSpec(): BrowseQuickActionsRenderSpec {
+    return BrowseQuickActionsRenderSpec(
+        horizontalInset = AURORA_SETTINGS_CARD_HORIZONTAL_INSET,
+        verticalInset = 16.dp,
+        itemGap = 12.dp,
+        primaryBreakGap = 4.dp,
+        minCardHeight = 72.dp,
+        leadingIconContainerSize = 48.dp,
+    )
+}
+
 @Composable
 private fun BrowseAuroraHeader(
     onSearchClick: () -> Unit,
 ) {
     val colors = AuroraTheme.colors
+    val tabContainerColor = resolveAuroraControlContainerColor(colors)
 
     Row(
         modifier = Modifier
@@ -192,7 +223,7 @@ private fun BrowseAuroraHeader(
         IconButton(
             onClick = onSearchClick,
             modifier = Modifier
-                .background(colors.glass, CircleShape)
+                .background(tabContainerColor, CircleShape)
                 .size(48.dp),
         ) {
             Icon(
@@ -206,63 +237,41 @@ private fun BrowseAuroraHeader(
 
 @Composable
 private fun QuickActionsSection(
-    useFullWidthActions: Boolean,
     onGlobalSearchClick: () -> Unit,
     onExtensionsClick: () -> Unit,
     onMigrateClick: () -> Unit,
 ) {
-    if (useFullWidthActions) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 24.dp, end = 24.dp, top = 18.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            QuickActionCard(
-                icon = Icons.Outlined.Explore,
-                title = stringResource(AYMR.strings.aurora_global_search),
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onGlobalSearchClick,
-            )
-            QuickActionCard(
-                icon = Icons.Filled.Extension,
-                title = stringResource(AYMR.strings.aurora_extensions),
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onExtensionsClick,
-            )
-            QuickActionCard(
-                icon = Icons.Filled.SwapHoriz,
-                title = stringResource(AYMR.strings.aurora_migrate),
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onMigrateClick,
-            )
-        }
-    } else {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            QuickActionCard(
-                icon = Icons.Outlined.Explore,
-                title = stringResource(AYMR.strings.aurora_global_search),
-                modifier = Modifier.weight(1f),
-                onClick = onGlobalSearchClick,
-            )
-            QuickActionCard(
-                icon = Icons.Filled.Extension,
-                title = stringResource(AYMR.strings.aurora_extensions),
-                modifier = Modifier.weight(1f),
-                onClick = onExtensionsClick,
-            )
-            QuickActionCard(
-                icon = Icons.Filled.SwapHoriz,
-                title = stringResource(AYMR.strings.aurora_migrate),
-                modifier = Modifier.weight(1f),
-                onClick = onMigrateClick,
-            )
-        }
+    val spec = resolveBrowseQuickActionsRenderSpec()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = spec.horizontalInset, vertical = spec.verticalInset),
+        verticalArrangement = Arrangement.spacedBy(spec.itemGap),
+    ) {
+        QuickActionCard(
+            icon = Icons.Outlined.Explore,
+            iconTint = AuroraTheme.colors.accent,
+            title = stringResource(AYMR.strings.aurora_global_search),
+            minHeight = spec.minCardHeight,
+            leadingIconContainerSize = spec.leadingIconContainerSize,
+            onClick = onGlobalSearchClick,
+        )
+        Spacer(modifier = Modifier.height(spec.primaryBreakGap))
+        QuickActionCard(
+            icon = Icons.Filled.Extension,
+            title = stringResource(AYMR.strings.aurora_extensions),
+            minHeight = spec.minCardHeight,
+            leadingIconContainerSize = spec.leadingIconContainerSize,
+            onClick = onExtensionsClick,
+        )
+        QuickActionCard(
+            icon = Icons.Filled.SwapHoriz,
+            title = stringResource(AYMR.strings.aurora_migrate),
+            minHeight = spec.minCardHeight,
+            leadingIconContainerSize = spec.leadingIconContainerSize,
+            onClick = onMigrateClick,
+        )
     }
 }
 
@@ -270,39 +279,56 @@ private fun QuickActionsSection(
 private fun QuickActionCard(
     icon: ImageVector,
     title: String,
-    modifier: Modifier = Modifier,
+    iconTint: Color? = null,
+    minHeight: Dp,
+    leadingIconContainerSize: Dp,
     onClick: () -> Unit,
 ) {
     val colors = AuroraTheme.colors
+    val useMediumWeight = LocalIsDefaultAppUiFont.current
 
     Card(
-        modifier = modifier
-            .height(80.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = minHeight)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = AURORA_SETTINGS_CARD_SHAPE,
         colors = CardDefaults.cardColors(
-            containerColor = colors.glass,
+            containerColor = resolveAuroraMoreCardContainerColor(colors),
         ),
+        border = BorderStroke(1.dp, resolveAuroraMoreCardBorderColor(colors)),
     ) {
-        Column(
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = colors.accent,
-                modifier = Modifier.size(24.dp),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(leadingIconContainerSize)
+                    .background(
+                        resolveAuroraIconSurfaceColor(colors),
+                        RoundedCornerShape(12.dp),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint ?: colors.textPrimary,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
             Text(
                 text = title,
                 color = colors.textPrimary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = if (useMediumWeight) FontWeight.Medium else FontWeight.SemiBold,
+                ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -376,8 +402,9 @@ private fun PinnedSourceCard(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = colors.accent.copy(alpha = 0.15f),
+            containerColor = resolveAuroraSelectionContainerColor(colors),
         ),
+        border = BorderStroke(1.dp, resolveAuroraBorderColor(colors, emphasized = false)),
     ) {
         Column(
             modifier = Modifier
@@ -412,6 +439,7 @@ private fun SourceGridItem(
     val colors = AuroraTheme.colors
     val isPinned = Pin.Actual in source.pin
     val successColor = Color(0xFF22c55e)
+    val tabContainerColor = resolveAuroraControlContainerColor(colors)
 
     // Use padding for grid spacing simulation if needed, but LazyVerticalGrid handles it
     // We add padding here to ensure content isn't touching the edges if used outside grid,
@@ -430,9 +458,9 @@ private fun SourceGridItem(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = colors.glass,
+            containerColor = tabContainerColor,
         ),
-        border = BorderStroke(1.dp, colors.divider),
+        border = BorderStroke(1.dp, resolveAuroraBorderColor(colors, emphasized = false)),
     ) {
         Column(
             modifier = Modifier
@@ -449,8 +477,8 @@ private fun SourceGridItem(
                     .background(
                         Brush.linearGradient(
                             colors = listOf(
-                                colors.accent.copy(alpha = 0.3f),
-                                colors.gradientStart.copy(alpha = 0.5f),
+                                colors.accent.copy(alpha = if (colors.isDark) 0.3f else 0.16f),
+                                colors.gradientStart.copy(alpha = if (colors.isDark) 0.5f else 0.35f),
                             ),
                         ),
                     ),

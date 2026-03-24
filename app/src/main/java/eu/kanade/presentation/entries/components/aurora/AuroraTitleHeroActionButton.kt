@@ -1,6 +1,8 @@
 package eu.kanade.presentation.entries.components.aurora
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -21,14 +23,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.ui.UserProfilePreferences
 import eu.kanade.domain.ui.model.AuroraTitleHeroCtaMode
+import eu.kanade.presentation.components.resolveAuroraCtaLabelShadowSpec
+import eu.kanade.presentation.components.toComposeShadow
 import eu.kanade.presentation.theme.AuroraTheme
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -44,6 +50,9 @@ internal enum class AuroraTitleHeroCtaVisualMode {
 internal data class AuroraTitleHeroCtaSurfaceSpec(
     val containerAlpha: Float,
     val usesGradient: Boolean,
+    val innerGlowAlpha: Float,
+    val highlightAlpha: Float,
+    val borderAlpha: Float,
 )
 
 internal fun resolveAuroraTitleHeroCtaVisualMode(
@@ -61,12 +70,18 @@ internal fun resolveAuroraTitleHeroCtaSurfaceSpec(
 ): AuroraTitleHeroCtaSurfaceSpec {
     return when (mode) {
         AuroraTitleHeroCtaMode.Aurora -> AuroraTitleHeroCtaSurfaceSpec(
-            containerAlpha = if (isDark) 0.46f else 0.30f,
+            containerAlpha = if (isDark) 0.50f else 0.88f,
             usesGradient = false,
+            innerGlowAlpha = if (isDark) 0.55f else 0.08f,
+            highlightAlpha = if (isDark) 0f else 0.12f,
+            borderAlpha = if (isDark) 0.12f else 0.10f,
         )
         AuroraTitleHeroCtaMode.Classic -> AuroraTitleHeroCtaSurfaceSpec(
             containerAlpha = 1f,
             usesGradient = false,
+            innerGlowAlpha = 0f,
+            highlightAlpha = 0f,
+            borderAlpha = 0f,
         )
     }
 }
@@ -103,11 +118,51 @@ private fun AuroraTitleHeroActionSurface(
         AuroraTitleHeroCtaVisualMode.AuroraGlass -> Color.White
         AuroraTitleHeroCtaVisualMode.ClassicSolid -> colors.textOnAccent
     }
-
+    val auroraInnerGlowBrush = remember(colors.accent, surfaceSpec) {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.00f to Color.Transparent,
+                0.46f to colors.accent.copy(alpha = surfaceSpec.innerGlowAlpha * 0.18f),
+                0.78f to colors.accent.copy(alpha = surfaceSpec.innerGlowAlpha * 0.58f),
+                1.00f to colors.accent.copy(alpha = surfaceSpec.innerGlowAlpha),
+            ),
+        )
+    }
+    val auroraHighlightBrush = remember(surfaceSpec) {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.00f to Color.White.copy(alpha = surfaceSpec.highlightAlpha),
+                0.34f to Color.White.copy(alpha = surfaceSpec.highlightAlpha * 0.48f),
+                0.68f to Color.Transparent,
+                1.00f to Color.Transparent,
+            ),
+        )
+    }
     Box(
         modifier = modifier
             .clip(shape)
             .background(colors.accent.copy(alpha = surfaceSpec.containerAlpha))
+            .background(
+                brush = auroraInnerGlowBrush,
+                alpha = if (visualMode == AuroraTitleHeroCtaVisualMode.AuroraGlass) 1f else 0f,
+            )
+            .background(
+                brush = auroraHighlightBrush,
+                alpha = if (visualMode == AuroraTitleHeroCtaVisualMode.AuroraGlass) 1f else 0f,
+            )
+            .let { base ->
+                if (surfaceSpec.borderAlpha > 0f) {
+                    base.border(
+                        BorderStroke(
+                            width = 1.dp,
+                            color = Color.White.copy(alpha = surfaceSpec.borderAlpha),
+                        ),
+                        shape,
+                    )
+                } else {
+                    base
+                }
+            }
             .clickable(onClick = onClick)
             .padding(contentPadding),
         contentAlignment = Alignment.Center,
@@ -128,6 +183,11 @@ internal fun AuroraTitleHeroActionButton(
     textWeight: FontWeight,
 ) {
     val titleHeroMode = rememberAuroraTitleHeroCtaMode()
+    val labelShadow = remember(titleHeroMode) {
+        resolveAuroraCtaLabelShadowSpec(
+            enabled = titleHeroMode == AuroraTitleHeroCtaMode.Aurora,
+        ).toComposeShadow()
+    }
 
     AuroraTitleHeroActionSurface(
         mode = titleHeroMode,
@@ -153,6 +213,7 @@ internal fun AuroraTitleHeroActionButton(
                 color = contentColor,
                 fontSize = textSize,
                 fontWeight = textWeight,
+                style = TextStyle(shadow = labelShadow),
             )
         }
     }
