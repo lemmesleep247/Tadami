@@ -326,7 +326,7 @@ class NovelJsSource internal constructor(
 
             val pageResult = when {
                 sourcePage == 1 && directChapters.isNotEmpty() -> directChapters
-                sourcePage == 1 && probePageResult != null -> probePageResult!!.chapters
+                sourcePage == 1 && probePageResult != null -> probePageResult.chapters
                 hasParsePage == true -> parseSinglePage(sourcePage)?.chapters.orEmpty()
                 else -> directChapters
             }
@@ -665,10 +665,12 @@ class NovelJsSource internal constructor(
     private fun ParsedPluginChapter.toSChapterOrNull(): SNovelChapter? {
         val resolvedPath = path?.trim()?.takeIf { it.isNotBlank() } ?: return null
         val resolvedName = name?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val rawReleaseTime = releaseTime?.trim()?.ifEmpty { null }
         return SNovelChapter.create().also {
             it.url = resolvedPath
             it.name = resolvedName
-            it.date_upload = parseChapterDate(releaseTime)
+            it.date_upload = parseChapterDate(rawReleaseTime)
+            it.date_upload_raw = rawReleaseTime
             it.chapter_number = chapterNumber?.toFloat() ?: -1f
             it.scanlator = resolveScanlatorLabel(scanlator, page)
         }

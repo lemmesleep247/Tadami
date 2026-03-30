@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.data.library.novel
 
 import android.content.Context
 import androidx.core.app.NotificationCompat
-import eu.kanade.tachiyomi.R
+import com.tadami.aurora.R
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.util.lang.chop
@@ -14,6 +14,7 @@ import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.i18n.MR
 import java.math.RoundingMode
 import java.text.NumberFormat
+import tachiyomi.i18n.R as I18nR
 
 class NovelLibraryUpdateNotifier(
     private val context: Context,
@@ -96,7 +97,7 @@ class NovelLibraryUpdateNotifier(
             setContentTitle(context.stringResource(MR.strings.notification_new_chapters))
             setContentText(
                 context.resources.getQuantityString(
-                    R.plurals.notification_new_chapters_summary,
+                    I18nR.plurals.notification_new_chapters_summary,
                     updated.size,
                     updated.size,
                 ),

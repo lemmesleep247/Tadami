@@ -5,8 +5,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -15,6 +14,8 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -36,12 +37,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -60,7 +64,6 @@ import eu.kanade.tachiyomi.ui.download.DownloadsTab
 import eu.kanade.tachiyomi.ui.entries.anime.AnimeScreen
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.history.HistoriesTab
-import eu.kanade.tachiyomi.ui.home.HomeHubTab
 import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryTab
 import eu.kanade.tachiyomi.ui.library.manga.MangaLibraryTab
 import eu.kanade.tachiyomi.ui.more.MoreTab
@@ -86,14 +89,14 @@ import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
 object HomeScreen : Screen() {
-
     private val librarySearchEvent = Channel<String>()
     private val openTabEvent = Channel<Tab>()
     private val showBottomNavEvent = Channel<Boolean>()
 
     private const val TAB_FADE_DURATION = 200
-    private const val TAB_MODERN_ENTER_DURATION = 260
-    private const val TAB_MODERN_EXIT_DURATION = 180
+    private const val TAB_MODERN_ENTER_DURATION = 300
+    private const val TAB_MODERN_EXIT_DURATION = 300
+    private val AURORA_EASING = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f)
     private const val TAB_NAVIGATOR_KEY = "HomeTabs"
 
     private val uiPreferences: UiPreferences by injectLazy()
@@ -142,18 +145,33 @@ object HomeScreen : Screen() {
                                 exit = shrinkVertically(),
                             ) {
                                 val auroraColors = if (isAurora) AuroraTheme.colors else null
-                                NavigationBar(
-                                    containerColor = if (isAurora) {
-                                        // Aniview: Frosted glass effect with blur
-                                        auroraColors!!.surface.copy(alpha = 0.2f)
+                                val navContainerColor = if (isAurora) {
+                                    if (auroraColors!!.isDark) {
+                                        auroraColors.surface.copy(alpha = 0.2f)
                                     } else {
-                                        MaterialTheme.colorScheme.surfaceContainer
-                                    },
+                                        auroraColors.accent.copy(alpha = 0.04f)
+                                            .compositeOver(Color(0xFFF0F4F8))
+                                    }
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainer
+                                }
+                                NavigationBar(
+                                    containerColor = navContainerColor,
                                     modifier = if (isAurora) {
-                                        Modifier.graphicsLayer {
-                                            // Add subtle blur for frosted glass effect
-                                            alpha = 0.95f
-                                        }
+                                        Modifier
+                                            .graphicsLayer { alpha = 0.95f }
+                                            .then(
+                                                if (!auroraColors!!.isDark) {
+                                                    Modifier.border(
+                                                        BorderStroke(
+                                                            width = 0.75.dp,
+                                                            color = auroraColors.divider.copy(alpha = 0.5f),
+                                                        ),
+                                                    )
+                                                } else {
+                                                    Modifier
+                                                },
+                                            )
                                     } else {
                                         Modifier
                                     },
@@ -196,22 +214,30 @@ object HomeScreen : Screen() {
                                         val enter = slideInHorizontally(
                                             animationSpec = tween(
                                                 durationMillis = TAB_MODERN_ENTER_DURATION,
-                                                easing = LinearOutSlowInEasing,
+                                                easing = AURORA_EASING,
                                             ),
-                                            initialOffsetX = { width -> direction * (width / 3) },
+                                            initialOffsetX = { width -> direction * (width / 4) },
                                         ) + fadeIn(
-                                            animationSpec = tween(durationMillis = TAB_MODERN_ENTER_DURATION),
+                                            animationSpec = tween(
+                                                durationMillis = TAB_MODERN_ENTER_DURATION,
+                                                easing = AURORA_EASING,
+                                            ),
                                         )
                                         val exit = slideOutHorizontally(
                                             animationSpec = tween(
                                                 durationMillis = TAB_MODERN_EXIT_DURATION,
-                                                easing = FastOutSlowInEasing,
+                                                easing = AURORA_EASING,
                                             ),
-                                            targetOffsetX = { width -> -direction * (width / 4) },
+                                            targetOffsetX = { width -> -direction * (width / 5) },
                                         ) + fadeOut(
-                                            animationSpec = tween(durationMillis = TAB_MODERN_EXIT_DURATION),
+                                            animationSpec = tween(
+                                                durationMillis = TAB_MODERN_EXIT_DURATION,
+                                                easing = AURORA_EASING,
+                                            ),
                                         )
-                                        enter togetherWith exit
+                                        (enter togetherWith exit).apply {
+                                            targetContentZIndex = 1f
+                                        }
                                     }
                                 }
                             },

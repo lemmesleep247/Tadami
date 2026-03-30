@@ -35,10 +35,10 @@ import com.kevinnzou.web.LoadingState
 import com.kevinnzou.web.WebView
 import com.kevinnzou.web.rememberWebViewNavigator
 import com.kevinnzou.web.rememberWebViewState
+import com.tadami.aurora.BuildConfig
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.WarningBanner
-import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.util.system.WebViewUtil
 import eu.kanade.tachiyomi.util.system.getHtml
@@ -238,7 +238,7 @@ fun WebViewScreenContent(
                             .align(Alignment.BottomCenter),
                     )
                     is LoadingState.Loading -> LinearProgressIndicator(
-                        progress = { (loadingState as? LoadingState.Loading)?.progress ?: 1f },
+                        progress = { loadingState.progress },
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.BottomCenter),

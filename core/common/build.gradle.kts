@@ -1,6 +1,5 @@
 plugins {
     id("mihon.library")
-    kotlin("android")
     kotlin("plugin.serialization")
 }
 
@@ -39,7 +38,8 @@ dependencies {
     api(kotlinx.serialization.json)
     api(kotlinx.serialization.json.okio)
 
-    api(libs.preferencektx)
+    // PreferenceManager is only needed inside this module's AndroidPreferenceStore implementation.
+    implementation(libs.preferencektx)
 
     implementation(libs.jsoup)
 

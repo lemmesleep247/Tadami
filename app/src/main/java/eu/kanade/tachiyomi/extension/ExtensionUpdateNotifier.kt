@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension
 
 import android.content.Context
 import androidx.core.app.NotificationCompat
-import eu.kanade.tachiyomi.R
+import com.tadami.aurora.R
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.notification.Notifications
@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.notify
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import tachiyomi.i18n.R as I18nR
 
 class ExtensionUpdateNotifier(
     private val context: Context,
@@ -23,7 +24,7 @@ class ExtensionUpdateNotifier(
         ) {
             setContentTitle(
                 context.resources.getQuantityString(
-                    R.plurals.update_check_notification_ext_updates,
+                    I18nR.plurals.update_check_notification_ext_updates,
                     names.size,
                     names.size,
                 ),

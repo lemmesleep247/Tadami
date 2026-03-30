@@ -18,6 +18,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -30,6 +34,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,18 +46,20 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.widget.BasePreferenceWidget
 import eu.kanade.presentation.more.settings.widget.PrefsHorizontalPadding
 import eu.kanade.presentation.reader.novel.NOVEL_READER_BACKGROUND_PRESET_AGED_PAGE_ID
+import eu.kanade.presentation.reader.novel.NOVEL_READER_BACKGROUND_PRESET_AGED_PARCHMENT_ID
 import eu.kanade.presentation.reader.novel.NOVEL_READER_BACKGROUND_PRESET_CRUMPLED_SHEET_ID
 import eu.kanade.presentation.reader.novel.NOVEL_READER_BACKGROUND_PRESET_DARK_WOOD_ID
 import eu.kanade.presentation.reader.novel.NOVEL_READER_BACKGROUND_PRESET_LINEN_PAPER_ID
 import eu.kanade.presentation.reader.novel.NOVEL_READER_BACKGROUND_PRESET_NIGHT_VELVET_ID
 import eu.kanade.presentation.reader.novel.NovelReaderBackgroundCard
+import eu.kanade.presentation.reader.novel.NovelReaderCustomBackgroundCard
 import eu.kanade.presentation.reader.novel.NovelReaderFontOption
 import eu.kanade.presentation.reader.novel.NovelReaderFontSource
+import eu.kanade.presentation.reader.novel.areChapterSwipeControlsEnabled
 import eu.kanade.presentation.reader.novel.autoScrollSpeedToInterval
 import eu.kanade.presentation.reader.novel.buildNovelReaderBackgroundCardsFromCustomItems
 import eu.kanade.presentation.reader.novel.buildNovelReaderFontCatalog
@@ -60,6 +67,15 @@ import eu.kanade.presentation.reader.novel.ensureLegacyNovelReaderBackgroundItem
 import eu.kanade.presentation.reader.novel.importNovelReaderCustomBackgroundItem
 import eu.kanade.presentation.reader.novel.importNovelReaderCustomFont
 import eu.kanade.presentation.reader.novel.intervalToAutoScrollSpeed
+import eu.kanade.presentation.reader.novel.novelPageTransitionStyleEntries
+import eu.kanade.presentation.reader.novel.novelPageTransitionStyleSubtitle
+import eu.kanade.presentation.reader.novel.novelPageTurnIntensityEntries
+import eu.kanade.presentation.reader.novel.novelPageTurnIntensitySliderIndex
+import eu.kanade.presentation.reader.novel.novelPageTurnShadowIntensityEntries
+import eu.kanade.presentation.reader.novel.novelPageTurnShadowIntensitySliderIndex
+import eu.kanade.presentation.reader.novel.novelPageTurnSpeedEntries
+import eu.kanade.presentation.reader.novel.novelPageTurnSpeedSliderIndex
+import eu.kanade.presentation.reader.novel.novelPageTurnTuningSummary
 import eu.kanade.presentation.reader.novel.novelReaderBackgroundPresets
 import eu.kanade.presentation.reader.novel.novelReaderPresetThemes
 import eu.kanade.presentation.reader.novel.readNovelReaderCustomBackgroundItems
@@ -68,11 +84,17 @@ import eu.kanade.presentation.reader.novel.removeNovelReaderCustomFont
 import eu.kanade.presentation.reader.novel.renameNovelReaderCustomBackgroundItem
 import eu.kanade.presentation.reader.novel.replaceNovelReaderCustomBackgroundItem
 import eu.kanade.presentation.reader.novel.resolveCustomBackgroundDeletion
+import eu.kanade.presentation.reader.novel.resolveNovelPageTurnIntensitySliderValue
+import eu.kanade.presentation.reader.novel.resolveNovelPageTurnShadowIntensitySliderValue
+import eu.kanade.presentation.reader.novel.resolveNovelPageTurnSliderLabel
+import eu.kanade.presentation.reader.novel.resolveNovelPageTurnSpeedSliderValue
 import eu.kanade.presentation.reader.novel.resolveNovelReaderSettingsSurfaceStrategy
 import eu.kanade.presentation.reader.novel.resolveRendererSettingsAvailability
+import eu.kanade.presentation.reader.novel.shouldShowPageTurnTuningControls
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderChapterDiskCache
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderChapterDiskCacheStore
 import eu.kanade.tachiyomi.ui.reader.novel.setting.GeminiPromptMode
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelPageTransitionStyle
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundSource
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundTexture
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderColorTheme
@@ -91,7 +113,6 @@ import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.io.File
 import android.graphics.Color as AndroidColor
 
 object SettingsNovelReaderScreen : SearchableSettings {
@@ -683,13 +704,38 @@ object SettingsNovelReaderScreen : SearchableSettings {
         val swipeGestures by swipeGesturesPref.collectAsState()
         val pageReaderPref = prefs.pageReader()
         val pageReader by pageReaderPref.collectAsState()
+        val pageTransitionStylePref = prefs.pageTransitionStyle()
+        val pageTransitionStyle by pageTransitionStylePref.collectAsState()
+        val pageTurnSpeedPref = prefs.pageTurnSpeed()
+        val pageTurnSpeed by pageTurnSpeedPref.collectAsState()
+        val pageTurnIntensityPref = prefs.pageTurnIntensity()
+        val pageTurnIntensity by pageTurnIntensityPref.collectAsState()
+        val pageTurnShadowIntensityPref = prefs.pageTurnShadowIntensity()
+        val pageTurnShadowIntensity by pageTurnShadowIntensityPref.collectAsState()
         val bionicReadingPref = prefs.bionicReading()
         val bionicReading by bionicReadingPref.collectAsState()
+        val pageTransitionEntries = novelPageTransitionStyleEntries()
+        val pageTurnSpeedEntries = novelPageTurnSpeedEntries()
+        val pageTurnIntensityEntries = novelPageTurnIntensityEntries()
+        val pageTurnShadowEntries = novelPageTurnShadowIntensityEntries()
+        val showPageTurnTuning = shouldShowPageTurnTuningControls(
+            pageReaderEnabled = pageReader,
+            style = pageTransitionStyle,
+        )
+        var pageTurnTuningExpanded by rememberSaveable(pageReader, pageTransitionStyle) {
+            mutableStateOf(false)
+        }
         val rendererAvailability = remember(pageReader, bionicReading) {
             resolveRendererSettingsAvailability(
                 pageReaderEnabled = pageReader,
                 showWebView = false,
                 bionicReadingEnabled = bionicReading,
+            )
+        }
+        val chapterSwipeControlsEnabled = remember(swipeGestures, pageReader) {
+            areChapterSwipeControlsEnabled(
+                swipeGesturesEnabled = swipeGestures,
+                pageReaderEnabled = pageReader,
             )
         }
         val autoScrollIntervalPref = prefs.autoScrollInterval()
@@ -756,55 +802,159 @@ object SettingsNovelReaderScreen : SearchableSettings {
             enabled = rendererAvailability.richNativeEnabled,
             reason = richNativeDisableReason,
         )
-
-        return Preference.PreferenceGroup(
-            title = stringResource(AYMR.strings.novel_reader_navigation),
-            preferenceItems = persistentListOf(
+        val navigationItems = buildList<Preference.PreferenceItem<out Any>> {
+            add(
                 Preference.PreferenceItem.SwitchPreference(
                     preference = prefs.useVolumeButtons(),
                     title = stringResource(AYMR.strings.novel_reader_volume_buttons),
                     subtitle = stringResource(AYMR.strings.novel_reader_volume_buttons_summary),
                 ),
+            )
+            add(
                 Preference.PreferenceItem.SwitchPreference(
                     preference = prefs.verticalSeekbar(),
                     title = stringResource(AYMR.strings.novel_reader_vertical_seekbar),
                 ),
+            )
+            add(
                 Preference.PreferenceItem.SwitchPreference(
                     preference = swipeGesturesPref,
                     title = stringResource(AYMR.strings.novel_reader_swipe_gestures),
                     subtitle = stringResource(AYMR.strings.novel_reader_swipe_gestures_summary),
                 ),
+            )
+            add(
                 Preference.PreferenceItem.SwitchPreference(
                     preference = prefs.swipeToNextChapter(),
                     title = stringResource(AYMR.strings.novel_reader_swipe_to_next),
-                    enabled = swipeGestures,
+                    enabled = chapterSwipeControlsEnabled,
                 ),
+            )
+            add(
                 Preference.PreferenceItem.SwitchPreference(
                     preference = prefs.swipeToPrevChapter(),
                     title = stringResource(AYMR.strings.novel_reader_swipe_to_prev),
-                    enabled = swipeGestures,
+                    enabled = chapterSwipeControlsEnabled,
                 ),
+            )
+            add(
                 Preference.PreferenceItem.SwitchPreference(
                     preference = prefs.tapToScroll(),
                     title = stringResource(AYMR.strings.novel_reader_tap_to_scroll),
                 ),
+            )
+            add(
                 Preference.PreferenceItem.SwitchPreference(
                     preference = pageReaderPref,
                     title = stringResource(AYMR.strings.novel_reader_page_mode),
                     subtitle = stringResource(AYMR.strings.novel_reader_page_mode_summary),
                 ),
+            )
+            add(
+                Preference.PreferenceItem.ListPreference(
+                    preference = pageTransitionStylePref,
+                    entries = pageTransitionEntries,
+                    title = stringResource(AYMR.strings.novel_reader_page_transition_style),
+                    subtitleProvider = { value: NovelPageTransitionStyle, entries ->
+                        novelPageTransitionStyleSubtitle(value, entries)
+                    },
+                    enabled = pageReader,
+                ),
+            )
+            if (showPageTurnTuning) {
+                add(
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(AYMR.strings.novel_reader_page_turn_tuning),
+                        subtitle = novelPageTurnTuningSummary(
+                            speed = pageTurnSpeed,
+                            intensity = pageTurnIntensity,
+                            shadowIntensity = pageTurnShadowIntensity,
+                            speedEntries = pageTurnSpeedEntries,
+                            intensityEntries = pageTurnIntensityEntries,
+                            shadowEntries = pageTurnShadowEntries,
+                        ),
+                        onClick = {
+                            pageTurnTuningExpanded = !pageTurnTuningExpanded
+                        },
+                        widget = {
+                            Icon(
+                                imageVector = if (pageTurnTuningExpanded) {
+                                    Icons.Filled.KeyboardArrowDown
+                                } else {
+                                    Icons.AutoMirrored.Filled.KeyboardArrowRight
+                                },
+                                contentDescription = null,
+                            )
+                        },
+                    ),
+                )
+                if (pageTurnTuningExpanded) {
+                    add(
+                        Preference.PreferenceItem.SliderPreference(
+                            value = novelPageTurnSpeedSliderIndex(pageTurnSpeed),
+                            title = stringResource(AYMR.strings.novel_reader_page_turn_speed),
+                            subtitle = resolveNovelPageTurnSliderLabel(
+                                value = pageTurnSpeed,
+                                entries = pageTurnSpeedEntries,
+                            ),
+                            valueRange = 0..(pageTurnSpeedEntries.size - 1),
+                            onValueChanged = { value ->
+                                pageTurnSpeedPref.set(resolveNovelPageTurnSpeedSliderValue(value))
+                                true
+                            },
+                        ),
+                    )
+                    add(
+                        Preference.PreferenceItem.SliderPreference(
+                            value = novelPageTurnIntensitySliderIndex(pageTurnIntensity),
+                            title = stringResource(AYMR.strings.novel_reader_page_turn_intensity),
+                            subtitle = resolveNovelPageTurnSliderLabel(
+                                value = pageTurnIntensity,
+                                entries = pageTurnIntensityEntries,
+                            ),
+                            valueRange = 0..(pageTurnIntensityEntries.size - 1),
+                            onValueChanged = { value ->
+                                pageTurnIntensityPref.set(resolveNovelPageTurnIntensitySliderValue(value))
+                                true
+                            },
+                        ),
+                    )
+                    add(
+                        Preference.PreferenceItem.SliderPreference(
+                            value = novelPageTurnShadowIntensitySliderIndex(pageTurnShadowIntensity),
+                            title = stringResource(AYMR.strings.novel_reader_page_turn_shadow_intensity),
+                            subtitle = resolveNovelPageTurnSliderLabel(
+                                value = pageTurnShadowIntensity,
+                                entries = pageTurnShadowEntries,
+                            ),
+                            valueRange = 0..(pageTurnShadowEntries.size - 1),
+                            onValueChanged = { value ->
+                                pageTurnShadowIntensityPref.set(
+                                    resolveNovelPageTurnShadowIntensitySliderValue(value),
+                                )
+                                true
+                            },
+                        ),
+                    )
+                }
+            }
+            add(
                 Preference.PreferenceItem.SwitchPreference(
                     preference = prefs.preferWebViewRenderer(),
                     title = stringResource(AYMR.strings.novel_reader_prefer_webview_renderer),
                     subtitle = preferWebViewSubtitle,
                     enabled = rendererAvailability.preferWebViewEnabled,
                 ),
+            )
+            add(
                 Preference.PreferenceItem.SwitchPreference(
                     preference = prefs.richNativeRendererExperimental(),
                     title = stringResource(AYMR.strings.novel_reader_rich_native_renderer_experimental),
                     subtitle = richNativeSubtitle,
                     enabled = rendererAvailability.richNativeEnabled,
                 ),
+            )
+            add(
                 Preference.PreferenceItem.SliderPreference(
                     value = autoScrollSpeed,
                     title = stringResource(AYMR.strings.novel_reader_auto_scroll_speed),
@@ -816,6 +966,8 @@ object SettingsNovelReaderScreen : SearchableSettings {
                         true
                     },
                 ),
+            )
+            add(
                 Preference.PreferenceItem.SliderPreference(
                     value = autoScrollOffset,
                     title = stringResource(AYMR.strings.novel_reader_auto_scroll_offset),
@@ -827,42 +979,54 @@ object SettingsNovelReaderScreen : SearchableSettings {
                         true
                     },
                 ),
+            )
+            add(
                 Preference.PreferenceItem.SwitchPreference(
                     preference = prefs.prefetchNextChapter(),
                     title = stringResource(AYMR.strings.novel_reader_prefetch_next_chapter),
                     subtitle = stringResource(AYMR.strings.novel_reader_prefetch_next_chapter_summary),
                 ),
+            )
+            add(
                 Preference.PreferenceItem.SwitchPreference(
                     preference = prefs.cacheReadChapters(),
                     title = stringResource(AYMR.strings.novel_reader_cache_read_chapters),
                     subtitle = stringResource(AYMR.strings.novel_reader_cache_read_chapters_summary),
                 ),
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = cacheReadChaptersUnlimitedPref,
-                    title = stringResource(AYMR.strings.novel_reader_cache_read_chapters_unlimited),
-                    subtitle = stringResource(AYMR.strings.novel_reader_cache_read_chapters_unlimited_summary),
-                    enabled = cacheReadChapters,
-                    onValueChanged = { enabled ->
-                        if (!enabled) {
-                            NovelReaderChapterDiskCacheStore.trimToCurrentLimits(unlimitedOverride = false)
-                        }
-                        true
-                    },
-                ),
-                Preference.PreferenceItem.TextPreference(
-                    title = stringResource(AYMR.strings.novel_reader_chapter_cache_size),
-                    subtitle = chapterCacheSummary,
-                ),
-                Preference.PreferenceItem.TextPreference(
-                    title = stringResource(AYMR.strings.novel_reader_clear_chapter_cache),
-                    subtitle = stringResource(AYMR.strings.novel_reader_clear_chapter_cache_summary),
-                    enabled = chapterCacheStats.entryCount > 0,
-                    onClick = {
-                        NovelReaderChapterDiskCacheStore.clear()
-                        chapterCacheRefreshTick.intValue++
-                    },
-                ),
-            ),
+            )
+        }
+
+        return Preference.PreferenceGroup(
+            title = stringResource(AYMR.strings.novel_reader_navigation),
+            preferenceItems = (
+                navigationItems + persistentListOf(
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = cacheReadChaptersUnlimitedPref,
+                        title = stringResource(AYMR.strings.novel_reader_cache_read_chapters_unlimited),
+                        subtitle = stringResource(AYMR.strings.novel_reader_cache_read_chapters_unlimited_summary),
+                        enabled = cacheReadChapters,
+                        onValueChanged = { enabled ->
+                            if (!enabled) {
+                                NovelReaderChapterDiskCacheStore.trimToCurrentLimits(unlimitedOverride = false)
+                            }
+                            true
+                        },
+                    ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(AYMR.strings.novel_reader_chapter_cache_size),
+                        subtitle = chapterCacheSummary,
+                    ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(AYMR.strings.novel_reader_clear_chapter_cache),
+                        subtitle = stringResource(AYMR.strings.novel_reader_clear_chapter_cache_summary),
+                        enabled = chapterCacheStats.entryCount > 0,
+                        onClick = {
+                            NovelReaderChapterDiskCacheStore.clear()
+                            chapterCacheRefreshTick.intValue++
+                        },
+                    ),
+                )
+                ).toImmutableList(),
         )
     }
 
@@ -1225,32 +1389,24 @@ private fun NovelReaderBackgroundCatalogRow(
                 } else {
                     selectedSource == NovelReaderBackgroundSource.CUSTOM && selectedCustomId == card.id
                 }
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (selected) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    },
-                    modifier = Modifier.clickable {
-                        if (card.isBuiltIn) {
-                            onSelectPreset(card.id)
+                if (card.isBuiltIn) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primaryContainer
                         } else {
-                            val customItem = card.customItem ?: return@clickable
-                            onSelectCustom(customItem.id, customItem.absolutePath)
-                        }
-                    },
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .padding(6.dp)
-                            .size(
-                                width = 160.dp,
-                                height = if (card.isBuiltIn) 164.dp else 214.dp,
-                            ),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                        modifier = Modifier.clickable {
+                            onSelectPreset(card.id)
+                        },
                     ) {
-                        if (card.isBuiltIn) {
+                        Column(
+                            modifier = Modifier
+                                .padding(6.dp)
+                                .size(width = 160.dp, height = 164.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
                             val preset = card.preset ?: return@Column
                             Image(
                                 painter = painterResource(id = preset.imageResId),
@@ -1260,57 +1416,31 @@ private fun NovelReaderBackgroundCatalogRow(
                                     .fillMaxWidth()
                                     .size(height = 92.dp, width = 148.dp),
                             )
-                        } else {
-                            val custom = card.customItem ?: return@Column
-                            AsyncImage(
-                                model = File(custom.absolutePath),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .size(height = 92.dp, width = 148.dp),
+                            Text(
+                                text = readerBackgroundPresetTitle(card.id),
+                                style = MaterialTheme.typography.labelLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = readerBackgroundPresetDescription(card.id),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        Text(
-                            text = if (card.isBuiltIn) {
-                                readerBackgroundPresetTitle(card.id)
-                            } else {
-                                card.customItem?.displayName.orEmpty()
-                            },
-                            style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = if (card.isBuiltIn) {
-                                readerBackgroundPresetDescription(card.id)
-                            } else {
-                                card.customItem?.absolutePath.orEmpty()
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (!card.isBuiltIn) {
-                            val custom = card.customItem ?: return@Column
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                ReaderBackgroundActionChip(
-                                    label = stringResource(AYMR.strings.editor_action_rename),
-                                    onClick = { onRenameCustom(custom.id, custom.displayName) },
-                                )
-                                ReaderBackgroundActionChip(
-                                    label = stringResource(AYMR.strings.novel_reader_background_action_replace),
-                                    onClick = { onReplaceCustom(custom.id) },
-                                )
-                                ReaderBackgroundActionChip(
-                                    label = stringResource(AYMR.strings.editor_action_delete),
-                                    highlighted = true,
-                                    onClick = { onDeleteCustom(custom.id) },
-                                )
-                            }
-                        }
                     }
+                } else {
+                    val custom = card.customItem ?: return@items
+                    NovelReaderCustomBackgroundCard(
+                        customItem = custom,
+                        selected = selected,
+                        onSelect = { onSelectCustom(custom.id, custom.absolutePath) },
+                        onRename = { onRenameCustom(custom.id, custom.displayName) },
+                        onReplace = { onReplaceCustom(custom.id) },
+                        onDelete = { onDeleteCustom(custom.id) },
+                    )
                 }
             }
         }
@@ -1337,42 +1467,14 @@ private fun NovelReaderBackgroundCatalogRow(
 }
 
 @Composable
-private fun ReaderBackgroundActionChip(
-    label: String,
-    highlighted: Boolean = false,
-    onClick: () -> Unit,
-) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = if (highlighted) {
-            MaterialTheme.colorScheme.errorContainer
-        } else {
-            MaterialTheme.colorScheme.secondaryContainer
-        },
-        modifier = Modifier.clickable(onClick = onClick),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (highlighted) {
-                MaterialTheme.colorScheme.onErrorContainer
-            } else {
-                MaterialTheme.colorScheme.onSecondaryContainer
-            },
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        )
-    }
-}
-
-@Composable
 private fun readerBackgroundPresetTitle(presetId: String): String {
     return when (presetId) {
         NOVEL_READER_BACKGROUND_PRESET_LINEN_PAPER_ID ->
             stringResource(AYMR.strings.novel_reader_background_preset_linen_paper_title)
         NOVEL_READER_BACKGROUND_PRESET_AGED_PAGE_ID ->
             stringResource(AYMR.strings.novel_reader_background_preset_aged_page_title)
+        NOVEL_READER_BACKGROUND_PRESET_AGED_PARCHMENT_ID ->
+            stringResource(AYMR.strings.novel_reader_background_preset_aged_parchment_title)
         NOVEL_READER_BACKGROUND_PRESET_CRUMPLED_SHEET_ID ->
             stringResource(AYMR.strings.novel_reader_background_preset_crumpled_sheet_title)
         NOVEL_READER_BACKGROUND_PRESET_NIGHT_VELVET_ID ->
@@ -1390,6 +1492,8 @@ private fun readerBackgroundPresetDescription(presetId: String): String {
             stringResource(AYMR.strings.novel_reader_background_preset_linen_paper_description)
         NOVEL_READER_BACKGROUND_PRESET_AGED_PAGE_ID ->
             stringResource(AYMR.strings.novel_reader_background_preset_aged_page_description)
+        NOVEL_READER_BACKGROUND_PRESET_AGED_PARCHMENT_ID ->
+            stringResource(AYMR.strings.novel_reader_background_preset_aged_parchment_description)
         NOVEL_READER_BACKGROUND_PRESET_CRUMPLED_SHEET_ID ->
             stringResource(AYMR.strings.novel_reader_background_preset_crumpled_sheet_description)
         NOVEL_READER_BACKGROUND_PRESET_NIGHT_VELVET_ID ->

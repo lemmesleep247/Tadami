@@ -34,7 +34,6 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifNovelSourcesLoaded
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.util.Screen
-import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.preference.SharedPreferencesDataStore
 import eu.kanade.tachiyomi.novelsource.ConfigurableNovelSource
 import eu.kanade.tachiyomi.novelsource.sourcePreferences
@@ -44,6 +43,7 @@ import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.screens.LoadingScreen
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import androidx.preference.R as PreferenceR
 
 class NovelSourcePreferencesScreen(val sourceId: Long) : Screen() {
 
@@ -123,7 +123,7 @@ class NovelSourcePreferencesFragment : PreferenceFragmentCompat() {
     override fun getContext(): Context? {
         val superCtx = super.getContext() ?: return null
         val tv = TypedValue()
-        superCtx.theme.resolveAttribute(R.attr.preferenceTheme, tv, true)
+        superCtx.theme.resolveAttribute(PreferenceR.attr.preferenceTheme, tv, true)
         return ContextThemeWrapper(superCtx, tv.resourceId)
     }
 

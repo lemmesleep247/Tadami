@@ -1,11 +1,10 @@
 plugins {
     id("mihon.library")
-    kotlin("android")
     kotlin("plugin.serialization")
 }
 
 android {
-    namespace = "tachiyomi.domain"
+    namespace = "com.tadami.aurora.domain"
 
     defaultConfig {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

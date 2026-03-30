@@ -58,10 +58,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import eu.kanade.presentation.components.TabbedDialog
 import eu.kanade.presentation.more.settings.widget.EditTextPreferenceWidget
+import eu.kanade.presentation.more.settings.widget.ListPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
+import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderAppearanceMode
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundSource
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundTexture
@@ -78,10 +79,8 @@ import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.io.File
 import kotlin.math.abs
 import kotlin.math.roundToInt
-import android.graphics.Color as AndroidColor
 
 @Composable
 fun NovelReaderSettingsDialog(
@@ -105,7 +104,8 @@ fun NovelReaderSettingsDialog(
     TabbedDialog(
         onDismissRequest = onDismissRequest,
         tabTitles = tabTitles,
-        modifier = Modifier.fillMaxHeight(0.4f),
+        enableSwipeDismiss = false,
+        modifier = Modifier.fillMaxHeight(0.7f),
     ) { page ->
         when (page) {
             0 -> {
@@ -116,6 +116,7 @@ fun NovelReaderSettingsDialog(
                     currentPageReaderActive = currentPageReaderActive,
                     overrideEnabled = overrideEnabled,
                     preferences = preferences,
+                    onDismissRequest = onDismissRequest,
                 )
             }
             else -> {
@@ -158,6 +159,7 @@ private fun GeneralTab(
     currentPageReaderActive: Boolean,
     overrideEnabled: Boolean,
     preferences: NovelReaderPreferences,
+    onDismissRequest: () -> Unit,
 ) {
     var showGeminiSettings by remember { mutableStateOf(false) }
 
@@ -165,11 +167,15 @@ private fun GeneralTab(
         value: T,
         copyOverride: (NovelReaderOverride, T) -> NovelReaderOverride,
         setGlobal: (T) -> Unit,
+        dismissFamily: NovelReaderSettingsFamily? = null,
     ) {
         if (overrideEnabled) {
             preferences.updateSourceOverride(sourceId) { copyOverride(it, value) }
         } else {
             setGlobal(value)
+        }
+        if (dismissFamily != null && shouldDismissReaderSettingsDialogAfterFamilyChange(dismissFamily)) {
+            onDismissRequest()
         }
     }
 
@@ -183,6 +189,23 @@ private fun GeneralTab(
             showWebView = currentWebViewActive,
             bionicReadingEnabled = settings.bionicReading,
         )
+    }
+    val chapterSwipeControlsEnabled = remember(settings.swipeGestures, currentPageReaderActive) {
+        areChapterSwipeControlsEnabled(
+            swipeGesturesEnabled = settings.swipeGestures,
+            pageReaderEnabled = currentPageReaderActive,
+        )
+    }
+    val pageTransitionEntries = novelPageTransitionStyleEntries()
+    val pageTurnSpeedEntries = novelPageTurnSpeedEntries()
+    val pageTurnIntensityEntries = novelPageTurnIntensityEntries()
+    val pageTurnShadowEntries = novelPageTurnShadowIntensityEntries()
+    val showPageTurnTuning = shouldShowPageTurnTuningControls(
+        pageReaderEnabled = settings.pageReader,
+        style = settings.pageTransitionStyle,
+    )
+    var pageTurnTuningExpanded by rememberSaveable(settings.pageReader, settings.pageTransitionStyle) {
+        mutableStateOf(false)
     }
     val surfaceStrategy = remember { resolveNovelReaderSettingsSurfaceStrategy() }
 
@@ -259,8 +282,125 @@ private fun GeneralTab(
             title = stringResource(AYMR.strings.novel_reader_page_mode),
             subtitle = stringResource(AYMR.strings.novel_reader_page_mode_summary),
             checked = settings.pageReader,
-            onCheckedChanged = { update(it, { o, v -> o.copy(pageReader = v) }, { preferences.pageReader().set(it) }) },
+            onCheckedChanged = {
+                update(
+                    it,
+                    { o, v -> o.copy(pageReader = v) },
+                    { preferences.pageReader().set(it) },
+                    dismissFamily = NovelReaderSettingsFamily.RENDERER_TUNING,
+                )
+            },
         )
+        if (settings.pageReader) {
+            ListPreferenceWidget(
+                value = settings.pageTransitionStyle,
+                title = stringResource(AYMR.strings.novel_reader_page_transition_style),
+                subtitle = novelPageTransitionStyleSubtitle(
+                    style = settings.pageTransitionStyle,
+                    entries = pageTransitionEntries,
+                ),
+                icon = null,
+                entries = pageTransitionEntries,
+                onValueChange = {
+                    update(
+                        it,
+                        { o, v -> o.copy(pageTransitionStyle = v) },
+                        { preferences.pageTransitionStyle().set(it) },
+                        dismissFamily = NovelReaderSettingsFamily.RENDERER_TUNING,
+                    )
+                },
+            )
+            if (showPageTurnTuning) {
+                TextPreferenceWidget(
+                    title = stringResource(AYMR.strings.novel_reader_page_turn_tuning),
+                    subtitle = novelPageTurnTuningSummary(
+                        speed = settings.pageTurnSpeed,
+                        intensity = settings.pageTurnIntensity,
+                        shadowIntensity = settings.pageTurnShadowIntensity,
+                        speedEntries = pageTurnSpeedEntries,
+                        intensityEntries = pageTurnIntensityEntries,
+                        shadowEntries = pageTurnShadowEntries,
+                    ),
+                    widget = {
+                        Icon(
+                            imageVector = if (pageTurnTuningExpanded) {
+                                Icons.Filled.KeyboardArrowDown
+                            } else {
+                                Icons.AutoMirrored.Filled.KeyboardArrowRight
+                            },
+                            contentDescription = null,
+                        )
+                    },
+                    onPreferenceClick = {
+                        pageTurnTuningExpanded = !pageTurnTuningExpanded
+                    },
+                )
+                if (pageTurnTuningExpanded) {
+                    LnReaderSliderRow(
+                        label = stringResource(AYMR.strings.novel_reader_page_turn_speed),
+                        valueText = { value ->
+                            resolveNovelPageTurnSliderLabel(
+                                value = resolveNovelPageTurnSpeedSliderValue(value.roundToInt()),
+                                entries = pageTurnSpeedEntries,
+                            )
+                        },
+                        committedValue = novelPageTurnSpeedSliderIndex(settings.pageTurnSpeed).toFloat(),
+                        range = 0f..(pageTurnSpeedEntries.size - 1).toFloat(),
+                        steps = pageTurnSpeedEntries.size - 2,
+                        onCommit = { value ->
+                            update(
+                                resolveNovelPageTurnSpeedSliderValue(value.roundToInt()),
+                                { o, v -> o.copy(pageTurnSpeed = v) },
+                                { preferences.pageTurnSpeed().set(it) },
+                                dismissFamily = NovelReaderSettingsFamily.RENDERER_TUNING,
+                            )
+                        },
+                    )
+                    LnReaderSliderRow(
+                        label = stringResource(AYMR.strings.novel_reader_page_turn_intensity),
+                        valueText = { value ->
+                            resolveNovelPageTurnSliderLabel(
+                                value = resolveNovelPageTurnIntensitySliderValue(value.roundToInt()),
+                                entries = pageTurnIntensityEntries,
+                            )
+                        },
+                        committedValue = novelPageTurnIntensitySliderIndex(settings.pageTurnIntensity).toFloat(),
+                        range = 0f..(pageTurnIntensityEntries.size - 1).toFloat(),
+                        steps = pageTurnIntensityEntries.size - 2,
+                        onCommit = { value ->
+                            update(
+                                resolveNovelPageTurnIntensitySliderValue(value.roundToInt()),
+                                { o, v -> o.copy(pageTurnIntensity = v) },
+                                { preferences.pageTurnIntensity().set(it) },
+                                dismissFamily = NovelReaderSettingsFamily.RENDERER_TUNING,
+                            )
+                        },
+                    )
+                    LnReaderSliderRow(
+                        label = stringResource(AYMR.strings.novel_reader_page_turn_shadow_intensity),
+                        valueText = { value ->
+                            resolveNovelPageTurnSliderLabel(
+                                value = resolveNovelPageTurnShadowIntensitySliderValue(value.roundToInt()),
+                                entries = pageTurnShadowEntries,
+                            )
+                        },
+                        committedValue = novelPageTurnShadowIntensitySliderIndex(
+                            settings.pageTurnShadowIntensity,
+                        ).toFloat(),
+                        range = 0f..(pageTurnShadowEntries.size - 1).toFloat(),
+                        steps = pageTurnShadowEntries.size - 2,
+                        onCommit = { value ->
+                            update(
+                                resolveNovelPageTurnShadowIntensitySliderValue(value.roundToInt()),
+                                { o, v -> o.copy(pageTurnShadowIntensity = v) },
+                                { preferences.pageTurnShadowIntensity().set(it) },
+                                dismissFamily = NovelReaderSettingsFamily.RENDERER_TUNING,
+                            )
+                        },
+                    )
+                }
+            }
+        }
         SwitchPreferenceWidget(
             title = stringResource(AYMR.strings.novel_reader_prefer_webview_renderer),
             subtitle = rendererSubtitle(
@@ -274,6 +414,7 @@ private fun GeneralTab(
                     it,
                     { o, v -> o.copy(preferWebViewRenderer = v) },
                     { preferences.preferWebViewRenderer().set(it) },
+                    dismissFamily = NovelReaderSettingsFamily.RENDERER_TUNING,
                 )
             },
         )
@@ -290,6 +431,7 @@ private fun GeneralTab(
                     it,
                     { o, v -> o.copy(richNativeRendererExperimental = v) },
                     { preferences.richNativeRendererExperimental().set(it) },
+                    dismissFamily = NovelReaderSettingsFamily.RENDERER_TUNING,
                 )
             },
         )
@@ -319,7 +461,7 @@ private fun GeneralTab(
         SwitchPreferenceWidget(
             title = stringResource(AYMR.strings.novel_reader_swipe_to_next),
             checked = settings.swipeToNextChapter,
-            enabled = settings.swipeGestures,
+            enabled = chapterSwipeControlsEnabled,
             onCheckedChanged = {
                 update(
                     it,
@@ -331,7 +473,7 @@ private fun GeneralTab(
         SwitchPreferenceWidget(
             title = stringResource(AYMR.strings.novel_reader_swipe_to_prev),
             checked = settings.swipeToPrevChapter,
-            enabled = settings.swipeGestures,
+            enabled = chapterSwipeControlsEnabled,
             onCheckedChanged = {
                 update(
                     it,
@@ -685,7 +827,7 @@ private fun ReadingTab(
         }
     }
 
-    val selectedTheme = currentTheme(settings.backgroundColor.orEmpty(), settings.textColor.orEmpty())
+    val selectedTheme = resolveNovelReaderColorTheme(settings.backgroundColor.orEmpty(), settings.textColor.orEmpty())
     val isPreset = selectedTheme != null && novelReaderPresetThemes.contains(selectedTheme)
     val isCustom = selectedTheme != null && settings.customThemes.contains(selectedTheme)
     val colorTiles = remember(settings.customThemes) {
@@ -918,7 +1060,7 @@ private fun ReadingTab(
                     icon = null,
                     value = settings.textShadowColor.orEmpty(),
                     onConfirm = { value ->
-                        if (!isValidColorOrBlank(value)) return@EditTextPreferenceWidget false
+                        if (!isValidNovelReaderColorOrBlank(value)) return@EditTextPreferenceWidget false
                         update(value.trim(), { o, v ->
                             o.copy(textShadowColor = v)
                         }, { preferences.textShadowColor().set(it) })
@@ -1131,7 +1273,7 @@ private fun ReadingTab(
                 icon = null,
                 value = settings.backgroundColor.orEmpty(),
                 onConfirm = { value ->
-                    if (!isValidColorOrBlank(value)) return@EditTextPreferenceWidget false
+                    if (!isValidNovelReaderColorOrBlank(value)) return@EditTextPreferenceWidget false
                     update(value, { o, v -> o.copy(backgroundColor = v) }, { preferences.backgroundColor().set(it) })
                     true
                 },
@@ -1144,7 +1286,7 @@ private fun ReadingTab(
                 icon = null,
                 value = settings.textColor.orEmpty(),
                 onConfirm = { value ->
-                    if (!isValidColorOrBlank(value)) return@EditTextPreferenceWidget false
+                    if (!isValidNovelReaderColorOrBlank(value)) return@EditTextPreferenceWidget false
                     update(value, { o, v -> o.copy(textColor = v) }, { preferences.textColor().set(it) })
                     true
                 },
@@ -1215,25 +1357,22 @@ private fun ReadingTab(
                         settings.backgroundSource == NovelReaderBackgroundSource.CUSTOM &&
                             selectedCustomId == card.id
                     }
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        },
-                        modifier = Modifier
-                            .size(
-                                width = 178.dp,
-                                height = if (card.isBuiltIn) 186.dp else 228.dp,
-                            )
-                            .clickable {
-                                update(
-                                    NovelReaderAppearanceMode.BACKGROUND,
-                                    { o, v -> o.copy(appearanceMode = v) },
-                                    { preferences.appearanceMode().set(it) },
-                                )
-                                if (card.isBuiltIn) {
+                    if (card.isBuiltIn) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            },
+                            modifier = Modifier
+                                .size(width = 178.dp, height = 186.dp)
+                                .clickable {
+                                    update(
+                                        NovelReaderAppearanceMode.BACKGROUND,
+                                        { o, v -> o.copy(appearanceMode = v) },
+                                        { preferences.appearanceMode().set(it) },
+                                    )
                                     update(
                                         NovelReaderBackgroundSource.PRESET,
                                         { o, v -> o.copy(backgroundSource = v) },
@@ -1244,33 +1383,14 @@ private fun ReadingTab(
                                         { o, v -> o.copy(backgroundPresetId = v) },
                                         { preferences.backgroundPresetId().set(it) },
                                     )
-                                } else {
-                                    val customItem = card.customItem ?: return@clickable
-                                    update(
-                                        NovelReaderBackgroundSource.CUSTOM,
-                                        { o, v -> o.copy(backgroundSource = v) },
-                                        { preferences.backgroundSource().set(it) },
-                                    )
-                                    update(
-                                        customItem.id,
-                                        { o, v -> o.copy(customBackgroundId = v) },
-                                        { preferences.customBackgroundId().set(it) },
-                                    )
-                                    update(
-                                        customItem.absolutePath,
-                                        { o, v -> o.copy(customBackgroundPath = v) },
-                                        { preferences.customBackgroundPath().set(it) },
-                                    )
-                                }
-                            },
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(5.dp),
+                                },
                         ) {
-                            if (card.isBuiltIn) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp),
+                            ) {
                                 val preset = card.preset ?: return@Column
                                 Image(
                                     painter = painterResource(id = preset.imageResId),
@@ -1280,121 +1400,116 @@ private fun ReadingTab(
                                         .fillMaxWidth()
                                         .size(height = 90.dp, width = 162.dp),
                                 )
-                            } else {
-                                val customItem = card.customItem ?: return@Column
-                                AsyncImage(
-                                    model = File(customItem.absolutePath),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .size(height = 90.dp, width = 162.dp),
+                                Text(
+                                    text = backgroundPresetTitle(card.id),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = backgroundPresetDescription(card.id),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            Text(
-                                text = if (card.isBuiltIn) {
-                                    backgroundPresetTitle(card.id)
-                                } else {
-                                    card.customItem?.displayName.orEmpty()
-                                },
-                                style = MaterialTheme.typography.labelLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = if (card.isBuiltIn) {
-                                    backgroundPresetDescription(card.id)
-                                } else {
-                                    card.customItem?.absolutePath.orEmpty()
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            if (!card.isBuiltIn) {
-                                val customItem = card.customItem ?: return@Column
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    BackgroundActionChip(
-                                        label = stringResource(AYMR.strings.editor_action_rename),
-                                        onClick = {
-                                            renameTarget = customItem
-                                            renameInput = customItem.displayName
-                                        },
-                                    )
-                                    BackgroundActionChip(
-                                        label = stringResource(AYMR.strings.novel_reader_background_action_replace),
-                                        onClick = {
-                                            pendingReplaceCustomId = customItem.id
-                                            replaceBackgroundPicker.launch("image/*")
-                                        },
-                                    )
-                                    BackgroundActionChip(
-                                        label = stringResource(AYMR.strings.editor_action_delete),
-                                        onClick = {
-                                            val removed = removeNovelReaderCustomBackgroundItem(
-                                                context = context,
-                                                id = customItem.id,
-                                            ).getOrDefault(false)
-                                            if (!removed) {
-                                                Toast.makeText(
-                                                    context,
-                                                    importFailedMessage,
-                                                    Toast.LENGTH_SHORT,
-                                                ).show()
-                                                return@BackgroundActionChip
-                                            }
-                                            val selectedId = settings.customBackgroundId
-                                                .ifBlank { settings.customBackgroundPath }
-                                            if (selectedId == customItem.id) {
-                                                val remaining = readNovelReaderCustomBackgroundItems(context)
-                                                val deletion = resolveCustomBackgroundDeletion(
-                                                    selectedId = selectedId,
-                                                    deletedId = customItem.id,
-                                                    remainingCustomIds = remaining.map { it.id },
-                                                    fallbackPresetId = settings.backgroundPresetId
-                                                        .ifBlank { NOVEL_READER_BACKGROUND_PRESET_LINEN_PAPER_ID },
-                                                )
-                                                update(
-                                                    deletion.nextCustomId,
-                                                    { o, v -> o.copy(customBackgroundId = v) },
-                                                    { preferences.customBackgroundId().set(it) },
-                                                )
-                                                val nextPath = remaining
-                                                    .firstOrNull { it.id == deletion.nextCustomId }
-                                                    ?.absolutePath
-                                                    .orEmpty()
-                                                update(
-                                                    nextPath,
-                                                    { o, v -> o.copy(customBackgroundPath = v) },
-                                                    { preferences.customBackgroundPath().set(it) },
-                                                )
-                                                if (deletion.keepCustomSource) {
-                                                    update(
-                                                        NovelReaderBackgroundSource.CUSTOM,
-                                                        { o, v -> o.copy(backgroundSource = v) },
-                                                        { preferences.backgroundSource().set(it) },
-                                                    )
-                                                } else {
-                                                    update(
-                                                        deletion.fallbackPresetId,
-                                                        { o, v -> o.copy(backgroundPresetId = v) },
-                                                        { preferences.backgroundPresetId().set(it) },
-                                                    )
-                                                    update(
-                                                        NovelReaderBackgroundSource.PRESET,
-                                                        { o, v -> o.copy(backgroundSource = v) },
-                                                        { preferences.backgroundSource().set(it) },
-                                                    )
-                                                }
-                                            }
-                                            backgroundCatalogVersion += 1
-                                        },
-                                        highlighted = true,
-                                    )
-                                }
-                            }
                         }
+                    } else {
+                        val customItem = card.customItem ?: return@items
+                        NovelReaderCustomBackgroundCard(
+                            customItem = customItem,
+                            selected = selected,
+                            onSelect = {
+                                update(
+                                    NovelReaderAppearanceMode.BACKGROUND,
+                                    { o, v -> o.copy(appearanceMode = v) },
+                                    { preferences.appearanceMode().set(it) },
+                                )
+                                update(
+                                    NovelReaderBackgroundSource.CUSTOM,
+                                    { o, v -> o.copy(backgroundSource = v) },
+                                    { preferences.backgroundSource().set(it) },
+                                )
+                                update(
+                                    customItem.id,
+                                    { o, v -> o.copy(customBackgroundId = v) },
+                                    { preferences.customBackgroundId().set(it) },
+                                )
+                                update(
+                                    customItem.absolutePath,
+                                    { o, v -> o.copy(customBackgroundPath = v) },
+                                    { preferences.customBackgroundPath().set(it) },
+                                )
+                            },
+                            onRename = {
+                                renameTarget = customItem
+                                renameInput = customItem.displayName
+                            },
+                            onReplace = {
+                                pendingReplaceCustomId = customItem.id
+                                replaceBackgroundPicker.launch("image/*")
+                            },
+                            onDelete = {
+                                val removed = removeNovelReaderCustomBackgroundItem(
+                                    context = context,
+                                    id = customItem.id,
+                                ).getOrDefault(false)
+                                if (!removed) {
+                                    Toast.makeText(
+                                        context,
+                                        importFailedMessage,
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                    return@NovelReaderCustomBackgroundCard
+                                }
+                                val selectedId = settings.customBackgroundId
+                                    .ifBlank { settings.customBackgroundPath }
+                                if (selectedId == customItem.id) {
+                                    val remaining = readNovelReaderCustomBackgroundItems(context)
+                                    val deletion = resolveCustomBackgroundDeletion(
+                                        selectedId = selectedId,
+                                        deletedId = customItem.id,
+                                        remainingCustomIds = remaining.map { it.id },
+                                        fallbackPresetId = settings.backgroundPresetId
+                                            .ifBlank { NOVEL_READER_BACKGROUND_PRESET_LINEN_PAPER_ID },
+                                    )
+                                    update(
+                                        deletion.nextCustomId,
+                                        { o, v -> o.copy(customBackgroundId = v) },
+                                        { preferences.customBackgroundId().set(it) },
+                                    )
+                                    val nextPath = remaining
+                                        .firstOrNull { it.id == deletion.nextCustomId }
+                                        ?.absolutePath
+                                        .orEmpty()
+                                    update(
+                                        nextPath,
+                                        { o, v -> o.copy(customBackgroundPath = v) },
+                                        { preferences.customBackgroundPath().set(it) },
+                                    )
+                                    if (deletion.keepCustomSource) {
+                                        update(
+                                            NovelReaderBackgroundSource.CUSTOM,
+                                            { o, v -> o.copy(backgroundSource = v) },
+                                            { preferences.backgroundSource().set(it) },
+                                        )
+                                    } else {
+                                        update(
+                                            deletion.fallbackPresetId,
+                                            { o, v -> o.copy(backgroundPresetId = v) },
+                                            { preferences.backgroundPresetId().set(it) },
+                                        )
+                                        update(
+                                            NovelReaderBackgroundSource.PRESET,
+                                            { o, v -> o.copy(backgroundSource = v) },
+                                            { preferences.backgroundSource().set(it) },
+                                        )
+                                    }
+                                }
+                                backgroundCatalogVersion += 1
+                            },
+                        )
                     }
                 }
             }
@@ -1571,36 +1686,6 @@ internal fun resolveLnReaderSliderCommitValue(
     draftValue: Float,
 ): Float? {
     return draftValue.takeIf { abs(it - committedValue) > 0.0001f }
-}
-
-@Composable
-private fun BackgroundActionChip(
-    label: String,
-    highlighted: Boolean = false,
-    onClick: () -> Unit,
-) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = if (highlighted) {
-            MaterialTheme.colorScheme.errorContainer
-        } else {
-            MaterialTheme.colorScheme.secondaryContainer
-        },
-        modifier = Modifier.clickable(onClick = onClick),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (highlighted) {
-                MaterialTheme.colorScheme.onErrorContainer
-            } else {
-                MaterialTheme.colorScheme.onSecondaryContainer
-            },
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-        )
-    }
 }
 
 @Composable
@@ -1893,8 +1978,8 @@ private fun ThemeTile(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val background = parseColor(theme.backgroundColor) ?: MaterialTheme.colorScheme.surface
-    val foreground = parseColor(theme.textColor) ?: MaterialTheme.colorScheme.onSurface
+    val background = parseNovelReaderColor(theme.backgroundColor) ?: MaterialTheme.colorScheme.surface
+    val foreground = parseNovelReaderColor(theme.textColor) ?: MaterialTheme.colorScheme.onSurface
     Box(
         modifier = Modifier
             .size(34.dp)
@@ -1922,6 +2007,8 @@ private fun backgroundPresetTitle(presetId: String): String {
             stringResource(AYMR.strings.novel_reader_background_preset_linen_paper_title)
         NOVEL_READER_BACKGROUND_PRESET_AGED_PAGE_ID ->
             stringResource(AYMR.strings.novel_reader_background_preset_aged_page_title)
+        NOVEL_READER_BACKGROUND_PRESET_AGED_PARCHMENT_ID ->
+            stringResource(AYMR.strings.novel_reader_background_preset_aged_parchment_title)
         NOVEL_READER_BACKGROUND_PRESET_CRUMPLED_SHEET_ID ->
             stringResource(AYMR.strings.novel_reader_background_preset_crumpled_sheet_title)
         NOVEL_READER_BACKGROUND_PRESET_NIGHT_VELVET_ID ->
@@ -1939,6 +2026,8 @@ private fun backgroundPresetDescription(presetId: String): String {
             stringResource(AYMR.strings.novel_reader_background_preset_linen_paper_description)
         NOVEL_READER_BACKGROUND_PRESET_AGED_PAGE_ID ->
             stringResource(AYMR.strings.novel_reader_background_preset_aged_page_description)
+        NOVEL_READER_BACKGROUND_PRESET_AGED_PARCHMENT_ID ->
+            stringResource(AYMR.strings.novel_reader_background_preset_aged_parchment_description)
         NOVEL_READER_BACKGROUND_PRESET_CRUMPLED_SHEET_ID ->
             stringResource(AYMR.strings.novel_reader_background_preset_crumpled_sheet_description)
         NOVEL_READER_BACKGROUND_PRESET_NIGHT_VELVET_ID ->
@@ -1947,88 +2036,4 @@ private fun backgroundPresetDescription(presetId: String): String {
             stringResource(AYMR.strings.novel_reader_background_preset_dark_wood_description)
         else -> ""
     }
-}
-
-private fun parseColor(value: String): Color? {
-    return runCatching { Color(AndroidColor.parseColor(value)) }.getOrNull()
-}
-
-private fun currentTheme(backgroundColor: String, textColor: String): NovelReaderColorTheme? {
-    if (backgroundColor.isBlank() || textColor.isBlank()) return null
-    if (!isValidColorOrBlank(backgroundColor) || !isValidColorOrBlank(textColor)) return null
-    return NovelReaderColorTheme(backgroundColor = backgroundColor, textColor = textColor)
-}
-
-internal data class ThemeModeSelection(
-    val theme: NovelReaderTheme,
-    val backgroundColor: String,
-    val textColor: String,
-)
-
-internal data class AppearanceControlState(
-    val themeControlsEnabled: Boolean,
-    val backgroundControlsEnabled: Boolean,
-)
-
-internal data class CustomBackgroundDeletionResolution(
-    val nextCustomId: String,
-    val keepCustomSource: Boolean,
-    val fallbackPresetId: String,
-)
-
-internal fun resolveAppearanceControlState(
-    appearanceMode: NovelReaderAppearanceMode,
-): AppearanceControlState {
-    return when (appearanceMode) {
-        NovelReaderAppearanceMode.THEME -> AppearanceControlState(
-            themeControlsEnabled = true,
-            backgroundControlsEnabled = false,
-        )
-        NovelReaderAppearanceMode.BACKGROUND -> AppearanceControlState(
-            themeControlsEnabled = false,
-            backgroundControlsEnabled = true,
-        )
-    }
-}
-
-internal fun resolveThemeModeSelection(theme: NovelReaderTheme): ThemeModeSelection {
-    // Base mode selection must restore fallback theme colors from reader screen logic.
-    return ThemeModeSelection(
-        theme = theme,
-        backgroundColor = "",
-        textColor = "",
-    )
-}
-
-internal fun resolveCustomBackgroundDeletion(
-    selectedId: String,
-    deletedId: String,
-    remainingCustomIds: List<String>,
-    fallbackPresetId: String,
-): CustomBackgroundDeletionResolution {
-    if (selectedId != deletedId) {
-        return CustomBackgroundDeletionResolution(
-            nextCustomId = selectedId,
-            keepCustomSource = true,
-            fallbackPresetId = fallbackPresetId,
-        )
-    }
-    val nextCustomId = remainingCustomIds.firstOrNull().orEmpty()
-    return CustomBackgroundDeletionResolution(
-        nextCustomId = nextCustomId,
-        keepCustomSource = nextCustomId.isNotBlank(),
-        fallbackPresetId = fallbackPresetId,
-    )
-}
-
-internal fun resolveCustomBackgroundReplacement(
-    selectedId: String,
-    replacedId: String,
-): String {
-    return if (selectedId == replacedId) replacedId else selectedId
-}
-
-private fun isValidColorOrBlank(value: String): Boolean {
-    if (value.isBlank()) return true
-    return value.matches(Regex("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$"))
 }

@@ -35,6 +35,8 @@ class NovelHomeHubScreenModel(
     private val sourceManager: NovelSourceManager = Injekt.get(),
 ) : StateScreenModel<NovelHomeHubScreenModel.State>(State()) {
 
+    private val fastCache = NovelHomeHubFastCache(Injekt.get<android.app.Application>())
+
     @Volatile
     private var liveUpdatesStarted = false
 
@@ -88,11 +90,32 @@ class NovelHomeHubScreenModel(
             )
         }
 
+        val cached = fastCache.load()
+        if (!cached.isEmpty || cached.isInitialized) {
+            mutableState.update {
+                it.copy(
+                    hero = cached.hero?.toHeroData(),
+                    history = cached.history.map { h -> h.toHistoryData() },
+                    recommendations = cached.recommendations.map { r -> r.toRecommendationData() },
+                    userName = cached.userName,
+                    userAvatar = cached.userAvatar,
+                    isInitialized = cached.isInitialized,
+                    isLoading = false,
+                )
+            }
+        }
+
         screenModelScope.launchIO {
             val greetingSelection = HomeGreetingSession.resolveGreeting(
                 userProfilePreferences = userProfilePreferences,
             )
             mutableState.update { it.copy(greeting = greetingSelection.greeting, greetingReady = true) }
+        }
+
+        cached.hero?.let { hero ->
+            screenModelScope.launchIO {
+                loadHeroChapterId(hero.novelId, hero.chapterId)
+            }
         }
     }
 
@@ -113,7 +136,10 @@ class NovelHomeHubScreenModel(
                 val history = if (data.historyList.size > 1) data.historyList.drop(1) else emptyList()
 
                 val hasData = hero != null || history.isNotEmpty() || data.novelList.isNotEmpty()
-                val previousHeroId = mutableState.value.hero?.novelId
+                if (hasData && !state.value.isInitialized) {
+                    fastCache.markInitialized()
+                }
+                val previousHero = mutableState.value.hero
 
                 mutableState.update {
                     it.copy(
@@ -127,9 +153,19 @@ class NovelHomeHubScreenModel(
                     )
                 }
 
-                if (hero != null && hero.novelId != previousHeroId) {
+                if (
+                    hero != null &&
+                    shouldReloadNovelHomeHeroChapterId(
+                        previousHeroNovelId = previousHero?.novelId,
+                        previousHeroChapterId = previousHero?.chapterId,
+                        currentHeroNovelId = hero.novelId,
+                        currentHeroChapterId = hero.chapterId,
+                    )
+                ) {
                     loadHeroChapterId(hero.novelId, hero.chapterId)
                 }
+
+                saveCache()
             }
         }
     }
@@ -153,6 +189,7 @@ class NovelHomeHubScreenModel(
         if (name != previousName) {
             userProfilePreferences.nameEdited().set(true)
         }
+        fastCache.updateUserName(name)
         mutableState.update { it.copy(userName = name) }
     }
 
@@ -167,9 +204,24 @@ class NovelHomeHubScreenModel(
             }
             val path = file.absolutePath
             userProfilePreferences.avatarUrl().set(path)
+            fastCache.updateUserAvatar(path)
             mutableState.update { it.copy(userAvatar = path) }
         } catch (_: Exception) {
         }
+    }
+
+    fun saveCache() {
+        val currentState = state.value
+        fastCache.save(
+            CachedNovelHomeState(
+                hero = currentState.hero?.toCached(),
+                history = currentState.history.map { it.toCached() },
+                recommendations = currentState.recommendations.map { it.toCached() },
+                userName = currentState.userName,
+                userAvatar = currentState.userAvatar,
+                isInitialized = currentState.isInitialized,
+            ),
+        )
     }
 
     fun getLastUsedNovelSourceId(): Long = sourcePreferences.lastUsedNovelSource().get()
@@ -215,6 +267,68 @@ class NovelHomeHubScreenModel(
         totalCount = totalChapters,
         readCount = readCount,
     )
+
+    private fun HeroData.toCached() = CachedNovelHeroItem(
+        novelId = novelId,
+        title = title,
+        chapterNumber = chapterNumber,
+        coverUrl = coverData.url,
+        coverLastModified = coverData.lastModified,
+        chapterId = chapterId,
+    )
+
+    private fun HistoryData.toCached() = CachedNovelHistoryItem(
+        novelId = novelId,
+        title = title,
+        chapterNumber = chapterNumber,
+        coverUrl = coverData.url,
+        coverLastModified = coverData.lastModified,
+    )
+
+    private fun RecommendationData.toCached() = CachedNovelRecommendationItem(
+        novelId = novelId,
+        title = title,
+        coverUrl = coverData.url,
+        coverLastModified = coverData.lastModified,
+        totalCount = totalCount,
+        readCount = readCount,
+    )
+
+    private fun CachedNovelHeroItem.toHeroData() = HeroData(
+        novelId = novelId,
+        title = title,
+        chapterNumber = chapterNumber,
+        coverData = NovelCover(novelId, -1, true, coverUrl, coverLastModified),
+        chapterId = chapterId,
+    )
+
+    private fun CachedNovelHistoryItem.toHistoryData() = HistoryData(
+        novelId = novelId,
+        title = title,
+        chapterNumber = chapterNumber,
+        coverData = NovelCover(novelId, -1, true, coverUrl, coverLastModified),
+    )
+
+    private fun CachedNovelRecommendationItem.toRecommendationData() = RecommendationData(
+        novelId = novelId,
+        title = title,
+        coverData = NovelCover(novelId, -1, true, coverUrl, coverLastModified),
+        totalCount = totalCount,
+        readCount = readCount,
+    )
+
+    companion object {
+        @Volatile
+        private var instance: NovelHomeHubScreenModel? = null
+
+        fun saveOnExit() {
+            instance?.saveCache()
+        }
+
+        internal fun setInstance(model: NovelHomeHubScreenModel) {
+            instance = model
+        }
+    }
 }
 
 internal fun resolveNovelHomeHeroChapterId(
@@ -237,4 +351,14 @@ internal fun resolveNovelHomeHeroChapterId(
     }
 
     return chapters.firstOrNull { !it.read }?.id ?: chapters.first().id
+}
+
+internal fun shouldReloadNovelHomeHeroChapterId(
+    previousHeroNovelId: Long?,
+    previousHeroChapterId: Long?,
+    currentHeroNovelId: Long,
+    currentHeroChapterId: Long,
+): Boolean {
+    return previousHeroNovelId != currentHeroNovelId ||
+        previousHeroChapterId != currentHeroChapterId
 }

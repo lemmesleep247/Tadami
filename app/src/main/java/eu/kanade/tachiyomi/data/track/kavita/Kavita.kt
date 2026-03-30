@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.data.track.kavita
 
 import android.graphics.Color
+import com.tadami.aurora.R
 import dev.icerock.moko.resources.StringResource
-import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.database.models.manga.MangaTrack
 import eu.kanade.tachiyomi.data.track.BaseTracker
 import eu.kanade.tachiyomi.data.track.EnhancedMangaTracker
@@ -141,7 +141,7 @@ class Kavita(id: Long) : BaseTracker(id, "Kavita"), EnhancedMangaTracker, MangaT
             }
 
             authentication.apiUrl = prefApiUrl
-            authentication.jwtToken = token.toString()
+            authentication.jwtToken = token
         }
         authentications = oauth
     }

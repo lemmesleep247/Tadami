@@ -14,8 +14,8 @@ import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.transformations
 import coil3.transform.CircleCropTransformation
+import com.tadami.aurora.R
 import eu.kanade.presentation.util.formatChapterNumber
-import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.core.common.Constants
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloader
@@ -40,6 +40,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.math.RoundingMode
 import java.text.NumberFormat
+import tachiyomi.i18n.R as I18nR
 
 class MangaLibraryUpdateNotifier(
     private val context: Context,
@@ -195,7 +196,7 @@ class MangaLibraryUpdateNotifier(
             } else {
                 setContentText(
                     context.resources.getQuantityString(
-                        R.plurals.notification_new_chapters_summary,
+                        I18nR.plurals.notification_new_chapters_summary,
                         updates.size,
                         updates.size,
                     ),
@@ -335,7 +336,7 @@ class MangaLibraryUpdateNotifier(
             0 -> {
                 // "1 new chapter" or "5 new chapters"
                 context.resources.getQuantityString(
-                    R.plurals.notification_chapters_generic,
+                    I18nR.plurals.notification_chapters_generic,
                     chapters.size,
                     chapters.size,
                 )
@@ -368,7 +369,7 @@ class MangaLibraryUpdateNotifier(
                         ", ",
                     )
                     context.resources.getQuantityString(
-                        R.plurals.notification_chapters_multiple_and_more,
+                        I18nR.plurals.notification_chapters_multiple_and_more,
                         remaining,
                         joinedChapterNumbers,
                         remaining,

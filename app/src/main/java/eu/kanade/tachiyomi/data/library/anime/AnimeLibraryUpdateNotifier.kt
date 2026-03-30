@@ -14,8 +14,8 @@ import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.transformations
 import coil3.transform.CircleCropTransformation
+import com.tadami.aurora.R
 import eu.kanade.presentation.util.formatEpisodeNumber
-import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.core.common.Constants
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloader
@@ -41,6 +41,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.math.RoundingMode
 import java.text.NumberFormat
+import tachiyomi.i18n.aniyomi.R as AniyomiR
 
 class AnimeLibraryUpdateNotifier(
     private val context: Context,
@@ -213,7 +214,7 @@ class AnimeLibraryUpdateNotifier(
             } else {
                 setContentText(
                     context.resources.getQuantityString(
-                        R.plurals.notification_new_episodes_summary,
+                        AniyomiR.plurals.notification_new_episodes_summary,
                         updates.size,
                         updates.size,
                     ),
@@ -349,7 +350,7 @@ class AnimeLibraryUpdateNotifier(
             0 -> {
                 // "1 new episode" or "5 new episodes"
                 context.resources.getQuantityString(
-                    R.plurals.notification_episodes_generic,
+                    AniyomiR.plurals.notification_episodes_generic,
                     episodes.size,
                     episodes.size,
                 )
@@ -382,7 +383,7 @@ class AnimeLibraryUpdateNotifier(
                         ", ",
                     )
                     context.resources.getQuantityString(
-                        R.plurals.notification_episodes_multiple_and_more,
+                        AniyomiR.plurals.notification_episodes_multiple_and_more,
                         remaining,
                         joinedEpisodeNumbers,
                         remaining,

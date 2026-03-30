@@ -67,7 +67,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
 import coil3.request.crossfade
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.components.AuroraCoverPlaceholderVariant
@@ -80,7 +79,7 @@ import eu.kanade.presentation.entries.components.aurora.rememberAuroraPosterColo
 import eu.kanade.presentation.entries.manga.components.ScanlatorBranchSelector
 import eu.kanade.presentation.entries.resolveEntryAutoJumpTargetIndex
 import eu.kanade.presentation.entries.resolveTitleListFastScrollSpec
-import eu.kanade.presentation.novel.sourceAwareNovelCoverModel
+import eu.kanade.presentation.novel.buildNovelCoverImageRequest
 import eu.kanade.presentation.theme.AuroraTheme
 import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.tachiyomi.data.coil.staticBlur
@@ -447,12 +446,10 @@ fun NovelScreen(
                             ),
                     ) {
                         AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(sourceAwareNovelCoverModel(state.novel))
-                                .crossfade(true)
-                                .placeholderMemoryCacheKey(state.novel.thumbnailUrl)
-                                .staticBlur(blurRadiusPx, intensityFactor = 0.6f)
-                                .build(),
+                            model = buildNovelCoverImageRequest(context, state.novel) {
+                                crossfade(true)
+                                staticBlur(blurRadiusPx, intensityFactor = 0.6f)
+                            },
                             error = fallbackPainter,
                             fallback = fallbackPainter,
                             contentDescription = null,
@@ -492,11 +489,9 @@ fun NovelScreen(
                                 horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.medium),
                             ) {
                                 ItemCover.Book(
-                                    data = ImageRequest.Builder(context)
-                                        .data(sourceAwareNovelCoverModel(state.novel))
-                                        .crossfade(true)
-                                        .placeholderMemoryCacheKey(state.novel.thumbnailUrl)
-                                        .build(),
+                                    data = buildNovelCoverImageRequest(context, state.novel) {
+                                        crossfade(true)
+                                    },
                                     modifier = Modifier.size(width = 112.dp, height = 158.dp),
                                 )
                                 Column(
@@ -958,9 +953,16 @@ fun NovelScreen(
                                                     MaterialTheme.colorScheme.onSurface
                                                 },
                                             )
-                                            if (chapter.dateUpload > 0) {
+                                            novelChapterDateText(
+                                                chapter = chapter,
+                                                parsedDateText = if (chapter.dateUpload > 0L) {
+                                                    relativeDateTimeText(chapter.dateUpload)
+                                                } else {
+                                                    null
+                                                },
+                                            )?.let { dateText ->
                                                 Text(
-                                                    text = relativeDateTimeText(chapter.dateUpload),
+                                                    text = dateText,
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 )
@@ -1201,9 +1203,16 @@ fun NovelScreen(
                                             MaterialTheme.colorScheme.onSurface
                                         },
                                     )
-                                    if (chapter.dateUpload > 0) {
+                                    novelChapterDateText(
+                                        chapter = chapter,
+                                        parsedDateText = if (chapter.dateUpload > 0L) {
+                                            relativeDateTimeText(chapter.dateUpload)
+                                        } else {
+                                            null
+                                        },
+                                    )?.let { dateText ->
                                         Text(
-                                            text = relativeDateTimeText(chapter.dateUpload),
+                                            text = dateText,
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
@@ -1404,9 +1413,16 @@ private fun NovelClassicChapterRow(
                             MaterialTheme.colorScheme.onSurface
                         },
                     )
-                    if (chapter.dateUpload > 0) {
+                    novelChapterDateText(
+                        chapter = chapter,
+                        parsedDateText = if (chapter.dateUpload > 0L) {
+                            relativeDateTimeText(chapter.dateUpload)
+                        } else {
+                            null
+                        },
+                    )?.let { dateText ->
                         Text(
-                            text = relativeDateTimeText(chapter.dateUpload),
+                            text = dateText,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

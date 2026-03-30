@@ -6,7 +6,6 @@ import android.widget.EditText
 import androidx.core.view.inputmethod.EditorInfoCompat
 import com.google.android.material.textfield.TextInputEditText
 import eu.kanade.domain.base.BasePreferences
-import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.widget.TachiyomiTextInputEditText.Companion.setIncognito
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +15,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import androidx.appcompat.R as AppCompatR
 
 /**
  * A custom [TextInputEditText] that sets [EditorInfoCompat.IME_FLAG_NO_PERSONALIZED_LEARNING] to imeOptions
@@ -26,7 +26,7 @@ import uy.kohesive.injekt.api.get
 class TachiyomiTextInputEditText @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
-    defStyleAttr: Int = R.attr.editTextStyle,
+    defStyleAttr: Int = AppCompatR.attr.editTextStyle,
 ) : TextInputEditText(context, attrs, defStyleAttr) {
 
     private var scope: CoroutineScope? = null

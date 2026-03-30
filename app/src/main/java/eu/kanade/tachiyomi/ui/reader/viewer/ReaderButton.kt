@@ -4,8 +4,8 @@ import android.content.Context
 import android.util.AttributeSet
 import android.view.MotionEvent
 import com.google.android.material.button.MaterialButton
-import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerViewer
+import com.google.android.material.R as MaterialR
 
 /**
  * A button class to be used by child views of the pager viewer. All tap gestures are handled by
@@ -14,7 +14,7 @@ import eu.kanade.tachiyomi.ui.reader.viewer.pager.PagerViewer
 class ReaderButton @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
-    defStyleAttr: Int = R.attr.materialButtonStyle,
+    defStyleAttr: Int = MaterialR.attr.materialButtonStyle,
 ) : MaterialButton(context, attrs, defStyleAttr) {
 
     var viewer: PagerViewer? = null

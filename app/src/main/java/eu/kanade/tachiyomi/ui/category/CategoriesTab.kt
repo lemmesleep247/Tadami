@@ -14,11 +14,11 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
+import com.tadami.aurora.R
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.components.TabbedScreen
 import eu.kanade.presentation.components.TabbedScreenAurora
 import eu.kanade.presentation.util.Tab
-import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.category.anime.AnimeCategoryEvent
 import eu.kanade.tachiyomi.ui.category.anime.AnimeCategoryScreenModel
 import eu.kanade.tachiyomi.ui.category.anime.animeCategoryTab
@@ -73,15 +73,14 @@ data object CategoriesTab : Tab {
         val navigator = LocalNavigator.currentOrThrow
         val uiPreferences = Injekt.get<UiPreferences>()
         val theme by uiPreferences.appTheme().collectAsState()
-        val navigateUp = remember(navigator.canPop) {
-            if (navigator.canPop) {
-                {
-                    navigator.pop()
-                    Unit
-                }
-            } else {
-                null
+        val canNavigateUp = remember { navigator.canPop }
+        val navigateUp = if (canNavigateUp) {
+            {
+                navigator.pop()
+                Unit
             }
+        } else {
+            null
         }
 
         val animeCategoryScreenModel = rememberScreenModel { AnimeCategoryScreenModel() }

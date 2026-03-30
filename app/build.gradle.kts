@@ -1,7 +1,9 @@
 import mihon.buildlogic.Config
+import mihon.buildlogic.generatedBuildDir
 import mihon.buildlogic.getBuildTime
 import mihon.buildlogic.getCommitCount
 import mihon.buildlogic.getGitSha
+import mihon.buildlogic.tasks.getLocalesConfigTask
 
 plugins {
     id("mihon.android.application")
@@ -12,13 +14,13 @@ plugins {
 val hasPrivateGeminiBridge = findProject(":private-gemini-bridge") != null
 
 android {
-    namespace = "eu.kanade.tachiyomi"
+    namespace = "com.tadami.aurora"
 
     defaultConfig {
         applicationId = "com.tadami.aurora"
 
-        versionCode = 149
-        versionName = "0.32"
+        versionCode = 150
+        versionName = "0.33"
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")
         buildConfigField("String", "COMMIT_SHA", "\"${getGitSha()}\"")
@@ -85,8 +87,10 @@ android {
     }
 
     sourceSets {
-        getByName("preview").res.srcDirs("src/debug/res")
-        getByName("benchmark").res.srcDirs("src/debug/res")
+        getByName("debug").res.directories += generatedBuildDir.resolve("android/res").path
+        getByName("release").res.directories += generatedBuildDir.resolve("android/res").path
+        getByName("preview").res.directories += "src/debug/res"
+        getByName("benchmark").res.directories += "src/debug/res"
     }
 
     splits {
@@ -151,7 +155,6 @@ android {
 
         // Disable some unused things
         aidl = false
-        renderScript = false
         shaders = false
     }
 
@@ -159,6 +162,26 @@ android {
         abortOnError = false
         checkReleaseBuilds = false
     }
+}
+
+val localesConfigTask = getLocalesConfigTask(
+    generatedBuildDir.resolve("android/res"),
+    listOf(
+        rootDir.resolve("i18n/src/commonMain/moko-resources"),
+        rootDir.resolve("i18n-aniyomi/src/commonMain/moko-resources"),
+    ),
+)
+
+tasks.matching {
+    it.name == "preBuild" || it.name == "preDebugBuild" || it.name == "preReleaseBuild"
+}.configureEach {
+    dependsOn(localesConfigTask)
+}
+
+tasks.matching {
+    it.name == "reportReleaseComposeMappingErrors"
+}.configureEach {
+    enabled = false
 }
 
 kotlin {
@@ -286,6 +309,7 @@ dependencies {
     implementation(libs.aboutLibraries.compose)
     implementation(libs.bundles.voyager)
     implementation(libs.compose.materialmotion)
+    implementation(libs.compose.pagecurl)
     implementation(libs.swipe)
     implementation(libs.compose.webview)
     implementation(libs.compose.grid)
@@ -299,6 +323,8 @@ dependencies {
 
     // Tests
     testImplementation(libs.bundles.test)
+    testRuntimeOnly(libs.junitVintageEngine)
+    testRuntimeOnly(libs.conscrypt.openjdk.uber)
     testImplementation(libs.okhttp.mockwebserver)
 
     // For detecting memory leaks; see https://square.github.io/leakcanary/
@@ -312,6 +338,12 @@ dependencies {
     testImplementation("androidx.test:core:1.6.1")
     testImplementation("androidx.test.ext:junit:1.2.1")
 
+    androidTestImplementation(platform(compose.bom))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation("androidx.test:core:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+
     // mpv-android
     implementation(aniyomilibs.aniyomi.mpv)
     // FFmpeg-kit
@@ -324,6 +356,12 @@ dependencies {
 
     // Lottie animations
     implementation(libs.lottie.compose)
+}
+
+configurations.configureEach {
+    if (name.endsWith("UnitTestRuntimeClasspath")) {
+        exclude(group = "org.conscrypt", module = "conscrypt-android")
+    }
 }
 
 androidComponents {

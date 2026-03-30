@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.data.backup
 
+import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
@@ -30,6 +31,7 @@ import java.time.LocalDate
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import tachiyomi.db.achievement.AchievementsDatabase as SqlDelightAchievementsDatabase
 
 /**
  * Integration tests for achievement backup/restore cycle.
@@ -40,7 +42,7 @@ import kotlin.test.assertTrue
  * - Data integrity after restore
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
+@Config(sdk = [30], application = Application::class)
 class AchievementBackupRestoreIntegrationTest {
 
     private lateinit var context: Context
@@ -58,7 +60,7 @@ class AchievementBackupRestoreIntegrationTest {
         context = ApplicationProvider.getApplicationContext()
 
         driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-        tachiyomi.data.achievement.AchievementsDatabase.Schema.create(driver)
+        SqlDelightAchievementsDatabase.Schema.create(driver)
         database = AchievementsDatabase(driver)
 
         achievementRepository = AchievementRepositoryImpl(database)

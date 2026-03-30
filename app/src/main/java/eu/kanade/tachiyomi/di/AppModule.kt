@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
+import com.tadami.aurora.BuildConfig
 import data.History
 import data.Mangas
 import dataanime.Animehistory
@@ -16,11 +17,11 @@ import datanovel.Novel_history
 import datanovel.Novels
 import eu.kanade.domain.track.anime.store.DelayedAnimeTrackingStore
 import eu.kanade.domain.track.manga.store.DelayedMangaTrackingStore
-import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.data.cache.AnimeBackgroundCache
 import eu.kanade.tachiyomi.data.cache.AnimeCoverCache
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.cache.MangaCoverCache
+import eu.kanade.tachiyomi.data.cache.NovelCoverCache
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadCache
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadProvider
@@ -66,7 +67,7 @@ import nl.adaptivity.xmlutil.core.XmlVersion
 import nl.adaptivity.xmlutil.serialization.XML
 import tachiyomi.core.common.storage.AndroidStorageFolderProvider
 import tachiyomi.data.AnimeUpdateStrategyColumnAdapter
-import tachiyomi.data.Database
+import tachiyomi.`data`.Database
 import tachiyomi.data.DateColumnAdapter
 import tachiyomi.data.FetchTypeColumnAdapter
 import tachiyomi.data.MangaUpdateStrategyColumnAdapter
@@ -89,8 +90,8 @@ import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.domain.storage.service.StorageManager
-import tachiyomi.mi.data.AnimeDatabase
-import tachiyomi.novel.data.NovelDatabase
+import tachiyomi.mi.`data`.AnimeDatabase
+import tachiyomi.novel.`data`.NovelDatabase
 import tachiyomi.source.local.entries.anime.LocalAnimeFetchTypeManager
 import tachiyomi.source.local.image.anime.LocalAnimeBackgroundManager
 import tachiyomi.source.local.image.anime.LocalAnimeCoverManager
@@ -217,7 +218,7 @@ class AppModule(val app: Application) : InjektModule {
         )
 
         val sqlDriverAchievements = AndroidSqliteDriver(
-            schema = tachiyomi.data.achievement.AchievementsDatabase.Schema,
+            schema = tachiyomi.db.achievement.AchievementsDatabase.Schema,
             context = app,
             name = AchievementsDatabase.NAME,
             factory = if (BuildConfig.DEBUG && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -226,7 +227,7 @@ class AppModule(val app: Application) : InjektModule {
             } else {
                 RequerySQLiteOpenHelperFactory()
             },
-            callback = object : AndroidSqliteDriver.Callback(tachiyomi.data.achievement.AchievementsDatabase.Schema) {
+            callback = object : AndroidSqliteDriver.Callback(tachiyomi.db.achievement.AchievementsDatabase.Schema) {
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
                     setPragma(db, "foreign_keys = ON")
@@ -360,6 +361,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { MangaCoverCache(app) }
         addSingletonFactory { AnimeCoverCache(app) }
         addSingletonFactory { AnimeBackgroundCache(app) }
+        addSingletonFactory { NovelCoverCache(app) }
 
         // Anime metadata caches
         addSingletonFactory { tachiyomi.data.shikimori.ShikimoriMetadataCache(get()) }

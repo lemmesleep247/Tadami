@@ -290,6 +290,7 @@ class AnimeScreen(
             AnimeScreenModel.Dialog.EpisodeSettingsSheet -> EpisodeSettingsDialog(
                 onDismissRequest = onDismissRequest,
                 anime = successState.anime,
+                downloadedOnly = successState.downloadedOnly,
                 onDownloadFilterChanged = screenModel::setDownloadedFilter,
                 onUnseenFilterChanged = screenModel::setUnseenFilter,
                 onBookmarkedFilterChanged = screenModel::setBookmarkedFilter,
@@ -303,6 +304,7 @@ class AnimeScreen(
             AnimeScreenModel.Dialog.SeasonSettingsSheet -> SeasonSettingsDialog(
                 onDismissRequest = onDismissRequest,
                 anime = successState.anime,
+                downloadedOnly = successState.downloadedOnly,
                 onDownloadFilterChanged = screenModel::setSeasonDownloadedFilter,
                 onUnseenFilterChanged = screenModel::setSeasonUnseenFilter,
                 onStartedFilterChanged = screenModel::setSeasonStartedFilter,
@@ -345,8 +347,8 @@ class AnimeScreen(
                         anime = anime!!,
                         snackbarHostState = sm.snackbarHostState,
                         pagerState = sm.pagerState,
-                        isCustomCover = remember(anime) { anime!!.hasCustomCover() },
-                        isCustomBackground = remember(anime) { anime!!.hasCustomBackground() },
+                        isCustomCover = remember(anime) { anime!!.hasCustomCover(sm.coverCache) },
+                        isCustomBackground = remember(anime) { anime!!.hasCustomBackground(sm.backgroundCache) },
                         onShareClick = { sm.shareImage(context) },
                         onSaveClick = { sm.saveImage(context) },
                         onEditClick = {

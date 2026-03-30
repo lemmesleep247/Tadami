@@ -57,7 +57,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAny
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
 import eu.kanade.presentation.components.AuroraCard
 import eu.kanade.presentation.components.AuroraTabRow
 import eu.kanade.presentation.components.LocalTabState
@@ -75,7 +74,7 @@ import eu.kanade.presentation.library.components.UnviewedBadge
 import eu.kanade.presentation.library.components.resolveGlowContourCornerIndicatorState
 import eu.kanade.presentation.library.components.resolveGlowContourLibraryTextSpec
 import eu.kanade.presentation.library.resolveNovelLibraryCardProgressPercent
-import eu.kanade.presentation.novel.sourceAwareNovelCoverModel
+import eu.kanade.presentation.novel.buildNovelCoverImageRequest
 import eu.kanade.presentation.theme.AuroraTheme
 import eu.kanade.presentation.theme.aurora.adaptive.auroraCenteredMaxWidth
 import eu.kanade.presentation.theme.aurora.adaptive.rememberAuroraAdaptiveSpec
@@ -184,7 +183,7 @@ fun NovelLibraryAuroraContent(
     val isSelectionMode = selection.isNotEmpty() && onToggleSelection != null
     val onClickNovelItem: (LibraryNovel) -> Unit = { libraryNovel ->
         if (isSelectionMode) {
-            onToggleSelection?.invoke(libraryNovel)
+            onToggleSelection(libraryNovel)
         } else {
             onNovelClicked(libraryNovel.novel.id)
         }
@@ -418,10 +417,7 @@ private fun NovelLibraryAuroraCard(
         isFinished = resolveNovelLibraryCornerIndicatorIsFinished(item.novel.status),
     )
     val coverRequest = remember(item.novel.id, item.novel.thumbnailUrl, item.novel.coverLastModified) {
-        ImageRequest.Builder(context)
-            .data(sourceAwareNovelCoverModel(item.novel))
-            .placeholderMemoryCacheKey(item.novel.thumbnailUrl)
-            .build()
+        buildNovelCoverImageRequest(context, item.novel)
     }
 
     if (useGlowContourCards) {

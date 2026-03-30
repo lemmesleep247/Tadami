@@ -21,7 +21,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import eu.kanade.presentation.theme.TachiyomiTheme
-import eu.kanade.tachiyomi.R
+import androidx.appcompat.R as AppCompatR
 
 inline fun ComponentActivity.setComposeContent(
     parent: CompositionContext? = null,
@@ -67,7 +67,7 @@ inline fun View.popupMenu(
     noinline initMenu: (Menu.() -> Unit)? = null,
     noinline onMenuItemClick: MenuItem.() -> Unit,
 ): PopupMenu {
-    val popup = PopupMenu(context, this, Gravity.NO_GRAVITY, R.attr.actionOverflowMenuStyle, 0)
+    val popup = PopupMenu(context, this, Gravity.NO_GRAVITY, AppCompatR.attr.actionOverflowMenuStyle, 0)
     popup.menuInflater.inflate(menuRes, popup.menu)
 
     if (initMenu != null) {

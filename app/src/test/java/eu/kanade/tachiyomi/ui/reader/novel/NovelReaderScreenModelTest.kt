@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.extension.novel.repo.NovelPluginStorage
 import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.novelsource.model.SNovelChapter
 import eu.kanade.tachiyomi.source.novel.NovelWebUrlSource
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelPageTransitionStyle
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderTheme
 import eu.kanade.tachiyomi.ui.reader.novel.translation.AirforceModelsService
@@ -21,6 +22,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -269,6 +271,48 @@ class NovelReaderScreenModelTest {
             state.contentBlocks[2].shouldBeInstanceOf<NovelReaderScreenModel.ContentBlock.Image>().url shouldBe
                 "https://example.org/images/pic.jpg"
             state.contentBlocks[3].shouldBeInstanceOf<NovelReaderScreenModel.ContentBlock.Text>().text shouldBe "Outro"
+        }
+    }
+
+    @Test
+    fun `keeps text outside selected block tags when building content blocks`() {
+        runBlocking {
+            val novel = Novel.create().copy(
+                id = 1L,
+                source = 10L,
+                title = "Novel",
+                url = "https://example.org/book/slug",
+            )
+            val chapter = NovelChapter.create().copy(
+                id = 5L,
+                novelId = 1L,
+                name = "Chapter 1",
+                url = "https://example.org/book/ch1",
+            )
+
+            val screenModel = trackedNovelReaderScreenModel(
+                chapterId = chapter.id,
+                novelChapterRepository = FakeNovelChapterRepository(chapter),
+                getNovel = GetNovel(FakeNovelRepository(novel)),
+                sourceManager = FakeNovelSourceManager(
+                    sourceId = novel.source,
+                    chapterHtml = "<p>Intro</p><div>Side note</div><p>Outro</p>",
+                ),
+                pluginStorage = FakeNovelPluginStorage(emptyList()),
+                novelReaderPreferences = createNovelReaderPreferences(),
+                isSystemDark = { false },
+            )
+
+            withTimeout(1_000) {
+                while (screenModel.state.value is NovelReaderScreenModel.State.Loading) {
+                    yield()
+                }
+            }
+
+            val state = screenModel.state.value.shouldBeInstanceOf<NovelReaderScreenModel.State.Success>()
+            state.contentBlocks.mapNotNull {
+                (it as? NovelReaderScreenModel.ContentBlock.Text)?.text
+            } shouldBe listOf("Chapter 1", "Intro", "Side note", "Outro")
         }
     }
 
@@ -1169,6 +1213,42 @@ class NovelReaderScreenModelTest {
     }
 
     @Test
+    fun `update reading progress marks single page chapter as read`() {
+        runBlocking {
+            val novel = Novel.create().copy(id = 1L, source = 10L, title = "Novel")
+            val chapter = NovelChapter.create().copy(
+                id = 5L,
+                novelId = 1L,
+                name = "Chapter 1",
+                url = "https://example.org/ch1",
+            )
+            val chapterRepo = FakeNovelChapterRepository(chapter)
+
+            val screenModel = trackedNovelReaderScreenModel(
+                chapterId = chapter.id,
+                novelChapterRepository = chapterRepo,
+                getNovel = GetNovel(FakeNovelRepository(novel)),
+                sourceManager = FakeNovelSourceManager(sourceId = novel.source, chapterHtml = "<p>Hello</p>"),
+                pluginStorage = FakeNovelPluginStorage(emptyList()),
+                novelReaderPreferences = createNovelReaderPreferences(),
+                isSystemDark = { false },
+            )
+
+            withTimeout(1_000) {
+                while (screenModel.state.value is NovelReaderScreenModel.State.Loading) {
+                    yield()
+                }
+            }
+
+            screenModel.updateReadingProgress(currentIndex = 0, totalItems = 1)
+            yield()
+
+            chapterRepo.lastUpdate?.read shouldBe true
+            chapterRepo.lastUpdate?.lastPageRead shouldBe 0L
+        }
+    }
+
+    @Test
     fun `percent based tracking does not mark read too early`() {
         runBlocking {
             val novel = Novel.create().copy(id = 1L, source = 10L, title = "Novel")
@@ -1239,6 +1319,88 @@ class NovelReaderScreenModelTest {
             val state = screenModel.state.value.shouldBeInstanceOf<NovelReaderScreenModel.State.Success>()
             state.lastSavedWebProgressPercent shouldBe 42
             state.lastSavedIndex shouldBe 0
+            Unit
+        }
+    }
+
+    @Test
+    fun `encoded page reader progress is restored separately from native and web state`() {
+        runBlocking {
+            val novel = Novel.create().copy(id = 1L, source = 10L, title = "Novel")
+            val chapter = NovelChapter.create().copy(
+                id = 5L,
+                novelId = 1L,
+                name = "Chapter 1",
+                url = "https://example.org/ch1",
+                lastPageRead = encodePageReaderProgress(index = 7, totalItems = 10),
+            )
+
+            val screenModel = trackedNovelReaderScreenModel(
+                chapterId = chapter.id,
+                novelChapterRepository = FakeNovelChapterRepository(chapter),
+                getNovel = GetNovel(FakeNovelRepository(novel)),
+                sourceManager = FakeNovelSourceManager(sourceId = novel.source, chapterHtml = "<p>Hello</p>"),
+                pluginStorage = FakeNovelPluginStorage(emptyList()),
+                novelReaderPreferences = createNovelReaderPreferences(),
+                isSystemDark = { false },
+            )
+
+            withTimeout(1_000) {
+                while (screenModel.state.value is NovelReaderScreenModel.State.Loading) {
+                    yield()
+                }
+            }
+
+            val state = screenModel.state.value.shouldBeInstanceOf<NovelReaderScreenModel.State.Success>()
+            state.lastSavedPageReaderProgress shouldBe PageReaderProgress(index = 7, totalItems = 10)
+            state.lastSavedIndex shouldBe 0
+            state.lastSavedWebProgressPercent shouldBe 0
+            Unit
+        }
+    }
+
+    @Test
+    fun `page reader progress restore is independent from selected transition style`() {
+        runBlocking {
+            val novel = Novel.create().copy(id = 1L, source = 10L, title = "Novel")
+            val chapter = NovelChapter.create().copy(
+                id = 5L,
+                novelId = 1L,
+                name = "Chapter 1",
+                url = "https://example.org/ch1",
+                lastPageRead = encodePageReaderProgress(index = 7, totalItems = 10),
+            )
+
+            suspend fun loadStateFor(style: NovelPageTransitionStyle): NovelReaderScreenModel.State.Success {
+                val preferences = createNovelReaderPreferences().also {
+                    it.pageTransitionStyle().set(style)
+                }
+                val screenModel = trackedNovelReaderScreenModel(
+                    chapterId = chapter.id,
+                    novelChapterRepository = FakeNovelChapterRepository(chapter),
+                    getNovel = GetNovel(FakeNovelRepository(novel)),
+                    sourceManager = FakeNovelSourceManager(sourceId = novel.source, chapterHtml = "<p>Hello</p>"),
+                    pluginStorage = FakeNovelPluginStorage(emptyList()),
+                    novelReaderPreferences = preferences,
+                    isSystemDark = { false },
+                )
+
+                withTimeout(1_000) {
+                    while (screenModel.state.value is NovelReaderScreenModel.State.Loading) {
+                        yield()
+                    }
+                }
+
+                return screenModel.state.value.shouldBeInstanceOf<NovelReaderScreenModel.State.Success>()
+            }
+
+            val slideState = loadStateFor(NovelPageTransitionStyle.SLIDE)
+            val curlState = loadStateFor(NovelPageTransitionStyle.CURL)
+
+            slideState.lastSavedPageReaderProgress shouldBe PageReaderProgress(index = 7, totalItems = 10)
+            curlState.lastSavedPageReaderProgress shouldBe slideState.lastSavedPageReaderProgress
+            curlState.lastSavedIndex shouldBe slideState.lastSavedIndex
+            curlState.lastSavedWebProgressPercent shouldBe slideState.lastSavedWebProgressPercent
             Unit
         }
     }
@@ -1759,6 +1921,53 @@ class NovelReaderScreenModelTest {
             chapterRepo.completedUpdates.size shouldBe 2
             chapterRepo.completedUpdates[0].lastPageRead shouldBe 1L
             chapterRepo.completedUpdates[1].lastPageRead shouldBe 3L
+        }
+    }
+
+    @Test
+    fun `flush pending progress waits for the in flight chapter update`() {
+        runBlocking {
+            val novel = Novel.create().copy(id = 1L, source = 10L, title = "Novel")
+            val chapter = NovelChapter.create().copy(
+                id = 5L,
+                novelId = 1L,
+                name = "Chapter 1",
+                url = "https://example.org/ch1",
+            )
+            val chapterRepo = BlockingNovelChapterRepository(chapter)
+
+            val screenModel = trackedNovelReaderScreenModel(
+                chapterId = chapter.id,
+                novelChapterRepository = chapterRepo,
+                getNovel = GetNovel(FakeNovelRepository(novel)),
+                sourceManager = FakeNovelSourceManager(sourceId = novel.source, chapterHtml = "<p>Hello</p>"),
+                pluginStorage = FakeNovelPluginStorage(emptyList()),
+                novelReaderPreferences = createNovelReaderPreferences(),
+                isSystemDark = { false },
+            )
+
+            withTimeout(1_000) {
+                while (screenModel.state.value is NovelReaderScreenModel.State.Loading) {
+                    yield()
+                }
+            }
+
+            screenModel.updateReadingProgress(currentIndex = 1, totalItems = 10)
+            withTimeout(1_000) {
+                while (chapterRepo.startedUpdates.isEmpty()) {
+                    yield()
+                }
+            }
+
+            val flushJob = async { screenModel.awaitPendingProgressPersistence() }
+            yield()
+            flushJob.isCompleted shouldBe false
+
+            chapterRepo.allowNextUpdate()
+            flushJob.await()
+
+            chapterRepo.completedUpdates.size shouldBe 1
+            chapterRepo.completedUpdates.single().lastPageRead shouldBe 1L
         }
     }
 

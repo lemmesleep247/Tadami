@@ -4,7 +4,7 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import androidx.core.app.NotificationCompat
 import com.hippo.unifile.UniFile
-import eu.kanade.tachiyomi.R
+import com.tadami.aurora.R
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.notification.Notifications
@@ -18,6 +18,7 @@ import tachiyomi.i18n.MR
 import uy.kohesive.injekt.injectLazy
 import java.io.File
 import java.util.concurrent.TimeUnit
+import tachiyomi.i18n.R as I18nR
 
 class BackupNotifier(private val context: Context) {
 
@@ -161,7 +162,7 @@ class BackupNotifier(private val context: Context) {
             setContentTitle(contentTitle)
             setContentText(
                 context.resources.getQuantityString(
-                    R.plurals.restore_completed_message,
+                    I18nR.plurals.restore_completed_message,
                     errorCount,
                     timeString,
                     errorCount,

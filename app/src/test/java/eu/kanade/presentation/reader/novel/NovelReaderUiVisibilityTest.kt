@@ -1,9 +1,11 @@
 package eu.kanade.presentation.reader.novel
 
+import android.graphics.Typeface
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -11,28 +13,47 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowInsetsControllerCompat
 import eu.kanade.tachiyomi.ui.reader.novel.NovelRichBlockTextAlign
 import eu.kanade.tachiyomi.ui.reader.novel.NovelRichContentBlock
 import eu.kanade.tachiyomi.ui.reader.novel.NovelRichTextSegment
 import eu.kanade.tachiyomi.ui.reader.novel.NovelRichTextStyle
+import eu.kanade.tachiyomi.ui.reader.novel.PageReaderProgress
+import eu.kanade.tachiyomi.ui.reader.novel.decodePageReaderProgress
+import eu.kanade.tachiyomi.ui.reader.novel.encodeNativeScrollProgress
+import eu.kanade.tachiyomi.ui.reader.novel.encodePageReaderProgress
+import eu.kanade.tachiyomi.ui.reader.novel.encodeWebScrollProgressPercent
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelPageTransitionStyle
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelPageTurnIntensity
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelPageTurnShadowIntensity
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelPageTurnSpeed
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderAppearanceMode
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundSource
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundTexture
+import eu.wewox.pagecurl.ExperimentalPageCurlApi
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import kotlin.math.abs
 import eu.kanade.tachiyomi.ui.reader.novel.setting.TextAlign as ReaderTextAlign
 
 class NovelReaderUiVisibilityTest {
+    @AfterEach
+    fun resetNovelReaderSystemUiSession() {
+        NovelReaderSystemUiSession.clear()
+    }
 
     @Test
-    fun `background preset catalog exposes five unique built-ins`() {
-        assertTrue(novelReaderBackgroundPresets.size == 5)
-        assertTrue(novelReaderBackgroundPresets.map { it.id }.toSet().size == 5)
+    fun `background preset catalog exposes six unique built-ins`() {
+        assertTrue(novelReaderBackgroundPresets.size == 6)
+        assertTrue(novelReaderBackgroundPresets.map { it.id }.toSet().size == 6)
     }
 
     @Test
@@ -138,10 +159,10 @@ class NovelReaderUiVisibilityTest {
 
         val cards = buildNovelReaderBackgroundCards(customItems = customItems)
 
-        assertTrue(cards.size == 7)
-        assertTrue(cards.take(5).all { it.isBuiltIn })
-        assertTrue(cards.drop(5).all { !it.isBuiltIn })
-        assertTrue(cards.drop(5).map { it.id } == listOf("custom-1", "custom-2"))
+        assertTrue(cards.size == 8)
+        assertTrue(cards.take(6).all { it.isBuiltIn })
+        assertTrue(cards.drop(6).all { !it.isBuiltIn })
+        assertTrue(cards.drop(6).map { it.id } == listOf("custom-1", "custom-2"))
     }
 
     @Test
@@ -409,6 +430,14 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
+    fun `page reader progress percent starts at zero and ends at one hundred`() {
+        assertEquals(0, resolvePageReaderReadingProgressPercent(pageIndex = 0, pageCount = 5))
+        assertEquals(50, resolvePageReaderReadingProgressPercent(pageIndex = 2, pageCount = 5))
+        assertEquals(100, resolvePageReaderReadingProgressPercent(pageIndex = 4, pageCount = 5))
+        assertEquals(100, resolvePageReaderReadingProgressPercent(pageIndex = 0, pageCount = 1))
+    }
+
+    @Test
     fun `time to end is unknown before reading pace is collected`() {
         val minutes = estimateNovelReaderRemainingMinutes(
             paceState = NovelReaderReadingPaceState(),
@@ -452,6 +481,7 @@ class NovelReaderUiVisibilityTest {
                 showReaderUi = true,
                 verticalSeekbarEnabled = true,
                 showWebView = false,
+                usePageReader = false,
                 textBlocksCount = 10,
             ),
         )
@@ -461,6 +491,7 @@ class NovelReaderUiVisibilityTest {
                 showReaderUi = false,
                 verticalSeekbarEnabled = true,
                 showWebView = false,
+                usePageReader = false,
                 textBlocksCount = 10,
             ),
         )
@@ -470,6 +501,7 @@ class NovelReaderUiVisibilityTest {
                 showReaderUi = true,
                 verticalSeekbarEnabled = true,
                 showWebView = true,
+                usePageReader = false,
                 textBlocksCount = 1,
             ),
         )
@@ -478,8 +510,72 @@ class NovelReaderUiVisibilityTest {
                 showReaderUi = true,
                 verticalSeekbarEnabled = true,
                 showWebView = true,
+                usePageReader = false,
                 textBlocksCount = 10,
             ),
+        )
+        assertTrue(
+            shouldShowVerticalSeekbar(
+                showReaderUi = true,
+                verticalSeekbarEnabled = true,
+                showWebView = false,
+                usePageReader = true,
+                textBlocksCount = 1,
+            ),
+        )
+    }
+
+    @Test
+    fun `page reader dismiss layer is only shown when reader ui is visible`() {
+        assertTrue(
+            shouldShowPageReaderDismissLayer(
+                showReaderUi = true,
+                usePageReader = true,
+            ),
+        )
+        assertFalse(
+            shouldShowPageReaderDismissLayer(
+                showReaderUi = false,
+                usePageReader = true,
+            ),
+        )
+        assertFalse(
+            shouldShowPageReaderDismissLayer(
+                showReaderUi = true,
+                usePageReader = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `page rail labels show first and last page inside seekbar`() {
+        assertEquals(
+            Pair(null, null),
+            resolveReaderPageRailLabels(pageIndex = 0, pageCount = 0),
+        )
+        assertEquals(
+            Pair("1", "1"),
+            resolveReaderPageRailLabels(pageIndex = 0, pageCount = 1),
+        )
+        assertEquals(
+            Pair("7", "10"),
+            resolveReaderPageRailLabels(pageIndex = 6, pageCount = 10),
+        )
+    }
+
+    @Test
+    fun `page seekbar ticks are resolved per page`() {
+        assertEquals(
+            emptyList<Float>(),
+            resolveReaderVerticalSeekbarTickFractions(pageCount = 0),
+        )
+        assertEquals(
+            emptyList<Float>(),
+            resolveReaderVerticalSeekbarTickFractions(pageCount = 1),
+        )
+        assertEquals(
+            listOf(0f, 1f / 3f, 2f / 3f, 1f),
+            resolveReaderVerticalSeekbarTickFractions(pageCount = 4),
         )
     }
 
@@ -683,9 +779,50 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
-    fun `fullscreen reader restores system bars on dispose`() {
-        assertTrue(shouldRestoreSystemBarsOnDispose(fullScreenMode = true))
-        assertTrue(shouldRestoreSystemBarsOnDispose(fullScreenMode = false))
+    fun `chapter handoff should not restore system bars on dispose`() {
+        assertFalse(shouldRestoreSystemBarsOnDispose(isInternalChapterReplace = true))
+        assertTrue(shouldRestoreSystemBarsOnDispose(isInternalChapterReplace = false))
+    }
+
+    @Test
+    fun `internal chapter replace token is consumed once`() {
+        NovelReaderSystemUiSession.markInternalChapterReplace()
+
+        assertTrue(NovelReaderSystemUiSession.consumeInternalChapterReplace())
+        assertFalse(NovelReaderSystemUiSession.consumeInternalChapterReplace())
+    }
+
+    @Test
+    fun `reader exit restores captured system bars state`() {
+        val captured = ReaderSystemBarsState(
+            isLightStatusBars = true,
+            isLightNavigationBars = false,
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE,
+        )
+        val current = captured.copy(
+            isLightStatusBars = false,
+            isLightNavigationBars = true,
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT,
+        )
+
+        assertEquals(captured, resolveReaderExitSystemBarsState(captured = captured, current = current))
+        assertEquals(current, resolveReaderExitSystemBarsState(captured = null, current = current))
+    }
+
+    @Test
+    fun `page reader resets ui visibility on chapter change`() {
+        assertFalse(
+            resolveReaderUiAfterChapterChange(
+                currentShowReaderUi = true,
+                usePageReader = true,
+            ),
+        )
+        assertTrue(
+            resolveReaderUiAfterChapterChange(
+                currentShowReaderUi = true,
+                usePageReader = false,
+            ),
+        )
     }
 
     @Test
@@ -1056,6 +1193,58 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
+    fun `plain paged page assembly marks chapter title block`() {
+        val renderBlocks = buildPlainPageRenderBlocks(
+            page = listOf(
+                PlainPageSlice(
+                    blockIndex = 0,
+                    range = TextPageRange(start = 0, endExclusive = "Chapter 12".length),
+                ),
+                PlainPageSlice(
+                    blockIndex = 1,
+                    range = TextPageRange(start = 0, endExclusive = "First paragraph".length),
+                ),
+            ),
+            textBlocks = listOf("Chapter 12", "First paragraph"),
+            paragraphSpacingPx = 12,
+            forceParagraphIndent = true,
+            chapterTitle = "Chapter 12",
+        )
+
+        assertEquals(listOf(true, false), renderBlocks.map { it.isChapterTitle })
+    }
+
+    @Test
+    fun `paragraph indent makes pagination more conservative`() {
+        val textBlocks = listOf("The quick brown fox jumps over the lazy dog ".repeat(3).trim())
+        val compactPages = paginatePlainPageBlocks(
+            textBlocks = textBlocks,
+            paragraphSpacingPx = 0,
+            widthPx = 220,
+            heightPx = 72,
+            textSizePx = 20f,
+            lineHeightMultiplier = 1.2f,
+            typeface = null,
+            textAlign = ReaderTextAlign.LEFT,
+            forceParagraphIndent = false,
+        )
+        val indentedPages = paginatePlainPageBlocks(
+            textBlocks = textBlocks,
+            paragraphSpacingPx = 0,
+            widthPx = 220,
+            heightPx = 72,
+            textSizePx = 20f,
+            lineHeightMultiplier = 1.2f,
+            typeface = null,
+            textAlign = ReaderTextAlign.LEFT,
+            forceParagraphIndent = true,
+        )
+
+        assertTrue(compactPages.isNotEmpty())
+        assertTrue(indentedPages.size >= compactPages.size)
+    }
+
+    @Test
     fun `rich paged page assembly preserves spans and paragraph boundaries`() {
         val blockTexts = listOf(
             buildRichPageReaderBlockText(
@@ -1097,6 +1286,194 @@ class NovelReaderUiVisibilityTest {
             )
                 .any { it.item == "https://example.org" },
         )
+    }
+
+    @Test
+    fun `rich paged page assembly marks chapter title block`() {
+        val blockTexts = listOf(
+            buildRichPageReaderBlockText(
+                block = NovelRichContentBlock.Paragraph(
+                    segments = listOf(NovelRichTextSegment(text = "Chapter 12")),
+                ),
+                forcedParagraphFirstLineIndentEm = FORCED_PARAGRAPH_FIRST_LINE_INDENT_EM,
+            ),
+            buildRichPageReaderBlockText(
+                block = NovelRichContentBlock.Paragraph(
+                    segments = listOf(NovelRichTextSegment(text = "First paragraph")),
+                ),
+                forcedParagraphFirstLineIndentEm = FORCED_PARAGRAPH_FIRST_LINE_INDENT_EM,
+            ),
+        )
+
+        val renderBlocks = buildRichPageRenderBlocks(
+            page = listOf(
+                RichPageSlice.Text(
+                    blockIndex = 0,
+                    range = TextPageRange(start = 0, endExclusive = "Chapter 12".length),
+                ),
+                RichPageSlice.Text(
+                    blockIndex = 1,
+                    range = TextPageRange(start = 0, endExclusive = "First paragraph".length),
+                ),
+            ),
+            blockTexts = blockTexts,
+            paragraphSpacingPx = 12,
+            chapterTitle = "Chapter 12",
+        )
+
+        assertEquals(listOf(true, false), renderBlocks.map { it.isChapterTitle })
+        assertEquals(listOf(null, 2f), renderBlocks.map { it.firstLineIndentEm })
+    }
+
+    @Test
+    fun `normalized page content preserves plain render blocks and page count`() {
+        val contentPages = normalizePageReaderContentPages(
+            useRichPageReader = false,
+            plainPages = listOf(
+                listOf(
+                    PlainPageSlice(
+                        blockIndex = 0,
+                        range = TextPageRange(start = 0, endExclusive = "Chapter 12".length),
+                    ),
+                ),
+                listOf(
+                    PlainPageSlice(
+                        blockIndex = 1,
+                        range = TextPageRange(start = 0, endExclusive = "First paragraph".length),
+                    ),
+                ),
+            ),
+            richPages = emptyList(),
+            plainTextBlocks = listOf("Chapter 12", "First paragraph"),
+            richBlockTexts = emptyList(),
+            paragraphSpacingPx = 12,
+            forceParagraphIndent = true,
+            chapterTitle = "Chapter 12",
+        )
+
+        assertEquals(2, contentPages.size)
+        val firstBlock = contentPages.first().blocks.single() as NovelPageContentBlock.Plain
+        val secondBlock = contentPages.last().blocks.single() as NovelPageContentBlock.Plain
+        assertEquals("Chapter 12", firstBlock.text)
+        assertTrue(firstBlock.isChapterTitle)
+        assertEquals("First paragraph", secondBlock.text)
+        assertEquals(2f, secondBlock.firstLineIndentEm)
+    }
+
+    @Test
+    fun `normalized page content preserves rich render blocks and chapter title metadata`() {
+        val richBlockTexts = listOf(
+            buildRichPageReaderBlockText(
+                block = NovelRichContentBlock.Paragraph(
+                    segments = listOf(
+                        NovelRichTextSegment(text = "Chapter 12"),
+                    ),
+                ),
+            ),
+            buildRichPageReaderBlockText(
+                block = NovelRichContentBlock.BlockQuote(
+                    segments = listOf(
+                        NovelRichTextSegment(text = "Quoted "),
+                        NovelRichTextSegment(text = "link", linkUrl = "https://example.org"),
+                    ),
+                    textAlign = NovelRichBlockTextAlign.JUSTIFY,
+                ),
+            ),
+        )
+
+        val contentPages = normalizePageReaderContentPages(
+            useRichPageReader = true,
+            plainPages = emptyList(),
+            richPages = listOf(
+                listOf(
+                    RichPageSlice.Text(
+                        blockIndex = 0,
+                        range = TextPageRange(start = 0, endExclusive = "Chapter 12".length),
+                    ),
+                ),
+                listOf(
+                    RichPageSlice.Text(
+                        blockIndex = 1,
+                        range = TextPageRange(start = 0, endExclusive = "Quoted link".length),
+                    ),
+                ),
+            ),
+            plainTextBlocks = emptyList(),
+            richBlockTexts = richBlockTexts,
+            paragraphSpacingPx = 12,
+            forceParagraphIndent = false,
+            chapterTitle = "Chapter 12",
+        )
+
+        assertEquals(2, contentPages.size)
+        val titleBlock = contentPages.first().blocks.single() as NovelPageContentBlock.Rich
+        val quotedBlock = contentPages.last().blocks.single() as NovelPageContentBlock.Rich
+        assertTrue(titleBlock.isChapterTitle)
+        assertEquals("Quoted link", quotedBlock.text.text)
+        assertEquals(NovelRichBlockTextAlign.JUSTIFY, quotedBlock.sourceTextAlign)
+        assertTrue(
+            quotedBlock.text.getStringAnnotations(
+                tag = "URL",
+                start = 0,
+                end = quotedBlock.text.length,
+            ).any { it.item == "https://example.org" },
+        )
+    }
+
+    @Test
+    fun `normalized page content preserves image pages between rich text pages`() {
+        val richBlockTexts = listOf(
+            buildRichPageReaderBlockText(
+                block = NovelRichContentBlock.Paragraph(
+                    segments = listOf(NovelRichTextSegment(text = "Before")),
+                ),
+            ),
+            buildRichPageReaderBlockText(
+                block = NovelRichContentBlock.Paragraph(
+                    segments = listOf(NovelRichTextSegment(text = "After")),
+                ),
+            ),
+        )
+
+        val contentPages = normalizePageReaderContentPages(
+            useRichPageReader = true,
+            plainPages = emptyList(),
+            richPages = listOf(
+                listOf(
+                    RichPageSlice.Text(
+                        blockIndex = 0,
+                        range = TextPageRange(start = 0, endExclusive = "Before".length),
+                    ),
+                ),
+                listOf(
+                    RichPageSlice.Image(
+                        sourceBlockIndex = 1,
+                        imageUrl = "https://example.org/image.jpg",
+                        contentDescription = "Cover art",
+                    ),
+                ),
+                listOf(
+                    RichPageSlice.Text(
+                        blockIndex = 1,
+                        range = TextPageRange(start = 0, endExclusive = "After".length),
+                    ),
+                ),
+            ),
+            plainTextBlocks = emptyList(),
+            richBlockTexts = richBlockTexts,
+            paragraphSpacingPx = 12,
+            forceParagraphIndent = false,
+            chapterTitle = "Before",
+        )
+
+        assertEquals(3, contentPages.size)
+        val firstBlock = contentPages[0].blocks.single() as NovelPageContentBlock.Rich
+        val imageBlock = contentPages[1].blocks.single() as NovelPageContentBlock.Image
+        val thirdBlock = contentPages[2].blocks.single() as NovelPageContentBlock.Rich
+        assertEquals("Before", firstBlock.text.text)
+        assertEquals("https://example.org/image.jpg", imageBlock.imageUrl)
+        assertEquals("Cover art", imageBlock.contentDescription)
+        assertEquals("After", thirdBlock.text.text)
     }
 
     @Test
@@ -1395,6 +1772,28 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
+    fun `page reader depends on parsed content blocks`() {
+        assertTrue(
+            shouldPaginateForPageReader(
+                pageReaderEnabled = true,
+                contentBlocksCount = 1,
+            ),
+        )
+        assertFalse(
+            shouldPaginateForPageReader(
+                pageReaderEnabled = false,
+                contentBlocksCount = 1,
+            ),
+        )
+        assertFalse(
+            shouldPaginateForPageReader(
+                pageReaderEnabled = true,
+                contentBlocksCount = 0,
+            ),
+        )
+    }
+
+    @Test
     fun `unsupported rich content forces webview startup only when experimental rich native is enabled`() {
         assertFalse(
             shouldStartInWebView(
@@ -1412,6 +1811,48 @@ class NovelReaderUiVisibilityTest {
                 pageReaderEnabled = false,
                 contentBlocksCount = 5,
                 richContentUnsupportedFeaturesDetected = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `runtime sync disables webview immediately when page reader becomes active`() {
+        assertFalse(
+            syncShowWebViewWithReaderSettings(
+                currentShowWebView = true,
+                preferWebViewRenderer = true,
+                richNativeRendererExperimentalEnabled = false,
+                pageReaderEnabled = true,
+                contentBlocksCount = 5,
+                richContentUnsupportedFeaturesDetected = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `runtime sync re-enables webview when page reader turns off and preference still requires it`() {
+        assertTrue(
+            syncShowWebViewWithReaderSettings(
+                currentShowWebView = false,
+                preferWebViewRenderer = true,
+                richNativeRendererExperimentalEnabled = false,
+                pageReaderEnabled = false,
+                contentBlocksCount = 5,
+                richContentUnsupportedFeaturesDetected = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `runtime sync leaves webview disabled when active renderer is no longer valid`() {
+        assertFalse(
+            syncShowWebViewWithReaderSettings(
+                currentShowWebView = true,
+                preferWebViewRenderer = false,
+                richNativeRendererExperimentalEnabled = false,
+                pageReaderEnabled = false,
+                contentBlocksCount = 5,
+                richContentUnsupportedFeaturesDetected = false,
             ),
         )
     }
@@ -1548,6 +1989,74 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
+    fun `page reader boundary swipe helper opens adjacent chapter only at edges`() {
+        assertEquals(
+            HorizontalChapterSwipeAction.NEXT,
+            resolvePageReaderBoundaryChapterSwipeAction(
+                currentPage = 9,
+                pageCount = 10,
+                deltaX = -220f,
+                deltaY = 12f,
+                thresholdPx = 160f,
+                hasPreviousChapter = true,
+                hasNextChapter = true,
+            ),
+        )
+        assertEquals(
+            HorizontalChapterSwipeAction.PREVIOUS,
+            resolvePageReaderBoundaryChapterSwipeAction(
+                currentPage = 0,
+                pageCount = 10,
+                deltaX = 220f,
+                deltaY = 10f,
+                thresholdPx = 160f,
+                hasPreviousChapter = true,
+                hasNextChapter = true,
+            ),
+        )
+        assertEquals(
+            HorizontalChapterSwipeAction.NONE,
+            resolvePageReaderBoundaryChapterSwipeAction(
+                currentPage = 4,
+                pageCount = 10,
+                deltaX = -220f,
+                deltaY = 10f,
+                thresholdPx = 160f,
+                hasPreviousChapter = true,
+                hasNextChapter = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `page reader boundary swipe helper ignores vertical dominant gestures`() {
+        assertEquals(
+            HorizontalChapterSwipeAction.NONE,
+            resolvePageReaderBoundaryChapterSwipeAction(
+                currentPage = 9,
+                pageCount = 10,
+                deltaX = -150f,
+                deltaY = 240f,
+                thresholdPx = 160f,
+                hasPreviousChapter = true,
+                hasNextChapter = true,
+            ),
+        )
+        assertEquals(
+            HorizontalChapterSwipeAction.NONE,
+            resolvePageReaderBoundaryChapterSwipeAction(
+                currentPage = 0,
+                pageCount = 10,
+                deltaX = 150f,
+                deltaY = -240f,
+                thresholdPx = 160f,
+                hasPreviousChapter = true,
+                hasNextChapter = true,
+            ),
+        )
+    }
+
+    @Test
     fun `kindle dependent toggles disable when kindle info block is off`() {
         assertFalse(areQuickDialogKindleDependentControlsEnabled(showKindleInfoBlock = false))
         assertTrue(areQuickDialogKindleDependentControlsEnabled(showKindleInfoBlock = true))
@@ -1562,8 +2071,8 @@ class NovelReaderUiVisibilityTest {
         )
         assertFalse(pageModeState.preferWebViewEnabled)
         assertTrue(pageModeState.preferWebViewReason == RendererSettingDisableReason.PAGE_MODE)
-        assertFalse(pageModeState.richNativeEnabled)
-        assertTrue(pageModeState.richNativeReason == RendererSettingDisableReason.PAGE_MODE)
+        assertTrue(pageModeState.richNativeEnabled)
+        assertTrue(pageModeState.richNativeReason == null)
 
         val webViewState = resolveRendererSettingsAvailability(
             pageReaderEnabled = false,
@@ -1583,6 +2092,787 @@ class NovelReaderUiVisibilityTest {
         assertTrue(bionicState.preferWebViewEnabled)
         assertFalse(bionicState.richNativeEnabled)
         assertTrue(bionicState.richNativeReason == RendererSettingDisableReason.BIONIC_READING)
+    }
+
+    @Test
+    fun `compose pager transition styles resolve to compose pager engine`() {
+        assertEquals(
+            NovelPageTransitionEngine.COMPOSE_PAGER,
+            resolvePageTransitionEngine(NovelPageTransitionStyle.INSTANT),
+        )
+        assertEquals(
+            NovelPageTransitionEngine.COMPOSE_PAGER,
+            resolvePageTransitionEngine(NovelPageTransitionStyle.SLIDE),
+        )
+        assertEquals(
+            NovelPageTransitionEngine.COMPOSE_PAGER,
+            resolvePageTransitionEngine(NovelPageTransitionStyle.DEPTH),
+        )
+    }
+
+    @Test
+    fun `book and curl transition styles resolve to page turn engine`() {
+        assertEquals(
+            NovelPageTransitionEngine.PAGE_TURN_RENDERER,
+            resolvePageTransitionEngine(NovelPageTransitionStyle.BOOK),
+        )
+        assertEquals(
+            NovelPageTransitionEngine.PAGE_TURN_RENDERER,
+            resolvePageTransitionEngine(NovelPageTransitionStyle.CURL),
+        )
+    }
+
+    @Test
+    fun `unsupported page turn transition styles fall back to slide`() {
+        assertEquals(
+            NovelPageTransitionStyle.SLIDE,
+            resolveActivePageTransitionStyle(
+                requestedStyle = NovelPageTransitionStyle.BOOK,
+                pageTurnRendererSupported = false,
+            ),
+        )
+        assertEquals(
+            NovelPageTransitionStyle.SLIDE,
+            resolveActivePageTransitionStyle(
+                requestedStyle = NovelPageTransitionStyle.CURL,
+                pageTurnRendererSupported = false,
+            ),
+        )
+        assertEquals(
+            NovelPageTransitionStyle.DEPTH,
+            resolveActivePageTransitionStyle(
+                requestedStyle = NovelPageTransitionStyle.DEPTH,
+                pageTurnRendererSupported = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `page reader routes compose transition styles through compose pager renderer`() {
+        assertEquals(
+            NovelPageReaderRendererRoute.COMPOSE_PAGER,
+            resolvePageReaderRendererRoute(
+                usePageReader = true,
+                activeStyle = NovelPageTransitionStyle.INSTANT,
+            ),
+        )
+        assertEquals(
+            NovelPageReaderRendererRoute.COMPOSE_PAGER,
+            resolvePageReaderRendererRoute(
+                usePageReader = true,
+                activeStyle = NovelPageTransitionStyle.SLIDE,
+            ),
+        )
+        assertEquals(
+            NovelPageReaderRendererRoute.COMPOSE_PAGER,
+            resolvePageReaderRendererRoute(
+                usePageReader = true,
+                activeStyle = NovelPageTransitionStyle.DEPTH,
+            ),
+        )
+    }
+
+    @Test
+    fun `page reader routes book and curl through page turn renderer`() {
+        assertEquals(
+            NovelPageReaderRendererRoute.PAGE_TURN_RENDERER,
+            resolvePageReaderRendererRoute(
+                usePageReader = true,
+                activeStyle = NovelPageTransitionStyle.BOOK,
+            ),
+        )
+        assertEquals(
+            NovelPageReaderRendererRoute.PAGE_TURN_RENDERER,
+            resolvePageReaderRendererRoute(
+                usePageReader = true,
+                activeStyle = NovelPageTransitionStyle.CURL,
+            ),
+        )
+    }
+
+    @Test
+    fun `page turn placeholder falls back to slide visuals`() {
+        assertEquals(
+            NovelPageTransitionStyle.SLIDE,
+            resolvePageTurnRendererFallbackStyle(NovelPageTransitionStyle.BOOK),
+        )
+        assertEquals(
+            NovelPageTransitionStyle.SLIDE,
+            resolvePageTurnRendererFallbackStyle(NovelPageTransitionStyle.CURL),
+        )
+        assertEquals(
+            NovelPageTransitionStyle.DEPTH,
+            resolvePageTurnRendererFallbackStyle(NovelPageTransitionStyle.DEPTH),
+        )
+    }
+
+    @Test
+    fun `page turn placeholder keeps page progress index contract`() {
+        assertEquals(7, resolvePageTurnRendererProgressPageIndex(currentPage = 7))
+    }
+
+    @Test
+    fun `page turn renderer resolves current page from curl state instead of pager state`() {
+        assertEquals(
+            6,
+            resolvePageReaderCurrentPage(
+                pageReaderRendererRoute = NovelPageReaderRendererRoute.PAGE_TURN_RENDERER,
+                pagerCurrentPage = 0,
+                pageTurnCurrentPage = 6,
+            ),
+        )
+    }
+
+    @Test
+    fun `compose pager keeps current page sourced from pager state`() {
+        assertEquals(
+            3,
+            resolvePageReaderCurrentPage(
+                pageReaderRendererRoute = NovelPageReaderRendererRoute.COMPOSE_PAGER,
+                pagerCurrentPage = 3,
+                pageTurnCurrentPage = 6,
+            ),
+        )
+    }
+
+    @Test
+    fun `page turn seekbar thumb follows curl page rather than pager state`() {
+        val seekbarValue = resolveReaderVerticalSeekbarValue(
+            showWebView = false,
+            webProgressPercent = 0,
+            usePageReader = true,
+            pageReaderRendererRoute = NovelPageReaderRendererRoute.PAGE_TURN_RENDERER,
+            pagerCurrentPage = 0,
+            pageTurnCurrentPage = 6,
+            seekbarItemsCount = 11,
+            readingProgressPercent = 60,
+        )
+
+        assertEquals(0.6f, seekbarValue, 0.0001f)
+    }
+
+    @Test
+    fun `book and curl resolve to distinct page turn presets`() {
+        val bookPreset = resolveNovelPageTurnPreset(
+            style = NovelPageTransitionStyle.BOOK,
+            speed = NovelPageTurnSpeed.NORMAL,
+            intensity = NovelPageTurnIntensity.MEDIUM,
+            shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+        )
+        val curlPreset = resolveNovelPageTurnPreset(
+            style = NovelPageTransitionStyle.CURL,
+            speed = NovelPageTurnSpeed.NORMAL,
+            intensity = NovelPageTurnIntensity.MEDIUM,
+            shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+        )
+
+        assertTrue(bookPreset.curlAmount < curlPreset.curlAmount)
+        assertTrue(bookPreset.shadowAlpha < curlPreset.shadowAlpha)
+        assertTrue(bookPreset.backPageAlpha < curlPreset.backPageAlpha)
+    }
+
+    @Test
+    fun `page turn preset widens the gap between slow and fast tuning`() {
+        val slowPreset = resolveNovelPageTurnPreset(
+            style = NovelPageTransitionStyle.BOOK,
+            speed = NovelPageTurnSpeed.SLOW,
+            intensity = NovelPageTurnIntensity.LOW,
+            shadowIntensity = NovelPageTurnShadowIntensity.LOW,
+        )
+        val fastPreset = resolveNovelPageTurnPreset(
+            style = NovelPageTransitionStyle.BOOK,
+            speed = NovelPageTurnSpeed.FAST,
+            intensity = NovelPageTurnIntensity.HIGH,
+            shadowIntensity = NovelPageTurnShadowIntensity.HIGH,
+        )
+
+        assertTrue(slowPreset.animationDurationMillis - fastPreset.animationDurationMillis >= 240)
+        assertTrue(slowPreset.curlAmount < fastPreset.curlAmount)
+        assertTrue(slowPreset.shadowAlpha < fastPreset.shadowAlpha)
+    }
+
+    @Test
+    fun `page turn slider mappings round trip the expanded value set`() {
+        assertEquals(0, novelPageTurnSpeedSliderIndex(NovelPageTurnSpeed.SLOWER))
+        assertEquals(NovelPageTurnSpeed.SLOWER, resolveNovelPageTurnSpeedSliderValue(0))
+        assertEquals(4, novelPageTurnSpeedSliderIndex(NovelPageTurnSpeed.FASTER))
+        assertEquals(NovelPageTurnSpeed.FASTER, resolveNovelPageTurnSpeedSliderValue(4))
+
+        assertEquals(0, novelPageTurnIntensitySliderIndex(NovelPageTurnIntensity.SOFTER))
+        assertEquals(NovelPageTurnIntensity.SOFTER, resolveNovelPageTurnIntensitySliderValue(0))
+        assertEquals(4, novelPageTurnIntensitySliderIndex(NovelPageTurnIntensity.STRONGER))
+        assertEquals(NovelPageTurnIntensity.STRONGER, resolveNovelPageTurnIntensitySliderValue(4))
+
+        assertEquals(0, novelPageTurnShadowIntensitySliderIndex(NovelPageTurnShadowIntensity.SOFTER))
+        assertEquals(
+            NovelPageTurnShadowIntensity.SOFTER,
+            resolveNovelPageTurnShadowIntensitySliderValue(0),
+        )
+        assertEquals(4, novelPageTurnShadowIntensitySliderIndex(NovelPageTurnShadowIntensity.STRONGER))
+        assertEquals(
+            NovelPageTurnShadowIntensity.STRONGER,
+            resolveNovelPageTurnShadowIntensitySliderValue(4),
+        )
+    }
+
+    @Test
+    fun `page turn tuning summary text formats expanded labels`() {
+        assertEquals(
+            "Slower speed • Stronger intensity • Softer shadow",
+            resolveNovelPageTurnTuningSummaryText(
+                format = "%1\$s speed • %2\$s intensity • %3\$s shadow",
+                speedLabel = "Slower",
+                intensityLabel = "Stronger",
+                shadowLabel = "Softer",
+            ),
+        )
+    }
+
+    @Test
+    fun `page turn preset responds to the new slider extremes`() {
+        val softerPreset = resolveNovelPageTurnPreset(
+            style = NovelPageTransitionStyle.BOOK,
+            speed = NovelPageTurnSpeed.SLOWER,
+            intensity = NovelPageTurnIntensity.SOFTER,
+            shadowIntensity = NovelPageTurnShadowIntensity.SOFTER,
+        )
+        val strongerPreset = resolveNovelPageTurnPreset(
+            style = NovelPageTransitionStyle.BOOK,
+            speed = NovelPageTurnSpeed.FASTER,
+            intensity = NovelPageTurnIntensity.STRONGER,
+            shadowIntensity = NovelPageTurnShadowIntensity.STRONGER,
+        )
+
+        assertEquals(NovelPageTransitionStyle.BOOK, softerPreset.style)
+        assertEquals(NovelPageTransitionStyle.BOOK, strongerPreset.style)
+        assertTrue(softerPreset.animationDurationMillis > strongerPreset.animationDurationMillis)
+        assertTrue(softerPreset.curlAmount < strongerPreset.curlAmount)
+        assertTrue(softerPreset.shadowAlpha < strongerPreset.shadowAlpha)
+        assertTrue(softerPreset.backPageAlpha < strongerPreset.backPageAlpha)
+    }
+
+    @Test
+    fun `page turn speed presets use the updated slow and slower durations`() {
+        val slowerBookPreset = resolveNovelPageTurnPreset(
+            style = NovelPageTransitionStyle.BOOK,
+            speed = NovelPageTurnSpeed.SLOWER,
+            intensity = NovelPageTurnIntensity.MEDIUM,
+            shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+        )
+        val slowBookPreset = resolveNovelPageTurnPreset(
+            style = NovelPageTransitionStyle.BOOK,
+            speed = NovelPageTurnSpeed.SLOW,
+            intensity = NovelPageTurnIntensity.MEDIUM,
+            shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+        )
+        val slowerCurlPreset = resolveNovelPageTurnPreset(
+            style = NovelPageTransitionStyle.CURL,
+            speed = NovelPageTurnSpeed.SLOWER,
+            intensity = NovelPageTurnIntensity.MEDIUM,
+            shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+        )
+        val slowCurlPreset = resolveNovelPageTurnPreset(
+            style = NovelPageTransitionStyle.CURL,
+            speed = NovelPageTurnSpeed.SLOW,
+            intensity = NovelPageTurnIntensity.MEDIUM,
+            shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+        )
+
+        assertEquals(780, slowerBookPreset.animationDurationMillis)
+        assertEquals(680, slowBookPreset.animationDurationMillis)
+        assertEquals(740, slowerCurlPreset.animationDurationMillis)
+        assertEquals(640, slowCurlPreset.animationDurationMillis)
+    }
+
+    @Test
+    fun `page turn softer and low intensity use the updated stronger offsets`() {
+        val softerPreset = resolveNovelPageTurnPreset(
+            style = NovelPageTransitionStyle.CURL,
+            speed = NovelPageTurnSpeed.NORMAL,
+            intensity = NovelPageTurnIntensity.SOFTER,
+            shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+        )
+        val lowPreset = resolveNovelPageTurnPreset(
+            style = NovelPageTransitionStyle.CURL,
+            speed = NovelPageTurnSpeed.NORMAL,
+            intensity = NovelPageTurnIntensity.LOW,
+            shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+        )
+
+        assertEquals(0.40f, softerPreset.curlAmount, 0.0001f)
+        assertEquals(0.16f, softerPreset.backPageAlpha, 0.0001f)
+        assertEquals(0.56f, lowPreset.curlAmount, 0.0001f)
+        assertEquals(0.24f, lowPreset.backPageAlpha, 0.0001f)
+    }
+
+    @Test
+    fun `page turn tuning values modify preset output without changing selected style`() {
+        val basePreset = resolveNovelPageTurnPreset(
+            style = NovelPageTransitionStyle.CURL,
+            speed = NovelPageTurnSpeed.NORMAL,
+            intensity = NovelPageTurnIntensity.MEDIUM,
+            shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+        )
+        val tunedPreset = resolveNovelPageTurnPreset(
+            style = NovelPageTransitionStyle.CURL,
+            speed = NovelPageTurnSpeed.FAST,
+            intensity = NovelPageTurnIntensity.HIGH,
+            shadowIntensity = NovelPageTurnShadowIntensity.LOW,
+        )
+
+        assertEquals(NovelPageTransitionStyle.CURL, basePreset.style)
+        assertEquals(NovelPageTransitionStyle.CURL, tunedPreset.style)
+        assertTrue(tunedPreset.animationDurationMillis < basePreset.animationDurationMillis)
+        assertTrue(tunedPreset.curlAmount > basePreset.curlAmount)
+        assertTrue(tunedPreset.shadowAlpha < basePreset.shadowAlpha)
+    }
+
+    @Test
+    fun `page reader content layout keeps text padding separate from full page surface`() {
+        val layout = resolveNovelPageReaderContentLayout(
+            contentPadding = 20.dp,
+            statusBarTopPadding = 12.dp,
+            horizontalMargin = 18,
+        )
+
+        assertEquals(32.dp, layout.textPadding.calculateTopPadding())
+        assertEquals(20.dp, layout.textPadding.calculateBottomPadding())
+        assertEquals(18.dp, layout.textPadding.calculateLeftPadding(LayoutDirection.Ltr))
+        assertEquals(18.dp, layout.textPadding.calculateRightPadding(LayoutDirection.Ltr))
+    }
+
+    @Test
+    fun `page reader reserves bottom book inset`() {
+        assertEquals(
+            30.dp,
+            resolveNovelPageReaderBookBottomInset(
+                density = Density(1f),
+                fontSize = 20,
+                lineHeight = 1.2f,
+            ),
+        )
+    }
+
+    @Test
+    fun `page turn renderer config maps book and curl to distinct drag profiles`() {
+        val bookConfig = resolveNovelPageTurnRendererConfig(
+            style = NovelPageTransitionStyle.BOOK,
+            speed = NovelPageTurnSpeed.NORMAL,
+            intensity = NovelPageTurnIntensity.MEDIUM,
+            shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+            textBackground = Color(0xFFF8F2E7),
+            canMoveBackward = true,
+            canMoveForward = true,
+        )
+        val curlConfig = resolveNovelPageTurnRendererConfig(
+            style = NovelPageTransitionStyle.CURL,
+            speed = NovelPageTurnSpeed.NORMAL,
+            intensity = NovelPageTurnIntensity.MEDIUM,
+            shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+            textBackground = Color(0xFFF8F2E7),
+            canMoveBackward = true,
+            canMoveForward = true,
+        )
+
+        assertEquals(NovelPageTurnDragMode.START_END, bookConfig.dragMode)
+        assertEquals(NovelPageTurnDragMode.GESTURE, curlConfig.dragMode)
+        assertTrue(bookConfig.dragActivationEdgeFraction < curlConfig.dragActivationEdgeFraction)
+        assertTrue(bookConfig.shadowRadiusDp < curlConfig.shadowRadiusDp)
+        assertTrue(bookConfig.preset.curlAmount < curlConfig.preset.curlAmount)
+    }
+
+    @Test
+    fun `page turn renderer config keeps back page color parchment tinted instead of pure white`() {
+        val config = resolveNovelPageTurnRendererConfig(
+            style = NovelPageTransitionStyle.CURL,
+            speed = NovelPageTurnSpeed.NORMAL,
+            intensity = NovelPageTurnIntensity.MEDIUM,
+            shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+            textBackground = Color.White,
+            canMoveBackward = true,
+            canMoveForward = true,
+        )
+
+        assertNotEquals(Color.White, config.backPageColor)
+        assertTrue(config.backPageColor.luminance() < Color.White.luminance())
+    }
+
+    @Test
+    fun `page turn renderer config keeps back page color visibly warmer than white`() {
+        val config = resolveNovelPageTurnRendererConfig(
+            style = NovelPageTransitionStyle.CURL,
+            speed = NovelPageTurnSpeed.NORMAL,
+            intensity = NovelPageTurnIntensity.MEDIUM,
+            shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+            textBackground = Color.White,
+            canMoveBackward = true,
+            canMoveForward = true,
+        )
+
+        assertTrue(
+            config.backPageColor.luminance() < 0.90f,
+            "expected parchment-like back face, got ${config.backPageColor}",
+        )
+    }
+
+    @Test
+    fun `page turn renderer config disables unavailable turn directions without losing center tap`() {
+        val config = resolveNovelPageTurnRendererConfig(
+            style = NovelPageTransitionStyle.CURL,
+            speed = NovelPageTurnSpeed.FAST,
+            intensity = NovelPageTurnIntensity.HIGH,
+            shadowIntensity = NovelPageTurnShadowIntensity.LOW,
+            textBackground = Color(0xFF171717),
+            canMoveBackward = false,
+            canMoveForward = true,
+        )
+
+        assertFalse(config.dragBackwardEnabled)
+        assertTrue(config.dragForwardEnabled)
+        assertFalse(config.tapBackwardEnabled)
+        assertTrue(config.tapForwardEnabled)
+        assertTrue(config.tapCustomEnabled)
+        assertTrue(config.centerTapWidthFraction >= 0.2f)
+    }
+
+    @Test
+    fun `page turn custom tap action keeps center tap when tap to scroll is disabled`() {
+        assertEquals(
+            PageTurnCustomTapAction.TOGGLE_UI,
+            resolvePageTurnCustomTapAction(
+                tapXFraction = 0.5f,
+                currentPage = 0,
+                pageCount = 3,
+                centerTapWidthFraction = 0.2f,
+                hasPreviousChapter = true,
+                hasNextChapter = true,
+                tapToScrollEnabled = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `page turn custom tap action ignores edge chapter navigation when tap to scroll is disabled`() {
+        assertEquals(
+            PageTurnCustomTapAction.NONE,
+            resolvePageTurnCustomTapAction(
+                tapXFraction = 0.05f,
+                currentPage = 0,
+                pageCount = 3,
+                centerTapWidthFraction = 0.2f,
+                hasPreviousChapter = true,
+                hasNextChapter = true,
+                tapToScrollEnabled = false,
+            ),
+        )
+    }
+
+    @Test
+    @OptIn(ExperimentalPageCurlApi::class)
+    fun `page turn renderer keeps backward tap zones wide enough for left side taps`() {
+        val bookConfig = resolveNovelPageTurnRendererConfig(
+            style = NovelPageTransitionStyle.BOOK,
+            speed = NovelPageTurnSpeed.NORMAL,
+            intensity = NovelPageTurnIntensity.MEDIUM,
+            shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+            textBackground = Color(0xFFF8F2E7),
+            canMoveBackward = true,
+            canMoveForward = true,
+        )
+        val bookTapInteraction = createPageTurnTapInteraction(bookConfig)
+        val curlTapInteraction = createPageTurnTapInteraction(
+            resolveNovelPageTurnRendererConfig(
+                style = NovelPageTransitionStyle.CURL,
+                speed = NovelPageTurnSpeed.NORMAL,
+                intensity = NovelPageTurnIntensity.MEDIUM,
+                shadowIntensity = NovelPageTurnShadowIntensity.MEDIUM,
+                textBackground = Color(0xFFF8F2E7),
+                canMoveBackward = true,
+                canMoveForward = true,
+            ),
+        )
+
+        assertEquals(
+            0.4f,
+            bookTapInteraction.backward.target.right,
+            0.0001f,
+        )
+        assertEquals(
+            0.4f,
+            curlTapInteraction.backward.target.right,
+            0.0001f,
+        )
+    }
+
+    @Test
+    fun `page turn tuning controls only show for book and curl in page mode`() {
+        assertFalse(
+            shouldShowPageTurnTuningControls(
+                pageReaderEnabled = false,
+                style = NovelPageTransitionStyle.BOOK,
+            ),
+        )
+        assertFalse(
+            shouldShowPageTurnTuningControls(
+                pageReaderEnabled = true,
+                style = NovelPageTransitionStyle.SLIDE,
+            ),
+        )
+        assertTrue(
+            shouldShowPageTurnTuningControls(
+                pageReaderEnabled = true,
+                style = NovelPageTransitionStyle.BOOK,
+            ),
+        )
+        assertTrue(
+            shouldShowPageTurnTuningControls(
+                pageReaderEnabled = true,
+                style = NovelPageTransitionStyle.CURL,
+            ),
+        )
+    }
+
+    @Test
+    fun `rich page content contract stays stable across compose and page turn transition routes`() {
+        val richBlockTexts = listOf(
+            buildRichPageReaderBlockText(
+                block = NovelRichContentBlock.Paragraph(
+                    segments = listOf(NovelRichTextSegment(text = "Chapter 12")),
+                    textAlign = NovelRichBlockTextAlign.CENTER,
+                ),
+            ),
+        )
+
+        val normalizedPages = normalizePageReaderContentPages(
+            useRichPageReader = true,
+            plainPages = emptyList(),
+            richPages = listOf(
+                listOf(
+                    RichPageSlice.Text(
+                        blockIndex = 0,
+                        range = TextPageRange(start = 0, endExclusive = "Chapter 12".length),
+                    ),
+                ),
+            ),
+            plainTextBlocks = emptyList(),
+            richBlockTexts = richBlockTexts,
+            paragraphSpacingPx = 12,
+            forceParagraphIndent = false,
+            chapterTitle = "Chapter 12",
+        )
+
+        val slideRoute = resolvePageReaderRendererRoute(
+            usePageReader = true,
+            activeStyle = resolveActivePageTransitionStyle(
+                requestedStyle = NovelPageTransitionStyle.SLIDE,
+                pageTurnRendererSupported = true,
+            ),
+        )
+        val bookRoute = resolvePageReaderRendererRoute(
+            usePageReader = true,
+            activeStyle = resolveActivePageTransitionStyle(
+                requestedStyle = NovelPageTransitionStyle.BOOK,
+                pageTurnRendererSupported = true,
+            ),
+        )
+
+        assertEquals(NovelPageReaderRendererRoute.COMPOSE_PAGER, slideRoute)
+        assertEquals(NovelPageReaderRendererRoute.PAGE_TURN_RENDERER, bookRoute)
+        assertEquals(1, normalizedPages.size)
+        val richBlock = normalizedPages.single().blocks.single() as NovelPageContentBlock.Rich
+        assertTrue(richBlock.isChapterTitle)
+        assertEquals(NovelRichBlockTextAlign.CENTER, richBlock.sourceTextAlign)
+        assertEquals(null, richBlock.firstLineIndentEm)
+    }
+
+    @Test
+    fun `rich paged renderer eligibility survives book and curl style fallback decisions`() {
+        val richEligible = shouldUseRichNativePageRenderer(
+            richNativeRendererExperimentalEnabled = true,
+            pageReaderEnabled = true,
+            bionicReadingEnabled = false,
+            richContentBlocks = listOf(
+                NovelRichContentBlock.Paragraph(
+                    segments = listOf(NovelRichTextSegment("Styled")),
+                ),
+            ),
+            richContentUnsupportedFeaturesDetected = false,
+        )
+
+        val bookStyle = resolveActivePageTransitionStyle(
+            requestedStyle = NovelPageTransitionStyle.BOOK,
+            pageTurnRendererSupported = true,
+        )
+        val curlFallbackStyle = resolveActivePageTransitionStyle(
+            requestedStyle = NovelPageTransitionStyle.CURL,
+            pageTurnRendererSupported = false,
+        )
+
+        assertTrue(richEligible)
+        assertEquals(NovelPageTransitionStyle.BOOK, bookStyle)
+        assertEquals(NovelPageTransitionStyle.SLIDE, curlFallbackStyle)
+    }
+
+    @Test
+    fun `instant transition keeps decorative transforms neutral`() {
+        val spec = resolveComposePagerTransitionSpec(
+            style = NovelPageTransitionStyle.INSTANT,
+            pageOffset = 0.65f,
+        )
+
+        assertEquals(1f, spec.alpha)
+        assertEquals(1f, spec.scale)
+        assertEquals(0f, spec.translationXFraction)
+        assertTrue(spec.cancelPagerMotion)
+        assertTrue(spec.hideOffscreenPages)
+    }
+
+    @Test
+    fun `slide transition preserves standard pager motion`() {
+        val spec = resolveComposePagerTransitionSpec(
+            style = NovelPageTransitionStyle.SLIDE,
+            pageOffset = 0.65f,
+        )
+
+        assertEquals(1f, spec.alpha)
+        assertEquals(1f, spec.scale)
+        assertEquals(0f, spec.translationXFraction)
+        assertFalse(spec.cancelPagerMotion)
+    }
+
+    @Test
+    fun `depth transition applies bounded scale alpha and translation`() {
+        val spec = resolveComposePagerTransitionSpec(
+            style = NovelPageTransitionStyle.DEPTH,
+            pageOffset = 0.65f,
+        )
+
+        assertTrue(spec.alpha in 0.65f..1f)
+        assertTrue(spec.scale in 0.92f..1f)
+        assertTrue(abs(spec.translationXFraction) > 0f)
+        assertTrue(abs(spec.translationXFraction) <= 0.12f)
+        assertFalse(spec.cancelPagerMotion)
+    }
+
+    @Test
+    fun `renderer tuning changes keep quick reader settings dialog open`() {
+        assertFalse(
+            shouldDismissReaderSettingsDialogAfterFamilyChange(
+                NovelReaderSettingsFamily.RENDERER_TUNING,
+            ),
+        )
+        assertFalse(
+            shouldDismissReaderSettingsDialogAfterFamilyChange(
+                NovelReaderSettingsFamily.LIVE_TEXT_STYLING,
+            ),
+        )
+    }
+
+    @Test
+    fun `rich paged renderer is allowed for text only rich chapters`() {
+        assertTrue(
+            shouldUseRichNativePageRenderer(
+                richNativeRendererExperimentalEnabled = true,
+                pageReaderEnabled = true,
+                bionicReadingEnabled = false,
+                richContentBlocks = listOf(
+                    NovelRichContentBlock.Paragraph(
+                        segments = listOf(
+                            NovelRichTextSegment(
+                                text = "Styled",
+                                style = NovelRichTextStyle(bold = true),
+                            ),
+                        ),
+                    ),
+                    NovelRichContentBlock.BlockQuote(
+                        segments = listOf(NovelRichTextSegment("Quoted")),
+                        textAlign = NovelRichBlockTextAlign.JUSTIFY,
+                    ),
+                ),
+                richContentUnsupportedFeaturesDetected = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `rich paged renderer allows image only and mixed rich chapters but still blocks unsupported modes`() {
+        assertTrue(
+            shouldUseRichNativePageRenderer(
+                richNativeRendererExperimentalEnabled = true,
+                pageReaderEnabled = true,
+                bionicReadingEnabled = false,
+                richContentBlocks = listOf(
+                    NovelRichContentBlock.Image(url = "https://example.org/image.jpg"),
+                ),
+                richContentUnsupportedFeaturesDetected = false,
+            ),
+        )
+        assertTrue(
+            shouldUseRichNativePageRenderer(
+                richNativeRendererExperimentalEnabled = true,
+                pageReaderEnabled = true,
+                bionicReadingEnabled = false,
+                richContentBlocks = listOf(
+                    NovelRichContentBlock.Paragraph(
+                        segments = listOf(NovelRichTextSegment("Styled")),
+                    ),
+                    NovelRichContentBlock.Image(url = "https://example.org/image.jpg"),
+                ),
+                richContentUnsupportedFeaturesDetected = false,
+            ),
+        )
+        assertFalse(
+            shouldUseRichNativePageRenderer(
+                richNativeRendererExperimentalEnabled = true,
+                pageReaderEnabled = true,
+                bionicReadingEnabled = false,
+                richContentBlocks = listOf(
+                    NovelRichContentBlock.Paragraph(
+                        segments = listOf(NovelRichTextSegment("Styled")),
+                    ),
+                ),
+                richContentUnsupportedFeaturesDetected = true,
+            ),
+        )
+        assertFalse(
+            shouldUseRichNativePageRenderer(
+                richNativeRendererExperimentalEnabled = true,
+                pageReaderEnabled = true,
+                bionicReadingEnabled = true,
+                richContentBlocks = listOf(
+                    NovelRichContentBlock.Paragraph(
+                        segments = listOf(NovelRichTextSegment("Styled")),
+                    ),
+                ),
+                richContentUnsupportedFeaturesDetected = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `chapter swipe controls are disabled while page mode is active`() {
+        assertFalse(
+            areChapterSwipeControlsEnabled(
+                swipeGesturesEnabled = true,
+                pageReaderEnabled = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `chapter swipe controls require swipe gestures and scroll mode`() {
+        assertTrue(
+            areChapterSwipeControlsEnabled(
+                swipeGesturesEnabled = true,
+                pageReaderEnabled = false,
+            ),
+        )
+        assertFalse(
+            areChapterSwipeControlsEnabled(
+                swipeGesturesEnabled = false,
+                pageReaderEnabled = false,
+            ),
+        )
     }
 
     @Test
@@ -1692,6 +2982,55 @@ class NovelReaderUiVisibilityTest {
                 globalTextAlign = ReaderTextAlign.SOURCE,
             ) == TextAlign.Start,
         )
+    }
+
+    @Test
+    fun `page reader progress restore scales to current page count after repagination`() {
+        assertEquals(
+            8,
+            resolveInitialPageReaderPage(
+                savedPageReaderProgress = PageReaderProgress(index = 4, totalItems = 5),
+                legacyLastSavedIndex = 0,
+                pageCount = 9,
+            ),
+        )
+    }
+
+    @Test
+    fun `page reader progress restore clamps safely when new page count shrinks`() {
+        assertEquals(
+            2,
+            resolveInitialPageReaderPage(
+                savedPageReaderProgress = PageReaderProgress(index = 9, totalItems = 10),
+                legacyLastSavedIndex = 0,
+                pageCount = 3,
+            ),
+        )
+    }
+
+    @Test
+    fun `page reader progress also normalizes native list restore when reopening in scroll mode`() {
+        assertEquals(
+            8,
+            resolveInitialNativeReaderIndex(
+                nativeLastSavedIndex = 0,
+                savedPageReaderProgress = PageReaderProgress(index = 4, totalItems = 5),
+                itemCount = 9,
+            ),
+        )
+    }
+
+    @Test
+    fun `page reader progress roundtrip stays distinct from native and web progress`() {
+        assertEquals(
+            PageReaderProgress(index = 7, totalItems = 10),
+            decodePageReaderProgress(
+                encodePageReaderProgress(index = 7, totalItems = 10),
+            ),
+        )
+
+        assertNull(decodePageReaderProgress(encodeNativeScrollProgress(index = 7, offsetPx = 420)))
+        assertNull(decodePageReaderProgress(encodeWebScrollProgressPercent(42)))
     }
 
     @Test
@@ -2221,6 +3560,44 @@ class NovelReaderUiVisibilityTest {
     }
 
     @Test
+    fun `page reader spannable builder preserves android spans and indent`() {
+        val annotated = buildNovelRichAnnotatedString(
+            listOf(
+                NovelRichTextSegment(
+                    text = "Bold",
+                    style = NovelRichTextStyle(
+                        bold = true,
+                        italic = true,
+                        underline = true,
+                        strikeThrough = true,
+                        colorCss = "#112233",
+                        backgroundColorCss = "#445566",
+                    ),
+                    linkUrl = "https://example.org",
+                ),
+            ),
+        )
+
+        val specs = buildNovelPageReaderSpanSpecs(
+            text = annotated,
+            firstLineIndentPx = 24,
+        )
+
+        val spanSpec = specs.single {
+            it.start == 0 &&
+                it.end == annotated.length &&
+                it.leadingMarginPx == null
+        }
+        assertTrue(spanSpec.bold)
+        assertTrue(spanSpec.italic)
+        assertTrue(spanSpec.underline)
+        assertTrue(spanSpec.strikeThrough)
+        assertTrue(spanSpec.foregroundColor == Color(0xFF112233))
+        assertTrue(spanSpec.backgroundColor == Color(0xFF445566))
+        assertTrue(specs.single { it.leadingMarginPx != null }.leadingMarginPx == 24)
+    }
+
+    @Test
     fun `rich link helper resolves url annotation at char offset`() {
         val annotated = buildNovelRichAnnotatedString(
             listOf(
@@ -2358,6 +3735,7 @@ class NovelReaderUiVisibilityTest {
         assertEquals(TextAlign.Center, style.textAlign)
         assertEquals(3f, style.shadow?.blurRadius)
         assertEquals(Offset(2f, 1f), style.shadow?.offset)
+        assertEquals(PlatformTextStyle(includeFontPadding = false), style.platformStyle)
     }
 
     @Test

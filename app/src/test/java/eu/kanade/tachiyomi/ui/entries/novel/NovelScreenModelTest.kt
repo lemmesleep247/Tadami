@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.ui.entries.novel
 
+import android.content.Context
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
+import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.entries.novel.interactor.GetNovelExcludedScanlators
 import eu.kanade.domain.entries.novel.interactor.SetNovelExcludedScanlators
 import eu.kanade.domain.entries.novel.interactor.UpdateNovel
@@ -107,6 +109,10 @@ class NovelScreenModelTest {
                 ) = FakePreference(defaultValue)
                 override fun getAll(): Map<String, *> = emptyMap<String, Any>()
             }
+            val basePreferences = BasePreferences(
+                context = mockk<Context>(relaxed = true),
+                preferenceStore = preferenceStore,
+            )
             val chapterRepository = object : tachiyomi.domain.items.novelchapter.repository.NovelChapterRepository {
                 override suspend fun addAllChapters(chapters: List<NovelChapter>): List<NovelChapter> = chapters
                 override suspend fun updateChapter(
@@ -228,6 +234,7 @@ class NovelScreenModelTest {
             val screenModel = NovelScreenModel(
                 lifecycle = lifecycleOwner.lifecycle,
                 novelId = 1L,
+                basePreferences = basePreferences,
                 libraryPreferences = libraryPreferences,
                 getNovelWithChapters = getNovelWithChapters,
                 updateNovel = updateNovel,
@@ -339,6 +346,42 @@ class NovelScreenModelTest {
             try {
                 awaitResumeScreenModel(screenModel)
                 screenModel.getResumeOrNextChapter()?.id shouldBe chapter2.id
+            } finally {
+                screenModel.onDispose()
+            }
+        }
+    }
+
+    @Test
+    fun `resume selection follows source order when chapter numbers are out of order`() {
+        runBlocking {
+            val novel = novelForResumeTests(104L)
+            val chapter1 = novelChapter(
+                id = 1L,
+                novelId = novel.id,
+                sourceOrder = 2L,
+                chapterNumber = 1.0,
+                read = true,
+            )
+            val chapter2 = novelChapter(
+                id = 2L,
+                novelId = novel.id,
+                sourceOrder = 0L,
+                chapterNumber = 10.0,
+                read = true,
+            )
+            val chapter3 = novelChapter(
+                id = 3L,
+                novelId = novel.id,
+                sourceOrder = 1L,
+                chapterNumber = 20.0,
+                read = false,
+            )
+            val screenModel = createResumeScreenModel(novel, listOf(chapter1, chapter2, chapter3))
+
+            try {
+                awaitResumeScreenModel(screenModel)
+                screenModel.getResumeOrNextChapter()?.id shouldBe chapter1.id
             } finally {
                 screenModel.onDispose()
             }
@@ -465,6 +508,10 @@ class NovelScreenModelTest {
     ): NovelScreenModel {
         val novelRepository = FakeNovelRepository(novel)
         val preferenceStore = FakePreferenceStore()
+        val basePreferences = BasePreferences(
+            context = mockk<Context>(relaxed = true),
+            preferenceStore = preferenceStore,
+        )
         val libraryPreferences = LibraryPreferences(preferenceStore)
         val sourceManager = FakeNovelSourceManager()
         val trackerManager = mockk<TrackerManager>().also { manager ->
@@ -514,6 +561,7 @@ class NovelScreenModelTest {
         return NovelScreenModel(
             lifecycle = FakeLifecycleOwner().lifecycle,
             novelId = novel.id,
+            basePreferences = basePreferences,
             libraryPreferences = libraryPreferences,
             getNovelWithChapters = getNovelWithChapters,
             updateNovel = updateNovel,
@@ -567,6 +615,7 @@ class NovelScreenModelTest {
     private fun novelChapter(
         id: Long,
         novelId: Long,
+        sourceOrder: Long = 0L,
         chapterNumber: Double,
         read: Boolean,
         lastPageRead: Long = 0L,
@@ -574,6 +623,7 @@ class NovelScreenModelTest {
         return NovelChapter.create().copy(
             id = id,
             novelId = novelId,
+            sourceOrder = sourceOrder,
             chapterNumber = chapterNumber,
             read = read,
             lastPageRead = lastPageRead,

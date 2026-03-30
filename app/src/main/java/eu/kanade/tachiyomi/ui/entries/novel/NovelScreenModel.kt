@@ -8,11 +8,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.entries.novel.interactor.GetNovelExcludedScanlators
 import eu.kanade.domain.entries.novel.interactor.SetNovelExcludedScanlators
 import eu.kanade.domain.entries.novel.interactor.UpdateNovel
 import eu.kanade.domain.entries.novel.model.chaptersFiltered
-import eu.kanade.domain.entries.novel.model.downloadedFilter
+import eu.kanade.domain.entries.novel.model.effectiveDownloadedFilter
 import eu.kanade.domain.entries.novel.model.toSNovel
 import eu.kanade.domain.items.novelchapter.interactor.GetAvailableNovelScanlators
 import eu.kanade.domain.items.novelchapter.interactor.GetNovelScanlatorChapterCounts
@@ -34,6 +35,7 @@ import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.novelsource.model.SNovelChapter
 import eu.kanade.tachiyomi.source.novel.NovelSiteSource
 import eu.kanade.tachiyomi.source.novel.NovelWebUrlSource
+import eu.kanade.tachiyomi.ui.novel.resolveNovelResumeChapter
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderPreferences
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -99,6 +101,7 @@ data class NovelEpubExportPreferencesState(
 class NovelScreenModel(
     private val lifecycle: Lifecycle,
     private val novelId: Long,
+    private val basePreferences: BasePreferences = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val getNovelWithChapters: GetNovelWithChapters = Injekt.get(),
     private val updateNovel: UpdateNovel = Injekt.get(),
@@ -168,28 +171,12 @@ class NovelScreenModel(
 
     fun getResumeOrNextChapter(): NovelChapter? {
         val state = successState ?: return null
-        val chapters = state.chapters.sortedWith(Comparator(getNovelChapterSort(state.novel)))
-        if (chapters.isEmpty()) return null
-
-        chapters.firstOrNull { it.lastPageRead > 0L && !it.read }?.let { return it }
-
-        val lastReadIndex = chapters.indexOfLast { it.read || it.lastPageRead > 0L }
-        if (lastReadIndex >= 0) {
-            chapters.drop(lastReadIndex + 1).firstOrNull { !it.read }?.let { return it }
-            return chapters[lastReadIndex]
-        }
-
-        return chapters.firstOrNull { !it.read } ?: chapters.firstOrNull()
+        return resolveNovelResumeChapter(state.chapters)
     }
 
     fun getNextUnreadChapter(): NovelChapter? {
         val state = successState ?: return null
-        val chapters = state.processedChapters
-        return if (state.novel.sortDescending()) {
-            chapters.findLast { !it.read }
-        } else {
-            chapters.find { !it.read }
-        }
+        return resolveNovelResumeChapter(state.processedChapters)
     }
 
     init {
@@ -346,6 +333,7 @@ class NovelScreenModel(
                     availableScanlators = availableScanlators,
                     scanlatorChapterCounts = scanlatorChapterCounts,
                     excludedScanlators = initialExcludedScanlators,
+                    downloadedOnly = basePreferences.downloadedOnly().get(),
                     isRefreshingData = shouldAutoRefreshNovel || shouldAutoRefreshChapters,
                     dialog = null,
                     selectedChapterIds = emptySet(),
@@ -364,6 +352,12 @@ class NovelScreenModel(
                         emptySet()
                     },
                 )
+            }
+            screenModelScope.launchIO {
+                basePreferences.downloadedOnly().changes()
+                    .collectLatest { downloadedOnly ->
+                        updateSuccessState { it.copy(downloadedOnly = downloadedOnly) }
+                    }
             }
             logRefreshSnapshot(
                 stage = "initial-state",
@@ -1436,6 +1430,7 @@ class NovelScreenModel(
             val availableScanlators: Set<String>,
             val scanlatorChapterCounts: Map<String, Int>,
             val excludedScanlators: Set<String>,
+            val downloadedOnly: Boolean = false,
             val isRefreshingData: Boolean,
             val dialog: Dialog?,
             val trackingCount: Int = 0,
@@ -1466,7 +1461,7 @@ class NovelScreenModel(
                 get() = availableScanlators.size > 1
 
             val filterActive: Boolean
-                get() = scanlatorFilterActive || novel.chaptersFiltered()
+                get() = scanlatorFilterActive || novel.chaptersFiltered(downloadedOnly)
 
             val trackingAvailable: Boolean
                 get() = trackingCount > 0
@@ -1482,7 +1477,9 @@ class NovelScreenModel(
                                 chapter.url in chapterPageVisibleUrls
                             ) &&
                             applyFilter(novel.unreadFilter) { !chapter.read } &&
-                            applyFilter(novel.downloadedFilter) { chapter.id in downloadedChapterIds } &&
+                            applyFilter(novel.effectiveDownloadedFilter(downloadedOnly)) {
+                                chapter.id in downloadedChapterIds
+                            } &&
                             applyFilter(novel.bookmarkedFilter) { chapter.bookmark }
                     }
                     .sortedWith(chapterSort)
