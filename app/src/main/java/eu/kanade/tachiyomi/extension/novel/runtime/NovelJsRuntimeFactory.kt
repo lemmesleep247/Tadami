@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.novel.runtime
 
 import android.content.Context
-import android.util.Log
 import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -657,6 +656,9 @@ class NovelJsRuntimeFactory(
             }
             if ("accept-language" !in presentHeaders) {
                 builder.addHeader("Accept-Language", DEFAULT_ACCEPT_LANGUAGE)
+            }
+            if ("cache-control" !in presentHeaders) {
+                builder.addHeader("Cache-Control", "max-age=0")
             }
             if ("referer" !in presentHeaders && origin != null) {
                 builder.addHeader("Referer", "$origin/")
