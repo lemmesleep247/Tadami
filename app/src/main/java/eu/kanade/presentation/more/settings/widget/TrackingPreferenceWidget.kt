@@ -15,14 +15,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import eu.kanade.presentation.more.settings.AURORA_SETTINGS_CARD_SHAPE
 import eu.kanade.presentation.more.settings.LocalPreferenceHighlighted
 import eu.kanade.presentation.more.settings.LocalSettingsUiStyle
 import eu.kanade.presentation.more.settings.SettingsUiStyle
-import eu.kanade.presentation.more.settings.settingsCardContainerColor
 import eu.kanade.presentation.more.settings.settingsTitleColor
 import eu.kanade.presentation.track.components.TrackLogoIcon
 import eu.kanade.tachiyomi.data.track.Tracker
@@ -38,22 +35,23 @@ fun TrackingPreferenceWidget(
 ) {
     val highlighted = LocalPreferenceHighlighted.current
     val isAurora = LocalSettingsUiStyle.current == SettingsUiStyle.Aurora
-    Box(
-        modifier = modifier.then(
-            if (isAurora) {
-                Modifier
-                    .padding(vertical = 4.dp)
-                    .clip(AURORA_SETTINGS_CARD_SHAPE)
-                    .background(settingsCardContainerColor())
-                    .highlightBackground(highlighted)
-            } else {
-                Modifier.highlightBackground(highlighted)
-            },
-        ),
-    ) {
+    val content: @Composable () -> Unit = {
         Row(
             modifier = Modifier
-                .clickable(enabled = onClick != null, onClick = { onClick?.invoke() })
+                .then(
+                    if (isAurora) {
+                        Modifier.highlightBackground(highlighted)
+                    } else {
+                        Modifier
+                    },
+                )
+                .then(
+                    if (isAurora) {
+                        Modifier
+                    } else {
+                        Modifier.clickable(enabled = onClick != null, onClick = { onClick?.invoke() })
+                    },
+                )
                 .fillMaxWidth()
                 .padding(horizontal = PrefsHorizontalPadding, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -79,6 +77,13 @@ fun TrackingPreferenceWidget(
                     contentDescription = stringResource(MR.strings.login_success),
                 )
             }
+        }
+    }
+    if (isAurora) {
+        AuroraSettingsCard(modifier = modifier, onClick = onClick, content = content)
+    } else {
+        Box(modifier = modifier) {
+            content()
         }
     }
 }

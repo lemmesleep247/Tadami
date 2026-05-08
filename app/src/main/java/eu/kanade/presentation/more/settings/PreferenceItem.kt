@@ -33,6 +33,7 @@ import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.TitleFontSize
 import eu.kanade.presentation.more.settings.widget.TrackingPreferenceWidget
+import eu.kanade.presentation.more.settings.widget.AuroraSettingsCard
 import kotlinx.coroutines.launch
 import tachiyomi.presentation.core.components.BaseSliderItem
 import tachiyomi.presentation.core.util.collectAsState
@@ -93,34 +94,45 @@ internal fun PreferenceItem(
                     )
                 }
                 is Preference.PreferenceItem.SliderPreference -> {
-                    BaseSliderItem(
-                        label = item.title,
-                        value = item.value,
-                        valueRange = item.valueRange,
-                        valueText = item.subtitle.takeUnless { it.isNullOrEmpty() } ?: item.value.toString(),
-                        steps = item.steps,
-                        labelStyle = MaterialTheme.typography.titleLarge.copy(fontSize = TitleFontSize),
-                        onChange = {
-                            scope.launch {
-                                item.onValueChanged(it)
-                            }
-                        },
-                        modifier = Modifier
-                            .then(
-                                if (isAurora) {
-                                    Modifier
-                                        .padding(vertical = 4.dp)
-                                        .clip(AURORA_SETTINGS_CARD_SHAPE)
-                                        .background(settingsCardContainerColor())
-                                } else {
-                                    Modifier
+                    if (isAurora) {
+                        AuroraSettingsCard {
+                            BaseSliderItem(
+                                label = item.title,
+                                value = item.value,
+                                valueRange = item.valueRange,
+                                valueText = item.subtitle.takeUnless { it.isNullOrEmpty() } ?: item.value.toString(),
+                                steps = item.steps,
+                                labelStyle = MaterialTheme.typography.titleLarge.copy(fontSize = TitleFontSize),
+                                onChange = {
+                                    scope.launch {
+                                        item.onValueChanged(it)
+                                    }
                                 },
+                                modifier = Modifier.padding(
+                                    horizontal = PrefsHorizontalPadding,
+                                    vertical = PrefsVerticalPadding,
+                                ),
                             )
-                            .padding(
+                        }
+                    } else {
+                        BaseSliderItem(
+                            label = item.title,
+                            value = item.value,
+                            valueRange = item.valueRange,
+                            valueText = item.subtitle.takeUnless { it.isNullOrEmpty() } ?: item.value.toString(),
+                            steps = item.steps,
+                            labelStyle = MaterialTheme.typography.titleLarge.copy(fontSize = TitleFontSize),
+                            onChange = {
+                                scope.launch {
+                                    item.onValueChanged(it)
+                                }
+                            },
+                            modifier = Modifier.padding(
                                 horizontal = PrefsHorizontalPadding,
                                 vertical = PrefsVerticalPadding,
                             ),
-                    )
+                        )
+                    }
                 }
                 is Preference.PreferenceItem.ListPreference<*> -> {
                     val value by item.preference.collectAsState()

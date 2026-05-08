@@ -10,6 +10,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import eu.kanade.presentation.more.resolveAuroraMoreCheckedTrackColor
@@ -46,6 +47,36 @@ fun SwitchPreferenceWidget(
                     SwitchDefaults.colors(
                         checkedThumbColor = accent,
                         checkedTrackColor = resolveAuroraMoreCheckedTrackColor(colors),
+                        uncheckedThumbColor = if (colors.isDark || colors.isEInk) {
+                            colors.textPrimary
+                        } else {
+                            Color.White
+                        },
+                        uncheckedTrackColor = if (colors.isDark || colors.isEInk) {
+                            colors.textSecondary.copy(alpha = 0.32f)
+                        } else {
+                            Color(0xFFD9DEE8)
+                        },
+                        uncheckedBorderColor = if (colors.isDark || colors.isEInk) {
+                            colors.textSecondary.copy(alpha = 0.42f)
+                        } else {
+                            Color(0xFFBCC6D6)
+                        },
+                        disabledUncheckedThumbColor = if (colors.isDark || colors.isEInk) {
+                            colors.textPrimary.copy(alpha = 0.55f)
+                        } else {
+                            Color.White.copy(alpha = 0.92f)
+                        },
+                        disabledUncheckedTrackColor = if (colors.isDark || colors.isEInk) {
+                            colors.textSecondary.copy(alpha = 0.18f)
+                        } else {
+                            Color(0xFFD9DEE8).copy(alpha = 0.68f)
+                        },
+                        disabledUncheckedBorderColor = if (colors.isDark || colors.isEInk) {
+                            colors.textSecondary.copy(alpha = 0.24f)
+                        } else {
+                            Color(0xFFBCC6D6).copy(alpha = 0.72f)
+                        },
                     )
                 } else {
                     SwitchDefaults.colors()
