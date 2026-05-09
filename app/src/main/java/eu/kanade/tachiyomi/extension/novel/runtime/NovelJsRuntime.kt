@@ -840,18 +840,42 @@ class NovelJsRuntime(
                   global.URLSearchParams = URLSearchParams;
                   function URL(input, base) {
                     var resolved = __native.resolveUrl(String(input), base != null ? String(base) : null);
-                    this.href = resolved;
                     this.pathname = __native.getPathname(resolved);
+                    // Split URL into base + query + fragment so toString() can
+                    // rebuild including mutations to this.searchParams.
+                    var qi = resolved.indexOf('?');
+                    var hi = resolved.indexOf('#');
+                    if (qi >= 0) {
+                      this._baseUrl = resolved.substring(0, qi);
+                      var qEnd = hi >= 0 ? hi : resolved.length;
+                      this._fragment = hi >= 0 ? resolved.substring(hi) : '';
+                      this.searchParams = new URLSearchParams(resolved.substring(qi + 1, qEnd));
+                    } else if (hi >= 0) {
+                      this._baseUrl = resolved.substring(0, hi);
+                      this._fragment = resolved.substring(hi);
+                      this.searchParams = new URLSearchParams('');
+                    } else {
+                      this._baseUrl = resolved;
+                      this._fragment = '';
+                      this.searchParams = new URLSearchParams('');
+                    }
                   }
                   URL.prototype.toString = function() {
-                    return this.href;
+                    var qs = this.searchParams.toString();
+                    return this._baseUrl + (qs ? '?' + qs : '') + this._fragment;
                   };
                   URL.prototype.valueOf = function() {
-                    return this.href;
+                    return this.toString();
                   };
                   URL.prototype.toJSON = function() {
-                    return this.href;
+                    return this.toString();
                   };
+                  Object.defineProperty(URL.prototype, 'href', {
+                    get: function() { return this.toString(); },
+                    set: function(v) { this._baseUrl = v; },
+                    configurable: true,
+                    enumerable: true
+                  });
                   global.URL = URL;
 
                   global.console = {
