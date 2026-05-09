@@ -1250,7 +1250,7 @@ class NovelJsModuleRegistry(
     private val defaultCoverModule = """
         __defineModule("@libs/defaultCover", function(module, exports) {
           module.exports = {
-            defaultCover: "https://github.com/LNReader/lnreader-plugins/blob/main/icons/src/coverNotAvailable.jpg?raw=true"
+            defaultCover: ""
           };
         });
     """.trimIndent()
@@ -1489,7 +1489,11 @@ class NovelJsModuleRegistry(
             var input = normalizeFetchInput(url, options);
             if (input.url == null) throw new Error("fetchApi requires a URL");
             var payload = JSON.stringify(normalizeInit(input.options));
-            var response = JSON.parse(__native.fetch(String(input.url), payload));
+            var raw = __native.fetch(String(input.url), payload);
+            var response = JSON.parse(raw);
+            if (response.status === 0) {
+              throw new Error("Network request failed: " + (response.body || "unknown error"));
+            }
             return Promise.resolve(makeResponse(response));
           }
           function fetchText(url, options, encoding) {
