@@ -1710,6 +1710,8 @@
     <string name="aurora_chapters_header">Chapters</string>
     <string name="aurora_chapters">CHAPTERS</string>
     <string name="aurora_chapter_count">%d chs</string>
+    <string name="aurora_episode_progress_format">%1$d/%2$d Episode</string>
+    <string name="aurora_chapter_progress_format">%1$d/%2$d Chapter</string>
     <string name="aurora_chapter_progress">Chapter %d</string>
     <string name="aurora_progress">PROGRESS</string>
     <string name="aurora_select_dubbing">Select Dubbing</string>
