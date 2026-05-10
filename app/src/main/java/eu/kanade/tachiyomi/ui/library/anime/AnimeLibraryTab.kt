@@ -179,6 +179,7 @@ import tachiyomi.presentation.core.screens.EmptyScreenAction
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.presentation.core.util.LocalAppHaptics
 import tachiyomi.presentation.core.util.collectAsState
+import tachiyomi.presentation.core.util.showSoftKeyboard
 import tachiyomi.source.local.entries.anime.isLocal
 import tachiyomi.source.local.entries.manga.isLocal
 import uy.kohesive.injekt.Injekt
@@ -1688,7 +1689,9 @@ private fun AuroraLibraryPinnedHeader(
                                 unfocusedIndicatorColor = Color.Transparent,
                             ),
                             shape = RoundedCornerShape(22.dp),
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .showSoftKeyboard(true),
                         )
                     } else {
                         Text(
