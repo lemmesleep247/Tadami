@@ -767,6 +767,7 @@
     <string name="relative_time_span_never">Никогда</string>
     <string name="pref_flash_page_summ">Уменьшает артефакты у экранов e-ink</string>
     <string name="last_auto_backup_info">Последнее автоматическое резервное копирование: %s</string>
+    <string name="pref_category_eink">E-ink</string>
     <string name="pref_flash_page">Мигать при смене страницы</string>
     <string name="pref_storage_usage">Использование хранилища</string>
     <string name="action_sort_tracker_score">Оценка сервиса отслеживания</string>
@@ -909,6 +910,15 @@
     <string name="navigator_height_large">Большой</string>
     <string name="pref_use_theme_color">Использовать цвет темы</string>
     <string name="pref_navigator_show_tick_marks">Показывать маркеры страниц</string>
+
+    <!-- Reader bottom bar section -->
+    <string name="pref_bottom_bar">Панель инструментов</string>
+    <string name="pref_bottom_bar_show_reading_mode">Режим чтения</string>
+    <string name="pref_bottom_bar_show_orientation">Поворот</string>
+    <string name="pref_bottom_bar_show_crop_borders">Обрезка полей</string>
+    <string name="pref_bottom_bar_show_chapter_list">Список глав</string>
+    <string name="pref_bottom_bar_show_settings">Настройки</string>
+
     <string name="pref_library_display_mode_per_media">Раздельный режим отображения для аниме, манги и ранобэ</string>
     <string name="pref_aurora_library_card_style">Стиль карточек Aurora</string>
     <string name="pref_aurora_library_card_style_standard">Стандартный</string>

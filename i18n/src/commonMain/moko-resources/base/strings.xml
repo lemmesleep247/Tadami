@@ -413,6 +413,7 @@
     <string name="pref_double_tap_zoom">Double tap to zoom</string>
     <string name="pref_cutout_short">Show content in cutout area</string>
     <string name="pref_page_transitions">Animate page transitions</string>
+    <string name="pref_category_eink">E-ink</string>
     <string name="pref_flash_page">Flash on page change</string>
     <string name="pref_flash_page_summ">Reduces ghosting on e-ink displays</string>
     <string name="pref_flash_duration">Flash duration</string>
@@ -542,6 +543,14 @@
     <string name="navigator_height_large">Large</string>
     <string name="pref_use_theme_color">Use theme color</string>
     <string name="pref_navigator_show_tick_marks">Show page markers</string>
+
+      <!-- Reader bottom bar section -->
+    <string name="pref_bottom_bar">Reader toolbar</string>
+    <string name="pref_bottom_bar_show_reading_mode">Reading mode</string>
+    <string name="pref_bottom_bar_show_orientation">Rotation</string>
+    <string name="pref_bottom_bar_show_crop_borders">Crop borders</string>
+    <string name="pref_bottom_bar_show_chapter_list">Chapter list</string>
+    <string name="pref_bottom_bar_show_settings">Settings</string>
 
       <!-- Downloads section -->
     <string name="pref_category_delete_chapters">Delete chapters</string>
