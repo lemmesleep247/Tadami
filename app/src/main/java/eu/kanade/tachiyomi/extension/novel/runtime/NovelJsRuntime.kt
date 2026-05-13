@@ -842,6 +842,73 @@ class NovelJsRuntime(
                       .join("&");
                   };
                   global.URLSearchParams = URLSearchParams;
+
+                  function Headers(init) {
+                    this._headers = {};
+                    if (init) {
+                      if (typeof Headers !== "undefined" && init instanceof Headers) {
+                        init.forEach(function(value, key) {
+                          this._headers[key.toLowerCase()] = String(value);
+                        }, this);
+                      } else if (Array.isArray(init)) {
+                        for (var i = 0; i < init.length; i++) {
+                          this.append(init[i][0], init[i][1]);
+                        }
+                      } else if (init && typeof init === "object") {
+                        for (var key in init) {
+                          if (Object.prototype.hasOwnProperty.call(init, key)) {
+                            this.append(key, init[key]);
+                          }
+                        }
+                      }
+                    }
+                  }
+                  Headers.prototype.get = function(name) {
+                    var key = String(name).toLowerCase();
+                    return Object.prototype.hasOwnProperty.call(this._headers, key) ? this._headers[key] : null;
+                  };
+                  Headers.prototype.set = function(name, value) {
+                    this._headers[String(name).toLowerCase()] = String(value);
+                  };
+                  Headers.prototype.append = function(name, value) {
+                    var key = String(name).toLowerCase();
+                    if (Object.prototype.hasOwnProperty.call(this._headers, key)) {
+                      this._headers[key] += ", " + String(value);
+                    } else {
+                      this._headers[key] = String(value);
+                    }
+                  };
+                  Headers.prototype.has = function(name) {
+                    return Object.prototype.hasOwnProperty.call(this._headers, String(name).toLowerCase());
+                  };
+                  Headers.prototype.delete = function(name) {
+                    delete this._headers[String(name).toLowerCase()];
+                  };
+                  Headers.prototype.forEach = function(callback, thisArg) {
+                    for (var key in this._headers) {
+                      if (Object.prototype.hasOwnProperty.call(this._headers, key)) {
+                        callback.call(thisArg, this._headers[key], key, this);
+                      }
+                    }
+                  };
+                  Headers.prototype.keys = function() {
+                    var result = [];
+                    for (var key in this._headers) {
+                      if (Object.prototype.hasOwnProperty.call(this._headers, key)) result.push(key);
+                    }
+                    return result;
+                  };
+                  Headers.prototype.toJSON = function() {
+                    var result = {};
+                    for (var key in this._headers) {
+                      if (Object.prototype.hasOwnProperty.call(this._headers, key)) {
+                        result[key] = this._headers[key];
+                      }
+                    }
+                    return result;
+                  };
+                  global.Headers = Headers;
+
                   function URL(input, base) {
                     var resolved = __native.resolveUrl(String(input), base != null ? String(base) : null);
                     this.pathname = __native.getPathname(resolved);
@@ -1696,6 +1763,7 @@ class NovelJsModuleRegistry(
                 var arr = [];
                 for (var i = 0; i < handles.length; i++) {
                   arr.push({
+                    handle: handles[i],
                     tagName: __native.domTagName(handles[i]),
                     name: __native.domTagName(handles[i]),
                     attribs: JSON.parse(__native.domAttrs(handles[i]))
@@ -1759,9 +1827,22 @@ class NovelJsModuleRegistry(
                 return __native.domIs(handles[0], String(selector));
               },
               find: function(selector) {
+                var s = String(selector);
+                // Jsoup does not support relative CSS combinators like "> a".
+                // Use children() which iterates direct child elements and
+                // filters by tag/selector via Jsoup's Element.is().
+                if (s.indexOf(">") === 0) {
+                  var tag = s.replace(/^\s*>\s*/, "");
+                  var result = [];
+                  for (var i = 0; i < handles.length; i++) {
+                    var kids = JSON.parse(__native.domChildren(handles[i], tag || ""));
+                    for (var j = 0; j < kids.length; j++) result.push(kids[j]);
+                  }
+                  return wrapHandles(result, handles.slice());
+                }
                 var result = [];
                 for (var i = 0; i < handles.length; i++) {
-                  var found = JSON.parse(__native.domSelect(handles[i], String(selector)));
+                  var found = JSON.parse(__native.domSelect(handles[i], s));
                   for (var j = 0; j < found.length; j++) result.push(found[j]);
                 }
                 return wrapHandles(result, handles.slice());
@@ -2071,6 +2152,9 @@ class NovelJsModuleRegistry(
               }
               if (typeof selector === "number") {
                 return wrapHandles([selector]);
+              }
+              if (selector && typeof selector === "object" && typeof selector.handle === "number") {
+                return wrapHandles([selector.handle]);
               }
               return wrapHandles([]);
             }

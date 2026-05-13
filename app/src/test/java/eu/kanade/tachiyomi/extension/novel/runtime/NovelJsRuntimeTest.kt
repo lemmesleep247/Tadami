@@ -423,4 +423,103 @@ class NovelJsRuntimeTest {
         script.shouldContain("name: __native.domTagName(handles[i])")
         script.shouldContain("name: __native.domTagName(handles[index])")
     }
+
+    // ── Headers polyfill ───────────────────────────────────────────────────
+
+    @Test
+    fun `bootstrap script defines Headers constructor`() {
+        val field = NovelJsRuntime::class.java.getDeclaredField("bootstrapScript").apply {
+            isAccessible = true
+        }
+        val script = field.get(null) as String
+        script.shouldContain("function Headers(init)")
+        script.shouldContain("global.Headers = Headers")
+    }
+
+    @Test
+    fun `bootstrap script defines Headers prototype get`() {
+        val field = NovelJsRuntime::class.java.getDeclaredField("bootstrapScript").apply {
+            isAccessible = true
+        }
+        val script = field.get(null) as String
+        script.shouldContain("Headers.prototype.get")
+    }
+
+    @Test
+    fun `bootstrap script defines Headers prototype set`() {
+        val field = NovelJsRuntime::class.java.getDeclaredField("bootstrapScript").apply {
+            isAccessible = true
+        }
+        val script = field.get(null) as String
+        script.shouldContain("Headers.prototype.set")
+    }
+
+    @Test
+    fun `bootstrap script defines Headers prototype has`() {
+        val field = NovelJsRuntime::class.java.getDeclaredField("bootstrapScript").apply {
+            isAccessible = true
+        }
+        val script = field.get(null) as String
+        script.shouldContain("Headers.prototype.has")
+    }
+
+    @Test
+    fun `bootstrap script defines Headers prototype delete`() {
+        val field = NovelJsRuntime::class.java.getDeclaredField("bootstrapScript").apply {
+            isAccessible = true
+        }
+        val script = field.get(null) as String
+        script.shouldContain("Headers.prototype.delete")
+    }
+
+    @Test
+    fun `bootstrap script defines Headers prototype append`() {
+        val field = NovelJsRuntime::class.java.getDeclaredField("bootstrapScript").apply {
+            isAccessible = true
+        }
+        val script = field.get(null) as String
+        script.shouldContain("Headers.prototype.append")
+    }
+
+    @Test
+    fun `bootstrap script defines Headers prototype forEach`() {
+        val field = NovelJsRuntime::class.java.getDeclaredField("bootstrapScript").apply {
+            isAccessible = true
+        }
+        val script = field.get(null) as String
+        script.shouldContain("Headers.prototype.forEach")
+    }
+
+    @Test
+    fun `bootstrap script defines Headers prototype toJSON`() {
+        val field = NovelJsRuntime::class.java.getDeclaredField("bootstrapScript").apply {
+            isAccessible = true
+        }
+        val script = field.get(null) as String
+        script.shouldContain("Headers.prototype.toJSON")
+    }
+
+    @Test
+    fun `bootstrap Headers polyfill uses lowercase keys for case-insensitivity`() {
+        val field = NovelJsRuntime::class.java.getDeclaredField("bootstrapScript").apply {
+            isAccessible = true
+        }
+        val script = field.get(null) as String
+        script.shouldContain(".toLowerCase()")
+    }
+
+    @Test
+    fun `bootstrap Headers polyfill rejects instanceof check for non-Headers init`() {
+        val field = NovelJsRuntime::class.java.getDeclaredField("bootstrapScript").apply {
+            isAccessible = true
+        }
+        val script = field.get(null) as String
+        script.shouldContain("init instanceof Headers")
+    }
+
+    @Test
+    fun `cheerio module find handles leading combinator with children fallback`() {
+        val script = NovelJsModuleRegistry().modules().first { it.name == "cheerio.js" }.script
+        script.shouldContain("domChildren")
+    }
 }

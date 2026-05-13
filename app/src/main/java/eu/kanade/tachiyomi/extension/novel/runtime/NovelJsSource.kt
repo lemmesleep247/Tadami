@@ -802,7 +802,7 @@ class NovelJsSource internal constructor(
             }
             return cachedParseNovelResult
         }
-        val payload = callPlugin(runtime, "parseNovel", toJsString(url))
+        val payload = callPluginWithTimeout(runtime, "parseNovel", PARSE_NOVEL_TIMEOUT_MS, toJsString(url))
         logcat(LogPriority.DEBUG) {
             "Novel parseNovel payload plugin=${plugin.id} url=$url " +
                 "bytes=${payload.length} preview=${payload.take(240)}"
@@ -890,6 +890,9 @@ class NovelJsSource internal constructor(
             val done = runtime.evaluate("globalThis.__d_$token") as? Boolean ?: false
             if (done) break
             cycles++
+            if (cycles < maxCycles) {
+                Thread.sleep(10L)
+            }
         }
 
         val error = runtime.evaluate("globalThis.__e_$token") as? String
@@ -1720,6 +1723,7 @@ class NovelJsSource internal constructor(
     companion object {
         private const val LOG_TAG = "NovelJsSource"
         private const val FETCH_IMAGE_RUNTIME_TIMEOUT_MS = 15_000L
+        private const val PARSE_NOVEL_TIMEOUT_MS = 30_000L
     }
 
     private enum class WuxiaworldSort(val value: String) {
