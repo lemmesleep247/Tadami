@@ -1644,6 +1644,8 @@ class NovelReaderScreenModel(
                 next
             }
 
+            if (basePreferences.incognitoMode().get()) return
+
             novelChapterRepository.updateChapter(
                 NovelChapterUpdate(
                     id = nextUpdate.chapterId,

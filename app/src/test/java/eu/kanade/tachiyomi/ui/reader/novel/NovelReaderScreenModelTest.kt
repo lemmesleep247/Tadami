@@ -1653,6 +1653,54 @@ class NovelReaderScreenModelTest {
     }
 
     @Test
+    fun `incognito mode does not persist completed chapter progress`() {
+        runBlocking {
+            val basePreferences = Injekt.get<BasePreferences>()
+            basePreferences.incognitoMode().set(true)
+            try {
+                val novel = Novel.create().copy(id = 1L, source = 10L, title = "Novel")
+                val chapter = NovelChapter.create().copy(
+                    id = 5L,
+                    novelId = 1L,
+                    name = "Chapter 1",
+                    url = "https://example.org/ch1",
+                )
+                val chapterRepo = FakeNovelChapterRepository(chapter)
+                val historyRepository = FakeNovelHistoryRepository()
+
+                val screenModel = trackedNovelReaderScreenModel(
+                    chapterId = chapter.id,
+                    novelChapterRepository = chapterRepo,
+                    getNovel = GetNovel(FakeNovelRepository(novel)),
+                    sourceManager = FakeNovelSourceManager(
+                        sourceId = novel.source,
+                        chapterHtml = "<p>Hello</p>",
+                    ),
+                    pluginStorage = FakeNovelPluginStorage(emptyList()),
+                    historyRepository = historyRepository,
+                    novelReaderPreferences = createNovelReaderPreferences(),
+                    isSystemDark = { false },
+                )
+
+                withTimeout(1_000) {
+                    while (screenModel.state.value is NovelReaderScreenModel.State.Loading) {
+                        yield()
+                    }
+                }
+
+                screenModel.updateReadingProgress(currentIndex = 9, totalItems = 10)
+                screenModel.awaitPendingProgressPersistence()
+                yield()
+
+                chapterRepo.lastUpdate shouldBe null
+                historyRepository.updates shouldBe emptyList()
+            } finally {
+                basePreferences.incognitoMode().set(false)
+            }
+        }
+    }
+
+    @Test
     fun `update reading progress marks single page chapter as read`() {
         runBlocking {
             val novel = Novel.create().copy(id = 1L, source = 10L, title = "Novel")
