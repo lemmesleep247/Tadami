@@ -273,6 +273,14 @@
     <string name="migration_selected_sources">Выбрано</string>
     <string name="migration_available_sources">Доступные</string>
     <string name="migration_extra_search_query">Дополнительный поисковый запрос</string>
+    <string name="migration_extra">Дополнительные настройки</string>
+    <string name="migration_hide_not_found">Скрывать не найденные</string>
+    <string name="migration_only_new_chapters">Показывать только записи с новыми главами</string>
+    <string name="migration_skip_next_time">Пропустить этот шаг в следующий раз</string>
+    <string name="migration_extra_search_param">Автоматически добавлять метаданные в поиск</string>
+    <string name="migration_strategy">Стратегия выбора источника</string>
+    <string name="migration_strategy_first_source">Первый источник</string>
+    <string name="migration_strategy_most_chapters">Больше всего глав</string>
     <string name="migration_hide_unmatched">Скрывать неподходящие</string>
     <string name="migration_hide_without_updates">Скрывать без обновлений</string>
     <string name="migration_deep_search_mode">Глубокий режим поиска</string>

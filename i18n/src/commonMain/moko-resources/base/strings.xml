@@ -932,6 +932,14 @@
     <string name="migration_selected_sources">Selected</string>
     <string name="migration_available_sources">Available</string>
     <string name="migration_extra_search_query">Extra search query</string>
+    <string name="migration_extra">Extra settings</string>
+    <string name="migration_hide_not_found">Hide not found</string>
+    <string name="migration_only_new_chapters">Only show entries with new chapters</string>
+    <string name="migration_skip_next_time">Skip this step next time</string>
+    <string name="migration_extra_search_param">Auto-add metadata to search</string>
+    <string name="migration_strategy">Source strategy</string>
+    <string name="migration_strategy_first_source">First source</string>
+    <string name="migration_strategy_most_chapters">Most chapters</string>
     <string name="migration_hide_unmatched">Hide unmatched</string>
     <string name="migration_hide_without_updates">Hide without updates</string>
     <string name="migration_deep_search_mode">Deep search mode</string>

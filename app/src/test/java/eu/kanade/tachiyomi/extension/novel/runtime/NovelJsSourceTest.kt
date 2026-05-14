@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.novel.runtime
 
 import eu.kanade.tachiyomi.novelsource.model.SNovel
-import io.kotest.matchers.shouldBe
 import io.kotest.matchers.comparables.shouldBeGreaterThan
+import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
