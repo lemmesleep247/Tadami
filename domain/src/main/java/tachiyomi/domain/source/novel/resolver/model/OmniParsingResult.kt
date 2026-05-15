@@ -5,12 +5,12 @@ data class OmniParsingResult(
     val author: String?,
     val description: String?,
     val thumbnailUrl: String?,
-    val chapters: List<OmniChapter>
+    val chapters: List<OmniChapter>,
 )
 
 data class OmniChapter(
     val name: String,
     val url: String,
     val dateUpload: Long = 0,
-    val chapterNumber: Float = 0f
+    val chapterNumber: Float = 0f,
 )

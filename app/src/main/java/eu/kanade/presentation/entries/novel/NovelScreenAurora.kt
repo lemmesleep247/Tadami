@@ -146,6 +146,7 @@ fun NovelScreenAuroraImpl(
     onOpenEpubExportDialog: (() -> Unit)?,
     onChapterClick: (Long) -> Unit,
     onChapterTranslateClick: (Long) -> Unit,
+    onChapterTranslateLongClick: (Long) -> Unit,
     onChapterTranslatedDownloadClick: (Long) -> Unit,
     onChapterTranslatedDownloadLongClick: (Long) -> Unit,
     onChapterTranslatedDownloadOpenFolder: (Long) -> Unit,
@@ -557,6 +558,7 @@ fun NovelScreenAuroraImpl(
                                                     onClick = { onChapterClick(chapter.id) },
                                                     onLongClick = { onChapterLongClick(chapter.id) },
                                                     onTranslateClick = { onChapterTranslateClick(chapter.id) },
+                                                    onTranslateLongClick = { onChapterTranslateLongClick(chapter.id) },
                                                     onTranslatedDownloadClick = {
                                                         onChapterTranslatedDownloadClick(chapter.id)
                                                     },
@@ -634,6 +636,7 @@ fun NovelScreenAuroraImpl(
                                                     onClick = { onChapterClick(chapter.id) },
                                                     onLongClick = { onChapterLongClick(chapter.id) },
                                                     onTranslateClick = { onChapterTranslateClick(chapter.id) },
+                                                    onTranslateLongClick = { onChapterTranslateLongClick(chapter.id) },
                                                     onTranslatedDownloadClick = {
                                                         onChapterTranslatedDownloadClick(chapter.id)
                                                     },
@@ -1078,6 +1081,7 @@ fun NovelScreenAuroraImpl(
                                         onClick = { onChapterClick(chapter.id) },
                                         onLongClick = { onChapterLongClick(chapter.id) },
                                         onTranslateClick = { onChapterTranslateClick(chapter.id) },
+                                        onTranslateLongClick = { onChapterTranslateLongClick(chapter.id) },
                                         onTranslatedDownloadClick = {
                                             onChapterTranslatedDownloadClick(chapter.id)
                                         },
@@ -1157,6 +1161,7 @@ fun NovelScreenAuroraImpl(
                                         onClick = { onChapterClick(chapter.id) },
                                         onLongClick = { onChapterLongClick(chapter.id) },
                                         onTranslateClick = { onChapterTranslateClick(chapter.id) },
+                                        onTranslateLongClick = { onChapterTranslateLongClick(chapter.id) },
                                         onTranslatedDownloadClick = {
                                             onChapterTranslatedDownloadClick(chapter.id)
                                         },
@@ -1336,7 +1341,6 @@ fun NovelScreenAuroraImpl(
                                 )
                             }
                             if (isFromSource) {
-
                                 AuroraEntryDropdownMenuItem(
                                     text = stringResource(MR.strings.action_webview_refresh),
                                     onClick = {

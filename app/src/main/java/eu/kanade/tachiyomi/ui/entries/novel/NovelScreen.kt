@@ -92,6 +92,7 @@ import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.presentation.entries.components.aurora.AuroraNoteEditorDialog
 import eu.kanade.presentation.entries.novel.NovelChapterSettingsDialog
 import eu.kanade.presentation.entries.novel.NovelScreen
+import eu.kanade.presentation.entries.novel.NovelTranslationBatchSheet
 import eu.kanade.presentation.entries.novel.TranslatedDownloadOptionsDialog
 import eu.kanade.presentation.entries.novel.components.NovelCoverDialog
 import eu.kanade.presentation.entries.novel.components.NovelTranslatedDownloadFormatSelector
@@ -451,6 +452,11 @@ class NovelScreen(
                     screenModel.addToTranslationQueue(chapterId)
                 }
             },
+            onChapterTranslateLongClick = { chapterId ->
+                if (isTranslatorEnabled) {
+                    screenModel.showTranslationBatchDialog(chapterId)
+                }
+            },
             onChapterTranslatedDownloadClick = { chapterId ->
                 val format = successState.translatedDownloadFormat
                 val added = screenModel.runTranslatedDownloadForChapterIds(
@@ -761,6 +767,27 @@ class NovelScreen(
                     ),
                     enableSwipeDismiss = { it.lastItem is MangaTrackInfoDialogHomeScreen },
                     onDismissRequest = screenModel::dismissDialog,
+                )
+            }
+            is NovelScreenModel.Dialog.TranslationBatchSheet -> {
+                val anchorChapter = successState.chapters.find { it.id == dialog.anchorChapterId }
+                NovelTranslationBatchSheet(
+                    onDismissRequest = screenModel::dismissDialog,
+                    chapterTitle = anchorChapter?.name.orEmpty(),
+                    anchorChapterId = dialog.anchorChapterId,
+                    chapters = successState.processedChapters,
+                    selectedChapterIds = successState.selectedChapterIds,
+                    downloadedChapterIds = successState.downloadedChapterIds,
+                    onStartBatch = { scope, limit, rangeStart, rangeEnd, forceRetranslate ->
+                        screenModel.enqueueTranslationBatch(
+                            anchorChapterId = dialog.anchorChapterId,
+                            scope = scope,
+                            limit = limit,
+                            rangeStart = rangeStart,
+                            rangeEnd = rangeEnd,
+                            forceRetranslate = forceRetranslate,
+                        )
+                    },
                 )
             }
             NovelScreenModel.Dialog.FullCover -> {

@@ -14,7 +14,7 @@ import java.net.URL
 
 class OmniBuilderScreenModel(
     val url: String,
-    private val ruleRepository: OmniRuleRepository = Injekt.get()
+    private val ruleRepository: OmniRuleRepository = Injekt.get(),
 ) : StateScreenModel<OmniBuilderScreenModel.State>(State.Init) {
 
     private val domain = runCatching { URL(url).host }.getOrDefault(url)
@@ -32,7 +32,7 @@ class OmniBuilderScreenModel(
     private fun handleSelection(selector: String, text: String) {
         val current = state.value
         if (current is State.Active && current.isInteractionMode) return // Don't select in interaction mode
-        
+
         when (current) {
             is State.StepTitle -> {
                 ruleBuilder.titleSelector = selector
@@ -45,10 +45,15 @@ class OmniBuilderScreenModel(
             is State.StepChapters -> {
                 // Remove ALL :nth-of-type(...) from the selector path to ensure we match all items
                 val cleanSelector = selector.replace(Regex(":nth-of-type\\(\\d+\\)"), "")
-                
+
                 val parts = cleanSelector.split(" > ")
-                val aIndex = parts.indexOfLast { it == "a" || it.startsWith("a:") || it.startsWith("a.") || it.startsWith("a#") }
-                
+                val aIndex = parts.indexOfLast {
+                    it == "a" ||
+                        it.startsWith("a:") ||
+                        it.startsWith("a.") ||
+                        it.startsWith("a#")
+                }
+
                 if (aIndex != -1) {
                     // We found an <a> tag in the hierarchy (even if they clicked a span inside it)
                     // Drop the <a> tag and its parent <li> (if present) to find the list container
@@ -56,7 +61,7 @@ class OmniBuilderScreenModel(
                     if (aIndex > 0 && parts[aIndex - 1].startsWith("li")) {
                         dropIndex = aIndex - 1
                     }
-                    
+
                     ruleBuilder.chapterListSelector = parts.subList(0, dropIndex).joinToString(" > ")
                     ruleBuilder.chapterUrlSelector = "a"
                     ruleBuilder.chapterNameSelector = "a"
@@ -66,7 +71,7 @@ class OmniBuilderScreenModel(
                     ruleBuilder.chapterUrlSelector = null
                     ruleBuilder.chapterNameSelector = null
                 }
-                
+
                 mutableState.update { State.StepPagination(current.isInteractionMode) }
             }
             is State.StepPagination -> {
@@ -121,7 +126,7 @@ class OmniBuilderScreenModel(
         val current = state.value
         if (current is State.Active) {
             val nextInteract = !current.isInteractionMode
-            mutableState.update { 
+            mutableState.update {
                 when (current) {
                     is State.StepTitle -> current.copy(isInteractionMode = nextInteract)
                     is State.StepCover -> current.copy(isInteractionMode = nextInteract)
@@ -134,16 +139,16 @@ class OmniBuilderScreenModel(
 
     sealed interface State {
         data object Init : State
-        
+
         sealed interface Active : State {
             val isInteractionMode: Boolean
         }
-        
+
         data class StepTitle(override val isInteractionMode: Boolean = false) : Active
         data class StepCover(override val isInteractionMode: Boolean = false) : Active
         data class StepChapters(override val isInteractionMode: Boolean = false) : Active
         data class StepPagination(override val isInteractionMode: Boolean = false) : Active
-        
+
         data object PaginationTypeSelection : State
         data object Review : State
     }
@@ -169,7 +174,7 @@ class OmniBuilderScreenModel(
             paginationSelector = paginationSelector,
             paginationType = paginationType,
             contentSelector = "div.entry-content, div.reading-content, div.text-left", // Default content area
-            removeSelectors = ".code-block, .adsbygoogle, .social-share, .comments-area"
+            removeSelectors = ".code-block, .adsbygoogle, .social-share, .comments-area",
         )
     }
 }

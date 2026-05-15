@@ -40,9 +40,11 @@ import eu.kanade.tachiyomi.data.export.novel.NovelEpubExportOptions
 import eu.kanade.tachiyomi.data.export.novel.NovelEpubExportProgress
 import eu.kanade.tachiyomi.data.export.novel.NovelEpubExporter
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import eu.kanade.tachiyomi.data.translation.TranslationBatchRequest
 import eu.kanade.tachiyomi.data.translation.TranslationJob
 import eu.kanade.tachiyomi.data.translation.TranslationQueueManager
 import eu.kanade.tachiyomi.data.translation.TranslationStatus
+import eu.kanade.tachiyomi.data.translation.toTranslationQueueProfileSnapshot
 import eu.kanade.tachiyomi.extension.novel.runtime.NovelJsSource
 import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.source.novel.NovelSiteSource
@@ -54,7 +56,6 @@ import eu.kanade.tachiyomi.ui.novel.resolveNovelResumeChapter
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderSettings
 import eu.kanade.tachiyomi.ui.reader.novel.translation.NovelReaderTranslationDiskCacheStore
-import eu.kanade.tachiyomi.ui.reader.novel.translation.toTranslationCacheRequirements
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
@@ -810,14 +811,13 @@ class NovelScreenModel(
     ): State.Success {
         val readerSettings = novelReaderPreferences.resolveSettings(novel.source)
         readerSettingsCache = readerSettings
-        val translationCacheRequirements = readerSettings.toTranslationCacheRequirements()
+        val translatedCacheChapterIds = NovelReaderTranslationDiskCacheStore.chapterIds(readerSettings.geminiTargetLang)
         val translatedDownloadFormat = novelReaderPreferences.translatedDownloadFormat(novel.id)
         val translatedQueueChapterIds = resolveTranslatedQueueChapterIds(
             queueState = queueState,
             novelId = novel.id,
             format = translatedDownloadFormat,
         )
-        val translatedCacheChapterIds = NovelReaderTranslationDiskCacheStore.chapterIds(translationCacheRequirements)
         val translatedDownloadedIds = novelTranslatedDownloadManager.getTranslatedChapterIds(
             novel = novel,
             chapters = chapters,
@@ -1779,8 +1779,9 @@ class NovelScreenModel(
         if (chapterIds.isEmpty()) return
 
         updateSuccessState { current ->
-            val translationCacheRequirements = resolveReaderSettings(current.novel.source)
-                .toTranslationCacheRequirements()
+            val translatedCacheChapterIds = NovelReaderTranslationDiskCacheStore.chapterIds(
+                resolveReaderSettings(current.novel.source).geminiTargetLang,
+            )
             val updatedChapterActionStates = current.chapterActionStates.toMutableMap()
             var changed = false
 
@@ -1788,10 +1789,7 @@ class NovelScreenModel(
                 val chapterActionState = updatedChapterActionStates[chapterId] ?: return@forEach
                 val translatedState = when {
                     isTranslating -> NovelChapterActionIconState.InProgress
-                    NovelReaderTranslationDiskCacheStore.has(
-                        chapterId = chapterId,
-                        requirements = translationCacheRequirements,
-                    ) -> NovelChapterActionIconState.Active
+                    chapterId in translatedCacheChapterIds -> NovelChapterActionIconState.Active
                     else -> NovelChapterActionIconState.Neutral
                 }
                 val updatedState = chapterActionState.copy(translateState = translatedState)
@@ -2002,6 +2000,9 @@ class NovelScreenModel(
             val novel: Novel,
             val initialSelection: ImmutableList<CheckboxState<Category>>,
         ) : Dialog
+        data class TranslationBatchSheet(
+            val anchorChapterId: Long,
+        ) : Dialog
         data object SettingsSheet : Dialog
         data object TrackSheet : Dialog
         data object FullCover : Dialog
@@ -2094,6 +2095,90 @@ class NovelScreenModel(
 
     fun showCoverDialog() {
         updateSuccessState { it.copy(dialog = Dialog.FullCover) }
+    }
+
+    fun showTranslationBatchDialog(chapterId: Long) {
+        updateSuccessState { it.copy(dialog = Dialog.TranslationBatchSheet(chapterId)) }
+    }
+
+    fun enqueueTranslationBatch(
+        anchorChapterId: Long,
+        scope: TranslationBatchScope,
+        limit: Int,
+        rangeStart: Int,
+        rangeEnd: Int,
+        forceRetranslate: Boolean,
+    ) {
+        val state = successState ?: return
+        screenModelScope.launchIO {
+            try {
+                val readerSettings = resolveReaderSettings(state.novel.source)
+                val selectedChapterIds = state.selectedChapterIds.ifEmpty { setOf(anchorChapterId) }
+                val resolvedChapterIds = resolveTranslationBatchChapterIds(
+                    scope = scope,
+                    limit = limit,
+                    chapters = state.processedChapters,
+                    selectedChapterIds = selectedChapterIds,
+                    downloadedChapterIds = state.downloadedChapterIds,
+                    rangeStart = rangeStart,
+                    rangeEnd = rangeEnd,
+                )
+                if (resolvedChapterIds.isEmpty()) {
+                    snackbarHostState.showSnackbar(
+                        message = "Для выбранного режима не нашлось глав для перевода.",
+                    )
+                    return@launchIO
+                }
+
+                val alreadyTranslatedChapterIds = resolvedChapterIds.filterTo(mutableSetOf()) { chapterId ->
+                    NovelReaderTranslationDiskCacheStore.has(
+                        chapterId = chapterId,
+                        targetLang = readerSettings.geminiTargetLang,
+                    )
+                }
+                val filteredSelection = filterTranslationBatchChapterIds(
+                    chapterIds = resolvedChapterIds,
+                    alreadyTranslatedChapterIds = alreadyTranslatedChapterIds,
+                    forceRetranslate = forceRetranslate,
+                )
+                if (filteredSelection.chapterIdsToEnqueue.isEmpty()) {
+                    snackbarHostState.showSnackbar(
+                        message = "Все выбранные главы уже переведены.",
+                    )
+                    return@launchIO
+                }
+
+                val result = translationQueueManager.enqueueTranslationBatch(
+                    TranslationBatchRequest(
+                        novelId = state.novel.id,
+                        batchToken = "",
+                        chapterIds = filteredSelection.chapterIdsToEnqueue,
+                        profileSnapshot = readerSettings.toTranslationQueueProfileSnapshot(),
+                        forceRetranslate = forceRetranslate,
+                    ),
+                )
+                if (result.enqueuedCount > 0) {
+                    TranslationJob.runImmediately(context.applicationContext)
+                    dismissDialog()
+                    val skippedText = if (filteredSelection.skippedAlreadyTranslatedCount > 0) {
+                        " Пропущено уже переведённых: ${filteredSelection.skippedAlreadyTranslatedCount}."
+                    } else {
+                        ""
+                    }
+                    snackbarHostState.showSnackbar(
+                        message = "Поставлено в очередь: ${result.enqueuedCount} глав.$skippedText",
+                    )
+                } else {
+                    snackbarHostState.showSnackbar(
+                        message = "Не удалось добавить главы в очередь.",
+                    )
+                }
+            } catch (e: Exception) {
+                snackbarHostState.showSnackbar(
+                    message = "Не удалось запустить очередь перевода: ${e.message}",
+                )
+            }
+        }
     }
 
     fun saveScrollPosition(index: Int, offset: Int) {

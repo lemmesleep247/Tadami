@@ -14,5 +14,5 @@ data class OmniRule(
     val paginationSelector: String?,
     val paginationType: PaginationType,
     val contentSelector: String,
-    val removeSelectors: String?
+    val removeSelectors: String?,
 )

@@ -137,6 +137,7 @@ fun NovelScreen(
     onOpenEpubExportDialog: (() -> Unit)?,
     onChapterClick: (Long) -> Unit,
     onChapterTranslateClick: (Long) -> Unit,
+    onChapterTranslateLongClick: (Long) -> Unit,
     onChapterTranslatedDownloadClick: (Long) -> Unit,
     onChapterTranslatedDownloadLongClick: (Long) -> Unit,
     onChapterTranslatedDownloadOpenFolder: (Long) -> Unit,
@@ -178,7 +179,7 @@ fun NovelScreen(
     val onToggleAutoJumpToNext = {
         uiPreferences.entryAutoJumpToNextNovel().set(!autoJumpToNextEnabled)
     }
-    
+
     val navigator = cafe.adriel.voyager.navigator.LocalNavigator.current
 
     // Route to Aurora implementation if Aurora theme is active
@@ -201,7 +202,9 @@ fun NovelScreen(
             onWebView = onWebView,
             onClickOmniBuilder = if (state.novel.source == eu.kanade.tachiyomi.source.novel.OmniSource.OMNI_SOURCE_ID) {
                 { navigator?.push(eu.kanade.tachiyomi.ui.entries.novel.OmniBuilderScreen(state.novel.url)) }
-            } else null,
+            } else {
+                null
+            },
             onMigrateClicked = onMigrateClicked,
             onTrackingClicked = onTrackingClicked,
             trackingCount = trackingCount,
@@ -210,6 +213,7 @@ fun NovelScreen(
             onOpenEpubExportDialog = onOpenEpubExportDialog,
             onChapterClick = onChapterClick,
             onChapterTranslateClick = onChapterTranslateClick,
+            onChapterTranslateLongClick = onChapterTranslateLongClick,
             onChapterTranslatedDownloadClick = onChapterTranslatedDownloadClick,
             onChapterTranslatedDownloadLongClick = onChapterTranslatedDownloadLongClick,
             onChapterTranslatedDownloadOpenFolder = onChapterTranslatedDownloadOpenFolder,
@@ -374,9 +378,13 @@ fun NovelScreen(
                 onClickRefresh = onRefresh,
                 onClickMigrate = onMigrateClicked,
                 onClickSettings = onSourceSettings,
-                onClickOmniBuilder = if (state.novel.source == eu.kanade.tachiyomi.source.novel.OmniSource.OMNI_SOURCE_ID) {
-                { navigator?.push(eu.kanade.tachiyomi.ui.entries.novel.OmniBuilderScreen(state.novel.url)) }
-            } else null,
+                onClickOmniBuilder = if (state.novel.source ==
+                    eu.kanade.tachiyomi.source.novel.OmniSource.OMNI_SOURCE_ID
+                ) {
+                    { navigator?.push(eu.kanade.tachiyomi.ui.entries.novel.OmniBuilderScreen(state.novel.url)) }
+                } else {
+                    null
+                },
                 onToggleAutoJumpToNext = onToggleAutoJumpToNext,
                 autoJumpToNextLabel = autoJumpToNextLabel,
                 changeAnimeSkipIntro = null,
@@ -844,6 +852,7 @@ fun NovelScreen(
                                 onClick = { onChapterClick(chapter.id) },
                                 onLongClick = { onChapterLongClick(chapter.id) },
                                 onTranslateClick = { onChapterTranslateClick(chapter.id) },
+                                onTranslateLongClick = { onChapterTranslateLongClick(chapter.id) },
                                 onTranslatedDownloadClick = { onChapterTranslatedDownloadClick(chapter.id) },
                                 onTranslatedDownloadLongClick = { onChapterTranslatedDownloadLongClick(chapter.id) },
                                 onTranslatedDownloadOpenFolder = { onChapterTranslatedDownloadOpenFolder(chapter.id) },
@@ -921,6 +930,7 @@ fun NovelScreen(
                                 onClick = { onChapterClick(chapter.id) },
                                 onLongClick = { onChapterLongClick(chapter.id) },
                                 onTranslateClick = { onChapterTranslateClick(chapter.id) },
+                                onTranslateLongClick = { onChapterTranslateLongClick(chapter.id) },
                                 onTranslatedDownloadClick = { onChapterTranslatedDownloadClick(chapter.id) },
                                 onTranslatedDownloadLongClick = { onChapterTranslatedDownloadLongClick(chapter.id) },
                                 onTranslatedDownloadOpenFolder = { onChapterTranslatedDownloadOpenFolder(chapter.id) },
@@ -1408,6 +1418,7 @@ private fun NovelClassicChapterRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onTranslateClick: () -> Unit,
+    onTranslateLongClick: () -> Unit,
     onTranslatedDownloadClick: () -> Unit,
     onTranslatedDownloadLongClick: () -> Unit,
     onTranslatedDownloadOpenFolder: () -> Unit,
@@ -1499,6 +1510,7 @@ private fun NovelClassicChapterRow(
                                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                                     },
                                     onClick = onTranslateClick,
+                                    onLongClick = onTranslateLongClick,
                                     backgroundColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.24f),
                                     showProgress = translateState == NovelChapterActionIconState.InProgress,
                                     progressColor = MaterialTheme.colorScheme.primary,

@@ -1,8 +1,8 @@
 package tachiyomi.domain.source.novel.resolver
 
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import tachiyomi.domain.source.novel.resolver.model.OmniChapter
 import tachiyomi.domain.source.novel.resolver.model.OmniParsingResult
 
@@ -14,16 +14,18 @@ class OmniResolverEngine {
             author = extractAuthor(document),
             description = extractDescription(document),
             thumbnailUrl = extractThumbnail(document),
-            chapters = extractChapters(document)
+            chapters = extractChapters(document),
         )
-        
+
         // Deep Scan: If we have very few chapters, look for an "All Chapters" link
         if (initialResult.chapters.size in 1..60) {
             val allChaptersLink = document.select("a").find { link ->
                 val text = link.text().lowercase()
-                text.contains(Regex("view all|show all|all chapters|все главы|список глав|archive", RegexOption.IGNORE_CASE))
+                text.contains(
+                    Regex("view all|show all|all chapters|все главы|список глав|archive", RegexOption.IGNORE_CASE),
+                )
             }
-            
+
             if (allChaptersLink != null) {
                 val archiveUrl = allChaptersLink.absUrl("href")
                 if (archiveUrl.isNotBlank() && archiveUrl != url) {
@@ -32,7 +34,7 @@ class OmniResolverEngine {
                 }
             }
         }
-        
+
         return initialResult
     }
 
@@ -67,10 +69,11 @@ class OmniResolverEngine {
         return allLinks.asSequence()
             .filter {
                 val absUrl = it.absUrl("href")
-                absUrl.isNotBlank() && (
-                    baseHost == null ||
-                        absUrl.toHttpUrlOrNull()?.host == baseHost
-                    )
+                absUrl.isNotBlank() &&
+                    (
+                        baseHost == null ||
+                            absUrl.toHttpUrlOrNull()?.host == baseHost
+                        )
             }
             .map { link ->
                 var score = 0
@@ -89,14 +92,14 @@ class OmniResolverEngine {
                 // Structure scoring: Look for patterns in parent or grandparent
                 val parent = link.parent()
                 val grandParent = parent?.parent()
-                
+
                 val siblingLinks = parent?.select("a")?.size ?: 0
                 val grandSiblingLinks = grandParent?.select("a")?.size ?: 0
-                
+
                 if (siblingLinks > 5 || grandSiblingLinks > 10) {
                     score += 15
                 }
-                
+
                 // Header bonus: Many sites put chapters in H2/H3
                 if (parent?.tagName()?.matches(Regex("h[1-6]")) == true) {
                     score += 10
@@ -109,12 +112,12 @@ class OmniResolverEngine {
             .mapIndexed { index, (link, _) ->
                 val name = link.text().trim()
                 val chapterNumber = parseChapterNumber(name) ?: (index + 1).toFloat()
-                
+
                 OmniChapter(
                     name = name,
                     url = link.absUrl("href"),
                     dateUpload = System.currentTimeMillis() - (index * 1000),
-                    chapterNumber = chapterNumber
+                    chapterNumber = chapterNumber,
                 )
             }
             .toList()
@@ -123,7 +126,7 @@ class OmniResolverEngine {
     private fun parseChapterNumber(name: String): Float? {
         val regex = Regex("(?i)(?:chapter|ch|глава|гл|vol|том)\\.?\\s*(\\d+(?:\\.\\d+)?)")
         val match = regex.find(name)
-        return match?.groupValues?.get(1)?.toFloatOrNull() 
+        return match?.groupValues?.get(1)?.toFloatOrNull()
             ?: Regex("(\\d+(?:\\.\\d+)?)").find(name)?.groupValues?.get(1)?.toFloatOrNull()
     }
 }

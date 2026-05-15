@@ -1,12 +1,12 @@
 package tachiyomi.data.source.novel
 
+import tachiyomi.data.handlers.novel.NovelDatabaseHandler
 import tachiyomi.domain.source.novel.resolver.model.OmniRule
 import tachiyomi.domain.source.novel.resolver.model.PaginationType
 import tachiyomi.domain.source.novel.resolver.repository.OmniRuleRepository
-import tachiyomi.data.handlers.novel.NovelDatabaseHandler
 
 class OmniRuleRepositoryImpl(
-    private val handler: NovelDatabaseHandler
+    private val handler: NovelDatabaseHandler,
 ) : OmniRuleRepository {
     override suspend fun getRuleByDomain(domain: String): OmniRule? {
         return handler.awaitOneOrNull { db -> db.omni_rulesQueries.getRuleByDomain(domain, ::mapRule) }
@@ -26,7 +26,7 @@ class OmniRuleRepositoryImpl(
                 pagination_selector = rule.paginationSelector,
                 pagination_type = rule.paginationType.name,
                 content_selector = rule.contentSelector,
-                remove_selectors = rule.removeSelectors
+                remove_selectors = rule.removeSelectors,
             )
         }
     }
@@ -47,13 +47,13 @@ class OmniRuleRepositoryImpl(
         paginationSelector: String?,
         paginationType: String,
         contentSelector: String,
-        removeSelectors: String?
+        removeSelectors: String?,
     ): OmniRule {
         return OmniRule(
             domain, titleSelector, authorSelector, coverSelector, descriptionSelector,
             chapterListSelector, chapterNameSelector, chapterUrlSelector,
             paginationSelector, PaginationType.valueOf(paginationType),
-            contentSelector, removeSelectors
+            contentSelector, removeSelectors,
         )
     }
 }

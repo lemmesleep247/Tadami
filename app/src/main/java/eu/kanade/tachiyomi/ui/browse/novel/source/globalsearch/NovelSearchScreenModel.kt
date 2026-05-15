@@ -85,7 +85,11 @@ abstract class NovelSearchScreenModel(
 
     open fun getEnabledSources(): List<NovelCatalogueSource> {
         return sourceManager.getCatalogueSources()
-            .filter { it.lang in enabledLanguages && "${it.id}" !in disabledSources && it.id != OmniSource.OMNI_SOURCE_ID }
+            .filter {
+                it.lang in enabledLanguages &&
+                    "${it.id}" !in disabledSources &&
+                    it.id != OmniSource.OMNI_SOURCE_ID
+            }
             .sortedWith(
                 compareBy(
                     { "${it.id}" !in pinnedSources },
@@ -120,7 +124,7 @@ abstract class NovelSearchScreenModel(
         achievementHandler.trackFeatureUsed(AchievementEvent.Feature.SEARCH)
 
         searchJob?.cancel()
-        
+
         val isUrl = query.trim().toHttpUrlOrNull() != null
         val sources = if (isUrl) {
             val omni = sourceManager.get(OmniSource.OMNI_SOURCE_ID) as? NovelCatalogueSource

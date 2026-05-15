@@ -790,6 +790,63 @@ class NovelScreenModelTest {
     }
 
     @Test
+    fun `selected batch scope keeps visible order`() {
+        val novel = novelForResumeTests(110L)
+        val chapters = listOf(
+            novelChapter(id = 1L, novelId = novel.id, chapterNumber = 3.0, read = false),
+            novelChapter(id = 2L, novelId = novel.id, chapterNumber = 1.0, read = true),
+            novelChapter(id = 3L, novelId = novel.id, chapterNumber = 2.0, read = false),
+        )
+
+        resolveTranslationBatchChapterIds(
+            scope = TranslationBatchScope.SELECTED,
+            limit = 10,
+            chapters = chapters,
+            selectedChapterIds = setOf(3L, 1L),
+            downloadedChapterIds = emptySet(),
+        ) shouldBe listOf(1L, 3L)
+    }
+
+    @Test
+    fun `already translated chapters are skipped unless forced`() {
+        filterTranslationBatchChapterIds(
+            chapterIds = listOf(1L, 2L, 3L),
+            alreadyTranslatedChapterIds = setOf(2L),
+            forceRetranslate = false,
+        ) shouldBe TranslationBatchSelection(
+            chapterIdsToEnqueue = listOf(1L, 3L),
+            skippedAlreadyTranslatedCount = 1,
+        )
+
+        filterTranslationBatchChapterIds(
+            chapterIds = listOf(1L, 2L, 3L),
+            alreadyTranslatedChapterIds = setOf(2L),
+            forceRetranslate = true,
+        ) shouldBe TranslationBatchSelection(
+            chapterIdsToEnqueue = listOf(1L, 2L, 3L),
+            skippedAlreadyTranslatedCount = 0,
+        )
+    }
+
+    @Test
+    fun `first n visible batch scope limits to visible order`() {
+        val novel = novelForResumeTests(111L)
+        val chapters = listOf(
+            novelChapter(id = 10L, novelId = novel.id, chapterNumber = 4.0, read = false),
+            novelChapter(id = 20L, novelId = novel.id, chapterNumber = 1.0, read = false),
+            novelChapter(id = 30L, novelId = novel.id, chapterNumber = 3.0, read = false),
+        )
+
+        resolveTranslationBatchChapterIds(
+            scope = TranslationBatchScope.FIRST_N_VISIBLE,
+            limit = 2,
+            chapters = chapters,
+            selectedChapterIds = emptySet(),
+            downloadedChapterIds = emptySet(),
+        ) shouldBe listOf(10L, 20L)
+    }
+
+    @Test
     fun `translation cache chapter ids are loaded in bulk`() {
         NovelReaderTranslationDiskCacheStore.clear()
         try {
