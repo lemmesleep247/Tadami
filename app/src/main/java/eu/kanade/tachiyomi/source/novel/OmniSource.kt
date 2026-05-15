@@ -78,12 +78,14 @@ class OmniSource(
 
     @Deprecated("Use the non-RxJava API instead.")
     override fun fetchPopularNovels(page: Int): Observable<NovelsPage> = throw UnsupportedOperationException()
+
     @Deprecated("Use the non-RxJava API instead.")
     override fun fetchSearchNovels(
         page: Int,
         query: String,
         filters: NovelFilterList,
     ): Observable<NovelsPage> = throw UnsupportedOperationException()
+
     @Deprecated("Use the non-RxJava API instead.")
     override fun fetchLatestUpdates(page: Int): Observable<NovelsPage> = throw UnsupportedOperationException()
 
