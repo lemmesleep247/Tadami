@@ -84,9 +84,10 @@ class NovelJsSource internal constructor(
             // storage.get/set) to expose the correct base URL without requiring a
             // static value baked into the plugin manifest.
             val userConfiguredUrl = settingsBridge.getSettingWithDefault("url")
-                ?.trim()
-                ?.takeIf { it.isNotBlank() && (it.startsWith("http://") || it.startsWith("https://")) }
-            return userConfiguredUrl ?: plugin.site?.takeIf { it.isNotBlank() }
+                ?.let { value ->
+                    value.trim().takeIf { it.isNotBlank() && (it.startsWith("http://") || it.startsWith("https://")) }
+                }
+            return userConfiguredUrl ?: plugin.site.takeIf { it.isNotBlank() }
         }
     override val pluginId: String = plugin.id
 

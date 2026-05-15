@@ -76,12 +76,15 @@ class OmniSource(
     override suspend fun getLatestUpdates(page: Int): NovelsPage = NovelsPage(emptyList(), false)
     override fun getFilterList(): NovelFilterList = NovelFilterList()
 
+    @Deprecated("Use the non-RxJava API instead.")
     override fun fetchPopularNovels(page: Int): Observable<NovelsPage> = throw UnsupportedOperationException()
+    @Deprecated("Use the non-RxJava API instead.")
     override fun fetchSearchNovels(
         page: Int,
         query: String,
         filters: NovelFilterList,
     ): Observable<NovelsPage> = throw UnsupportedOperationException()
+    @Deprecated("Use the non-RxJava API instead.")
     override fun fetchLatestUpdates(page: Int): Observable<NovelsPage> = throw UnsupportedOperationException()
 
     private fun getDomain(url: String): String = url.toHttpUrlOrNull()?.host ?: ""
@@ -168,16 +171,14 @@ class OmniSource(
                     if (chapterNameSel == chapterUrlSel) linkElement else linkElement.select(chapterNameSel).first()
                 }
 
-                if (linkElement != null) {
-                    val url = linkElement.absUrl("href")
-                    if (url.isNotBlank() && chapters.none { it.url == url }) {
-                        chapters.add(
-                            SNovelChapter.create().apply {
-                                this.url = url
-                                this.name = nameElement?.text()?.trim() ?: "Chapter"
-                            },
-                        )
-                    }
+                val url = linkElement.absUrl("href")
+                if (url.isNotBlank() && chapters.none { it.url == url }) {
+                    chapters.add(
+                        SNovelChapter.create().apply {
+                            this.url = url
+                            this.name = nameElement?.text()?.trim() ?: "Chapter"
+                        },
+                    )
                 }
             }
 
