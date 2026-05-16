@@ -41,6 +41,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -177,7 +178,7 @@ fun NovelLibraryAuroraContent(
             item.id to sourceManager.getOrStub(source).lang
         }.toMap()
     }
-    val isSearchActive = !searchQuery.isNullOrBlank()
+    val isSearchActive = searchQuery != null
     val showPinnedSection = remember(items) { items.count { it.pinned } > 1 }
     val isSelectionMode = selection.isNotEmpty() && onToggleSelection != null
     val selectedIds = remember(selection) { selection.map { it.id }.toHashSet() }
@@ -807,6 +808,15 @@ private fun InlineNovelLibraryHeader(
     val tabState = LocalTabState.current
     var showMenu by remember { mutableStateOf(false) }
 
+    var internalQuery by remember(searchQuery) { mutableStateOf(searchQuery) }
+
+    LaunchedEffect(internalQuery) {
+        if (internalQuery != searchQuery) {
+            kotlinx.coroutines.delay(eu.kanade.presentation.components.SEARCH_DEBOUNCE_MILLIS)
+            onSearchQueryChange(internalQuery)
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -819,9 +829,9 @@ private fun InlineNovelLibraryHeader(
         ) {
             if (isSearchActive) {
                 TextField(
-                    value = searchQuery,
+                    value = internalQuery,
                     onValueChange = { value ->
-                        onSearchQueryChange(value.ifBlank { null })
+                        internalQuery = value
                     },
                     placeholder = {
                         Text(
