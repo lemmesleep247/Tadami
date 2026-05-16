@@ -17,7 +17,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.fastAny
 import eu.kanade.presentation.components.AuroraCard
 import eu.kanade.presentation.library.components.GlobalSearchItem
 import eu.kanade.presentation.library.components.GlowContourLibraryGridItem
@@ -205,6 +204,7 @@ private fun AnimeLibraryAuroraList(
 ) {
     val colors = AuroraTheme.colors
     val showPinnedSection = items.count { it.pinned } > 1
+    val selectedIds = remember(selection) { selection.map { it.id }.toHashSet() }
 
     FastScrollLazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -249,19 +249,22 @@ private fun AnimeLibraryAuroraList(
                 libraryItem.isLocal ||
                 libraryItem.sourceLanguage.isNotBlank()
 
+            val coverData = remember(anime) {
+                AnimeCover(
+                    animeId = anime.id,
+                    sourceId = anime.source,
+                    isAnimeFavorite = anime.favorite,
+                    url = anime.thumbnailUrl,
+                    lastModified = anime.coverLastModified,
+                )
+            }
             AuroraCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .auroraCenteredMaxWidth(listMaxWidthDp)
                     .aspectRatio(2.2f),
                 title = anime.title,
-                coverData = AnimeCover(
-                    animeId = anime.id,
-                    sourceId = anime.source,
-                    isAnimeFavorite = anime.favorite,
-                    url = anime.thumbnailUrl,
-                    lastModified = anime.coverLastModified,
-                ),
+                coverData = coverData,
                 subtitle = subtitle,
                 badge = if (hasBadge) {
                     {
@@ -320,7 +323,7 @@ private fun AnimeLibraryAuroraList(
                 } else {
                     null
                 },
-                isSelected = selection.fastAny { it.id == libraryAnime.id },
+                isSelected = selectedIds.contains(libraryAnime.id),
                 coverHeightFraction = 0.62f,
                 titleMaxLines = 1,
             )
@@ -348,6 +351,7 @@ private fun AnimeLibraryAuroraCardGrid(
 ) {
     val useGlowContourCards = cardStyle == AuroraLibraryCardStyle.GlowContour
     val showPinnedSection = remember(items) { items.count { it.pinned } > 1 }
+    val selectedIds = remember(selection) { selection.map { it.id }.toHashSet() }
 
     LazyLibraryGrid(
         modifier = Modifier
@@ -403,18 +407,22 @@ private fun AnimeLibraryAuroraCardGrid(
                     anime.status == SAnime.CANCELLED.toLong(),
             )
 
+            val coverData = remember(anime) {
+                AnimeCover(
+                    animeId = anime.id,
+                    sourceId = anime.source,
+                    isAnimeFavorite = anime.favorite,
+                    url = anime.thumbnailUrl,
+                    lastModified = anime.coverLastModified,
+                )
+            }
+
             if (useGlowContourCards) {
                 GlowContourLibraryGridItem(
                     modifier = Modifier,
                     title = anime.title,
                     subtitle = subtitle,
-                    coverData = AnimeCover(
-                        animeId = anime.id,
-                        sourceId = anime.source,
-                        isAnimeFavorite = anime.favorite,
-                        url = anime.thumbnailUrl,
-                        lastModified = anime.coverLastModified,
-                    ),
+                    coverData = coverData,
                     progressPercent = progressPercent,
                     cardAspectRatio = 0.76f,
                     cornerIndicatorState = cornerIndicatorState,
@@ -447,20 +455,16 @@ private fun AnimeLibraryAuroraCardGrid(
                     } else {
                         null
                     },
-                    isSelected = selection.fastAny { it.id == libraryAnime.id },
+                    isSelected = selectedIds.contains(libraryAnime.id),
+
                     gridColumns = columns,
                 )
             } else {
                 AuroraCard(
                     modifier = Modifier.aspectRatio(if (showMetadata) 0.66f else 0.6f),
                     title = anime.title,
-                    coverData = AnimeCover(
-                        animeId = anime.id,
-                        sourceId = anime.source,
-                        isAnimeFavorite = anime.favorite,
-                        url = anime.thumbnailUrl,
-                        lastModified = anime.coverLastModified,
-                    ),
+                    coverData = coverData,
+
                     subtitle = subtitle,
                     badge = if (hasBadge) {
                         {
@@ -484,7 +488,8 @@ private fun AnimeLibraryAuroraCardGrid(
                     } else {
                         null
                     },
-                    isSelected = selection.fastAny { it.id == libraryAnime.id },
+                    isSelected = selectedIds.contains(libraryAnime.id),
+
                     coverHeightFraction = if (showMetadata) 0.68f else 1f,
                     titleMaxLines = if (showMetadata) 1 else 2,
                     gridColumns = columns,

@@ -54,7 +54,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.fastAny
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.components.AuroraCard
@@ -190,6 +189,7 @@ fun NovelLibraryAuroraContent(
     }
     val showPinnedSection = remember(filteredItems) { filteredItems.count { it.pinned } > 1 }
     val isSelectionMode = selection.isNotEmpty() && onToggleSelection != null
+    val selectedIds = remember(selection) { selection.map { it.id }.toHashSet() }
     val onClickNovelItem: (NovelLibraryItem) -> Unit = { libraryItem ->
         if (isSelectionMode) {
             onToggleSelection(libraryItem)
@@ -269,7 +269,8 @@ fun NovelLibraryAuroraContent(
                         onNovelClicked = { onClickNovelItem(item) },
                         onLongClick = onLongClickNovelItem?.let { { it(item) } },
                         onClickContinueReading = onContinueReadingClicked?.let { { it(item) } },
-                        isSelected = selection.fastAny { it.id == item.id },
+                        isSelected = selectedIds.contains(item.id),
+
                         cardStyle = AuroraLibraryCardStyle.Standard,
                         glowDisplayMode = LibraryDisplayMode.List,
                         gridColumns = null,
@@ -331,7 +332,7 @@ fun NovelLibraryAuroraContent(
                         NovelLibraryCompactGridItem(
                             item = item,
                             badgeState = badgeState,
-                            selection = selection,
+                            selectedIds = selectedIds,
                             onNovelClicked = onClickNovelItem,
                             onLongClickNovel = onLongClickNovelItem,
                             onClickContinueReading = onContinueReadingClicked,
@@ -351,7 +352,8 @@ fun NovelLibraryAuroraContent(
                             onNovelClicked = { onClickNovelItem(item) },
                             onLongClick = onLongClickNovelItem?.let { { it(item) } },
                             onClickContinueReading = onContinueReadingClicked?.let { { it(item) } },
-                            isSelected = selection.fastAny { it.id == item.id },
+                            isSelected = selectedIds.contains(item.id),
+
                             cardStyle = auroraCardStyle,
                             glowDisplayMode = displayMode,
                             gridColumns = columns.coerceAtLeast(0),
@@ -368,7 +370,7 @@ fun NovelLibraryAuroraContent(
 private fun NovelLibraryCompactGridItem(
     item: NovelLibraryItem,
     badgeState: NovelLibraryBadgeState,
-    selection: List<NovelLibraryItem>,
+    selectedIds: Set<Long>,
     onNovelClicked: (NovelLibraryItem) -> Unit,
     onLongClickNovel: ((NovelLibraryItem) -> Unit)?,
     onClickContinueReading: ((NovelLibraryItem) -> Unit)?,
@@ -376,20 +378,23 @@ private fun NovelLibraryCompactGridItem(
 ) {
     val placeholderPainter = rememberAuroraCoverPlaceholderPainter()
 
-    val coverData = item.coverNovel?.asNovelCover() ?: NovelCover(
-        novelId = item.id,
-        sourceId = 0,
-        isNovelFavorite = true,
-        url = null,
-        lastModified = 0,
-    )
+    val coverData = remember(item) {
+        item.coverNovel?.asNovelCover() ?: NovelCover(
+            novelId = item.id,
+            sourceId = 0,
+            isNovelFavorite = true,
+            url = null,
+            lastModified = 0,
+        )
+    }
 
     EntryCompactGridItem(
         coverData = coverData,
         title = item.title,
         onClick = { onNovelClicked(item) },
         onLongClick = { onLongClickNovel?.invoke(item) },
-        isSelected = selection.fastAny { it.id == item.id },
+        isSelected = selectedIds.contains(item.id),
+
         onClickContinueViewing = if (onClickContinueReading != null && item.unreadCount > 0) {
             { onClickContinueReading(item) }
         } else {
