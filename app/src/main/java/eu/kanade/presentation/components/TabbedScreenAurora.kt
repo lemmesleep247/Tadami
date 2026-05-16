@@ -598,7 +598,7 @@ internal fun AuroraTabRow(
     val density = LocalDensity.current
 
     // Auto-scroll to center the selected tab when scrollable (except first two).
-    LaunchedEffect(selectedIndex) {
+    LaunchedEffect(selectedIndex, containerWidthPx) {
         if (!scrollable || containerWidthPx <= 0) return@LaunchedEffect
 
         if (selectedIndex <= 1) {
