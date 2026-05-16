@@ -2,9 +2,11 @@ package eu.kanade.tachiyomi.ui.library.manga
 
 import android.content.Context
 import eu.kanade.domain.base.BasePreferences
+import eu.kanade.domain.entries.manga.interactor.UpdateManga
+import eu.kanade.domain.items.chapter.interactor.SetReadStatus
 import eu.kanade.presentation.components.SEARCH_DEBOUNCE_MILLIS
-import eu.kanade.tachiyomi.data.download.manga.MangaDownloadManager
 import eu.kanade.tachiyomi.data.download.manga.MangaDownloadCache
+import eu.kanade.tachiyomi.data.download.manga.MangaDownloadManager
 import eu.kanade.tachiyomi.data.track.BaseTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import io.kotest.matchers.collections.shouldContainExactly
@@ -33,8 +35,6 @@ import tachiyomi.domain.category.manga.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.entries.manga.interactor.GetLibraryManga
 import tachiyomi.domain.entries.manga.model.Manga
-import eu.kanade.domain.entries.manga.interactor.UpdateManga
-import eu.kanade.domain.items.chapter.interactor.SetReadStatus
 import tachiyomi.domain.history.manga.interactor.GetNextChapters
 import tachiyomi.domain.items.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.library.manga.LibraryManga

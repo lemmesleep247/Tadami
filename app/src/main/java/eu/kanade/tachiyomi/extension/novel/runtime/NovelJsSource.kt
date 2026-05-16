@@ -97,15 +97,15 @@ class NovelJsSource internal constructor(
     override val pluginId: String = plugin.id
 
     private fun resolveSiteUrl(): String? {
-            // Prefer the user-configured URL from settings (e.g. Komga's "url" setting).
-            // This allows plugins whose site is dynamically configured (stored via
-            // storage.get/set) to expose the correct base URL without requiring a
-            // static value baked into the plugin manifest.
-            val userConfiguredUrl = settingsBridge.getSettingWithDefault("url")
-                ?.let { value ->
-                    value.trim().takeIf { it.isNotBlank() && (it.startsWith("http://") || it.startsWith("https://")) }
-                }
-            return userConfiguredUrl ?: plugin.site.takeIf { it.isNotBlank() }
+        // Prefer the user-configured URL from settings (e.g. Komga's "url" setting).
+        // This allows plugins whose site is dynamically configured (stored via
+        // storage.get/set) to expose the correct base URL without requiring a
+        // static value baked into the plugin manifest.
+        val userConfiguredUrl = settingsBridge.getSettingWithDefault("url")
+            ?.let { value ->
+                value.trim().takeIf { it.isNotBlank() && (it.startsWith("http://") || it.startsWith("https://")) }
+            }
+        return userConfiguredUrl ?: plugin.site.takeIf { it.isNotBlank() }
     }
 
     private val mutex = Mutex()
@@ -118,8 +118,10 @@ class NovelJsSource internal constructor(
     private var cachedParseNovelResult: ParsedPluginNovel? = null
     private var settingsDiscoveryAttempted = false
     private var cachedHasSettings = false
+
     @Volatile
     private var cachedSiteUrl: String? = null
+
     @Volatile
     private var isSiteUrlCached = false
 

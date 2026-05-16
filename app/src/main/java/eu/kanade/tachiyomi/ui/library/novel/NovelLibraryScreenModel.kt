@@ -60,7 +60,6 @@ import tachiyomi.domain.items.novelchapter.repository.NovelChapterRepository
 import tachiyomi.domain.items.novelchapter.service.getNovelChapterSort
 import tachiyomi.domain.library.novel.model.NovelLibrarySort
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.domain.series.novel.interactor.AddNovelsToSeries
 import tachiyomi.domain.series.novel.interactor.CreateNovelSeries
 import tachiyomi.domain.series.novel.interactor.DeleteNovelSeries
@@ -68,6 +67,7 @@ import tachiyomi.domain.series.novel.interactor.GetLibraryNovelSeries
 import tachiyomi.domain.series.novel.interactor.GetNovelIdsInAnySeries
 import tachiyomi.domain.series.novel.interactor.UpdateNovelSeries
 import tachiyomi.domain.series.novel.model.NovelSeries
+import tachiyomi.domain.source.novel.service.NovelSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File

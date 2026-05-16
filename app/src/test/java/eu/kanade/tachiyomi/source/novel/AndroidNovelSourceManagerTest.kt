@@ -26,9 +26,9 @@ import tachiyomi.domain.extension.novel.model.NovelPlugin
 import tachiyomi.domain.source.novel.model.StubNovelSource
 import tachiyomi.domain.source.novel.repository.NovelStubSourceRepository
 import tachiyomi.domain.source.novel.resolver.repository.OmniRuleRepository
+import tachiyomi.source.local.entries.novel.LocalNovelSource
 import tachiyomi.source.local.image.novel.LocalNovelCoverManager
 import tachiyomi.source.local.io.novel.LocalNovelSourceFileSystem
-import tachiyomi.source.local.entries.novel.LocalNovelSource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.fullType
 import uy.kohesive.injekt.api.get

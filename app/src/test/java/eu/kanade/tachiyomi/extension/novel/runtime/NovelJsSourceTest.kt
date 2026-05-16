@@ -693,7 +693,7 @@ class NovelJsSourceTest {
     private open class InMemoryKeyValueStore : NovelPluginKeyValueStore {
         private val store = mutableMapOf<String, MutableMap<String, String>>()
 
-        override open fun get(pluginId: String, key: String): String? {
+        open override fun get(pluginId: String, key: String): String? {
             return store[pluginId]?.get(key)
         }
 
