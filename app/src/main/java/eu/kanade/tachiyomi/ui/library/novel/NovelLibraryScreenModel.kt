@@ -36,11 +36,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -146,7 +146,7 @@ class NovelLibraryScreenModel(
                 },
                 flow3 = getFilterPreferencesFlow(),
                 flow4 = getSortPreferencesFlow(),
-                flow5 = downloadCacheChanges.onStart { emit(Unit) },
+                flow5 = downloadCacheChanges.conflate(),
                 transform = {
                         query: String?,
                         novels: List<NovelLibraryItem>,

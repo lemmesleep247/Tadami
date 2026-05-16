@@ -37,6 +37,7 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -121,7 +122,7 @@ class MangaLibraryScreenModel(
                 getLibraryFlow(),
                 getTracksPerManga.subscribe(),
                 getTrackingFilterFlow(),
-                downloadCache.changes,
+                downloadCache.changes.conflate(),
             ) { searchQuery, library, tracks, trackingFilter, _ ->
                 library
                     .applyFilters(tracks, trackingFilter)
