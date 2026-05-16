@@ -722,15 +722,19 @@ class NovelJsSource internal constructor(
     }
 
     internal fun clearInMemoryCaches() {
-        runCatching { runtime?.close() }
-        runtime = null
-        cachedFiltersPayload = null
-        cachedImageRequestHeaders = null
-        settingsSchema = emptyList()
-        settingsBridge.clearSettingsSchema()
-        capabilities = null
-        settingsDiscoveryAttempted = false
-        cachedHasSettings = false
+        runBlocking {
+            mutex.withLock {
+                runCatching { runtime?.close() }
+                runtime = null
+                cachedFiltersPayload = null
+                cachedImageRequestHeaders = null
+                settingsSchema = emptyList()
+                settingsBridge.clearSettingsSchema()
+                capabilities = null
+                settingsDiscoveryAttempted = false
+                cachedHasSettings = false
+            }
+        }
     }
 
     private fun loadFiltersLocked(): NovelFilterList {

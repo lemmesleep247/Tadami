@@ -6,6 +6,9 @@ import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Test
 import tachiyomi.data.extension.novel.NovelPluginKeyValueStore
@@ -50,6 +53,61 @@ class NovelJsSourceTest {
         source.clearInMemoryCaches()
 
         source.hasPluginSettings(discoverRuntime = true) shouldBe true
+
+        verify(exactly = 2) { runtimeFactory.create("test-plugin") }
+    }
+
+    @Test
+    fun `clearInMemoryCaches waits for runtime close before rediscovery`() = kotlinx.coroutines.runBlocking {
+        val runtimeFactory = mockk<NovelJsRuntimeFactory>()
+        val runtime1 = mockk<NovelJsRuntime>(relaxed = true)
+        val runtime2 = mockk<NovelJsRuntime>(relaxed = true)
+        val closeStarted = CompletableDeferred<Unit>()
+        val allowClose = CompletableDeferred<Unit>()
+        val secondRuntimeCreated = CompletableDeferred<Unit>()
+        val createCount = AtomicInteger(0)
+
+        every { runtimeFactory.create(any()) } answers {
+            when (createCount.getAndIncrement()) {
+                0 -> runtime1
+                else -> {
+                    secondRuntimeCreated.complete(Unit)
+                    runtime2
+                }
+            }
+        }
+        every { runtime1.close() } answers {
+            closeStarted.complete(Unit)
+            kotlinx.coroutines.runBlocking {
+                allowClose.await()
+            }
+        }
+        every { runtime1.evaluate(any(), any(), any()) } answers { evaluateSettingsScript(firstArg()) }
+        every { runtime2.evaluate(any(), any(), any()) } answers { evaluateSettingsScript(firstArg()) }
+
+        val source = createSource(
+            hasSettings = false,
+            runtimeFactory = runtimeFactory,
+        )
+
+        source.getFilterList()
+
+        val clearJob = async(Dispatchers.Default) {
+            source.clearInMemoryCaches()
+        }
+        closeStarted.await()
+
+        val filterJob = async(Dispatchers.Default) {
+            source.getFilterList()
+        }
+
+        kotlinx.coroutines.withTimeoutOrNull(200) {
+            secondRuntimeCreated.await()
+        } shouldBe null
+
+        allowClose.complete(Unit)
+        clearJob.await()
+        filterJob.await()
 
         verify(exactly = 2) { runtimeFactory.create("test-plugin") }
     }
@@ -309,6 +367,7 @@ class NovelJsSourceTest {
                     }
                 ]
             """.trimIndent()
+            script.contains("JSON.stringify(__plugin && __plugin.filters ? __plugin.filters : {})") -> "{}"
             script.contains("typeof __plugin.parsePage") -> false
             script.contains("typeof __plugin.resolveUrl") -> false
             script.contains("typeof __plugin.fetchImage") -> false
@@ -330,6 +389,7 @@ class NovelJsSourceTest {
             """.trimIndent()
             script.contains("Array.isArray(__plugin && __plugin.settings)") -> false
             script.contains("JSON.stringify(__plugin.settings || [])") -> "[]"
+            script.contains("JSON.stringify(__plugin && __plugin.filters ? __plugin.filters : {})") -> "{}"
             script.contains("typeof __plugin.parsePage") -> false
             script.contains("typeof __plugin.resolveUrl") -> false
             script.contains("typeof __plugin.fetchImage") -> false
