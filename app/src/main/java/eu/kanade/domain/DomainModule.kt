@@ -679,7 +679,7 @@ class DomainModule : InjektModule {
                 get(), get(), get(), get(), get(),
                 get(), get(), get(), get(), get(),
                 get(), get(), get(), get(), get(),
-                get(),
+                get(), get(),
             )
         }
         // Note: AchievementLoader, PointsManager, UnlockableManager require Context

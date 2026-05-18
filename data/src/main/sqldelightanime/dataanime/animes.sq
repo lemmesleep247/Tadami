@@ -229,6 +229,12 @@ SELECT COUNT(*)
 FROM animes
 WHERE favorite = 1;
 
+getLibraryCountByStatus:
+SELECT COUNT(*)
+FROM animes
+WHERE favorite = 1
+AND status = :status;
+
 getLibraryGenreCount:
 SELECT COUNT(*)
 FROM animes

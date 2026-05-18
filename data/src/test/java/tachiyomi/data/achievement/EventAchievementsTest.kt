@@ -21,6 +21,7 @@ import tachiyomi.data.handlers.novel.NovelDatabaseHandler
 import tachiyomi.domain.achievement.repository.AchievementRepository
 import tachiyomi.domain.entries.anime.repository.AnimeRepository
 import tachiyomi.domain.entries.manga.repository.MangaRepository
+import tachiyomi.domain.entries.novel.repository.NovelRepository
 
 /**
  * Unit tests for EVENT achievement logic.
@@ -59,6 +60,7 @@ class EventAchievementsTest : AchievementTestBase() {
         val featureBasedChecker: FeatureBasedAchievementChecker = mockk(relaxed = true)
         val mangaRepository: MangaRepository = mockk(relaxed = true)
         val animeRepository: AnimeRepository = mockk(relaxed = true)
+        val novelRepository: NovelRepository = mockk(relaxed = true)
         val activityDataRepo: tachiyomi.domain.achievement.repository.ActivityDataRepository = mockk(relaxed = true)
 
         handler = AchievementHandler(
@@ -76,6 +78,7 @@ class EventAchievementsTest : AchievementTestBase() {
             novelHandler = novelHandler,
             mangaRepository = mangaRepository,
             animeRepository = animeRepository,
+            novelRepository = novelRepository,
             userProfileManager = mockk(relaxed = true),
             activityDataRepository = activityDataRepo,
         )

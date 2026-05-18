@@ -34,6 +34,7 @@ import tachiyomi.domain.achievement.model.UserPoints
 import tachiyomi.domain.achievement.repository.AchievementRepository
 import tachiyomi.domain.entries.anime.repository.AnimeRepository
 import tachiyomi.domain.entries.manga.repository.MangaRepository
+import tachiyomi.domain.entries.novel.repository.NovelRepository
 
 @Execution(ExecutionMode.CONCURRENT)
 class AchievementHandlerRoutingTest : AchievementTestBase() {
@@ -84,6 +85,7 @@ class AchievementHandlerRoutingTest : AchievementTestBase() {
             novelHandler = novelHandler,
             mangaRepository = mockk<MangaRepository>(relaxed = true),
             animeRepository = mockk<AnimeRepository>(relaxed = true),
+            novelRepository = mockk<NovelRepository>(relaxed = true),
             userProfileManager = mockk(relaxed = true),
             activityDataRepository = mockk(relaxed = true),
         )
@@ -150,6 +152,7 @@ class AchievementHandlerRoutingTest : AchievementTestBase() {
 
         coEvery { mangaHandler.awaitOneOrNull<Any>(any(), any()) } returnsMany listOf(1L, true)
         coEvery { animeHandler.awaitOneOrNull<Any>(any(), any()) } returnsMany listOf(1L, false)
+        coEvery { novelHandler.awaitOneOrNull<Any>(any(), any()) } returnsMany listOf(1L, false)
 
         emitAndSettle(AchievementEvent.LibraryRemoved(entryId = 1L, type = AchievementCategory.MANGA))
 
