@@ -380,7 +380,7 @@ class MyAnimeListApi(
     }
 
     companion object {
-        private const val CLIENT_ID = "686b980ff4240fccce7f6a654cea07ce"
+        private const val CLIENT_ID = "e538b83e7a11ab181510d69d42374a09"
 
         private const val BASE_OAUTH_URL = "https://myanimelist.net/v1/oauth2"
         private const val BASE_API_URL = "https://api.myanimelist.net/v2"
