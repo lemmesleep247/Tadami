@@ -27,6 +27,8 @@ class UserProfilePreferences(
     fun nicknameOutlineWidth() = preferenceStore.getInt("user_profile_name_outline_width", 2)
     fun nicknameGlow() = preferenceStore.getBoolean("user_profile_name_glow", false)
     fun nicknameEffect() = preferenceStore.getString("user_profile_name_effect", "none")
+    fun avatarFrameStyle() = preferenceStore.getString("user_profile_avatar_frame_style", "none")
+    fun homeBadgeStyle() = preferenceStore.getString("user_profile_home_badge_style", "none")
 
     fun showHomeGreeting() = preferenceStore.getBoolean("user_profile_show_home_greeting", true)
     fun showHomeStreak() = preferenceStore.getBoolean("user_profile_show_home_streak", true)

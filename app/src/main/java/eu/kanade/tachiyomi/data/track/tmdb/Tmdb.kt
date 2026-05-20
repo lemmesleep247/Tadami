@@ -38,7 +38,7 @@ class Tmdb(id: Long) : BaseTracker(id, "TMDB"), AnimeTracker {
         // App-level v3 API key for TMDB; bundled like our other tracker app credentials.
         const val API_KEY = "2636d1247a3d193fdb5334f9d5780429"
 
-        const val REDIRECT_URI = "aniyomi://tmdb-auth"
+        const val REDIRECT_URI = "tadami://tmdb-auth"
 
         private val SCORE_LIST = IntRange(0, 10)
             .map(Int::toString)

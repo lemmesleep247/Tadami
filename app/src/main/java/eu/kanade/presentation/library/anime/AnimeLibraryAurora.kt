@@ -427,6 +427,7 @@ private fun AnimeLibraryAuroraCardGrid(
                     cardAspectRatio = 0.76f,
                     cornerIndicatorState = cornerIndicatorState,
                     textSpec = textSpec,
+                    genres = anime.genre ?: emptyList(),
                     badge = if (hasBadge) {
                         {
                             AnimeAuroraBadgeGroup(

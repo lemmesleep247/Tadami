@@ -3,6 +3,7 @@
 package eu.kanade.tachiyomi.novelsource.model
 
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import eu.kanade.tachiyomi.source.model.parseSourceGenres
 import java.io.Serializable
 
 interface SNovel : Serializable {
@@ -26,29 +27,7 @@ interface SNovel : Serializable {
     var initialized: Boolean
 
     fun getGenres(): List<String>? {
-        if (genre.isNullOrBlank()) return null
-        val tokens = genre
-            .orEmpty()
-            .split(Regex("[,;/|\\n\\r\\t•·]+"))
-            .map {
-                it.trim()
-                    .trim('-', '–', '—', ',', ';', '/', '|', '•', '·')
-            }
-            .filter { it.isNotBlank() }
-
-        if (tokens.isEmpty()) return null
-
-        val seen = LinkedHashSet<String>()
-        val normalized = buildList {
-            tokens.forEach { token ->
-                val dedupeKey = token.lowercase()
-                if (seen.add(dedupeKey)) {
-                    add(token)
-                }
-            }
-        }
-
-        return normalized.ifEmpty { null }
+        return parseSourceGenres(genre)
     }
 
     fun copy() = create().also {

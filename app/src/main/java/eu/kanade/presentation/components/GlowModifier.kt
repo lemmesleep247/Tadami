@@ -1,6 +1,5 @@
 package eu.kanade.presentation.components
 
-import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
@@ -9,11 +8,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.theme.AuroraTheme
@@ -28,26 +24,13 @@ fun Modifier.glowEffect(
     alpha: Float = 0.6f,
     shape: Shape? = null,
 ): Modifier {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        // Android 12+: Use RenderEffect for better blur
-        this.graphicsLayer {
-            renderEffect = android.graphics.RenderEffect
-                .createBlurEffect(
-                    blurRadius.toPx(),
-                    blurRadius.toPx(),
-                    android.graphics.Shader.TileMode.CLAMP,
-                )
-                .asComposeRenderEffect()
-        }
-    } else {
-        // Fallback: Use shadow with elevated effect
-        this.shadow(
-            elevation = blurRadius,
-            shape = shape ?: androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-            ambientColor = color.copy(alpha = alpha),
-            spotColor = color.copy(alpha = alpha),
-        )
-    }
+    return this.shadow(
+        elevation = blurRadius,
+        shape = shape ?: androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+        clip = false,
+        ambientColor = color.copy(alpha = alpha),
+        spotColor = color.copy(alpha = alpha),
+    )
 }
 
 /**
@@ -91,6 +74,32 @@ fun Modifier.purpleGlow(
     color: Color = AuroraTheme.colors.accent,
 ): Modifier = glowEffect(
     color = color,
+    blurRadius = blurRadius,
+    alpha = alpha,
+)
+
+/**
+ * Harem aura glow (Pink/Heart themed)
+ */
+@Composable
+fun Modifier.haremGlow(
+    blurRadius: Dp = 14.dp,
+    alpha: Float = 0.5f,
+): Modifier = glowEffect(
+    color = Color(0xFFFF69B4), // HotPink
+    blurRadius = blurRadius,
+    alpha = alpha,
+)
+
+/**
+ * Matrix aura glow (Green/Digital themed)
+ */
+@Composable
+fun Modifier.matrixGlow(
+    blurRadius: Dp = 14.dp,
+    alpha: Float = 0.5f,
+): Modifier = glowEffect(
+    color = Color(0xFF00FF41), // Matrix Green
     blurRadius = blurRadius,
     alpha = alpha,
 )

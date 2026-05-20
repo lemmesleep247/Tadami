@@ -1,11 +1,13 @@
 package tachiyomi.domain.achievement.model
 
 import androidx.compose.runtime.Immutable
+import kotlinx.serialization.Serializable
 
 /**
  * Типы наград за достижения
  */
 @Immutable
+@Serializable
 enum class RewardType {
     /** Опыт профиля (XP) */
     EXPERIENCE,
@@ -21,6 +23,9 @@ enum class RewardType {
 
     /** Специальные возможности */
     SPECIAL,
+
+    /** Визуальные эффекты (Аура) */
+    AURA,
 }
 
 /**
@@ -35,6 +40,7 @@ enum class RewardType {
  * @property unlocked Разблокирована ли награда
  */
 @Immutable
+@Serializable
 data class Reward(
     val type: RewardType,
     val id: String,
@@ -107,6 +113,21 @@ data class Reward(
             title = badgeName,
             description = description,
             icon = icon,
+        )
+
+        /**
+         * Создать награду аурой
+         */
+        fun aura(
+            auraId: String,
+            auraName: String,
+            description: String? = null,
+        ) = Reward(
+            type = RewardType.AURA,
+            id = "aura_$auraId",
+            value = 1,
+            title = auraName,
+            description = description ?: "Аура: $auraName",
         )
     }
 }

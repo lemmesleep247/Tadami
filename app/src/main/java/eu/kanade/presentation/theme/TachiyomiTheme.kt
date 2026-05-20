@@ -29,7 +29,10 @@ import eu.kanade.presentation.theme.colorscheme.MidnightDuskColorScheme
 import eu.kanade.presentation.theme.colorscheme.MochaColorScheme
 import eu.kanade.presentation.theme.colorscheme.MonetColorScheme
 import eu.kanade.presentation.theme.colorscheme.MonochromeColorScheme
+import eu.kanade.presentation.theme.colorscheme.NebulaTideColorScheme
 import eu.kanade.presentation.theme.colorscheme.NordColorScheme
+import eu.kanade.presentation.theme.colorscheme.OnyxGoldColorScheme
+import eu.kanade.presentation.theme.colorscheme.SakuraNoirColorScheme
 import eu.kanade.presentation.theme.colorscheme.SapphireColorScheme
 import eu.kanade.presentation.theme.colorscheme.StrawberryColorScheme
 import eu.kanade.presentation.theme.colorscheme.TachiyomiColorScheme
@@ -207,4 +210,7 @@ private val colorSchemes: Map<AppTheme, BaseColorScheme> = mapOf(
     AppTheme.YINYANG to YinYangColorScheme,
     AppTheme.YOTSUBA to YotsubaColorScheme,
     AppTheme.AURORA to AuroraColorScheme,
+    AppTheme.ONYX_GOLD to OnyxGoldColorScheme,
+    AppTheme.SAKURA_NOIR to SakuraNoirColorScheme,
+    AppTheme.NEBULA_TIDE to NebulaTideColorScheme,
 )

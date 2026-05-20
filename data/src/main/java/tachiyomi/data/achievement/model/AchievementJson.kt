@@ -26,4 +26,5 @@ data class AchievementJson(
     val isSecret: Boolean = false,
     @SerialName("unlockable_id")
     val unlockableId: String? = null,
+    val rewards: List<tachiyomi.domain.achievement.model.Reward>? = null,
 )

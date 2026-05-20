@@ -28,6 +28,8 @@ import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.anime.repository.AnimeRepository
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.manga.repository.MangaRepository
+import tachiyomi.domain.entries.novel.model.Novel
+import tachiyomi.domain.entries.novel.repository.NovelRepository
 
 class AchievementHandler(
     private val eventBus: AchievementEventBus,
@@ -44,6 +46,7 @@ class AchievementHandler(
     private val novelHandler: NovelDatabaseHandler,
     private val mangaRepository: MangaRepository,
     private val animeRepository: AnimeRepository,
+    private val novelRepository: NovelRepository,
     private val userProfileManager: UserProfileManager,
     private val activityDataRepository: ActivityDataRepository,
 ) {
@@ -200,6 +203,7 @@ class AchievementHandler(
         relevantAchievements.forEach { achievement ->
             checkAndUpdateProgress(achievement, event)
         }
+        checkReadSecrets()
     }
 
     private suspend fun handleLibraryAdded(event: AchievementEvent.LibraryAdded) {
@@ -263,6 +267,7 @@ class AchievementHandler(
                 checkAndUpdateProgress(achievement, event)
             }
         }
+        checkCompletionSecrets(event)
     }
 
     private suspend fun handleSessionEnd(event: AchievementEvent.SessionEnd) {
@@ -1047,7 +1052,7 @@ class AchievementHandler(
     }
 
     /**
-     * secret_crybaby: Trigger when completing manga/anime with "Tragedy" or "Drama" genre
+     * secret_crybaby: Trigger when completing manga/anime/novel with "Tragedy" or "Drama" genre
      */
     private suspend fun checkCrybaby(event: AchievementEvent): Boolean {
         return when (event) {
@@ -1058,6 +1063,10 @@ class AchievementHandler(
             is AchievementEvent.AnimeCompleted -> {
                 val anime = animeRepository.getAnimeById(event.animeId)
                 anime.hasGenre("Tragedy") || anime.hasGenre("Drama")
+            }
+            is AchievementEvent.NovelCompleted -> {
+                val novel = novelRepository.getNovelById(event.novelId)
+                novel.hasGenre("Tragedy") || novel.hasGenre("Drama")
             }
             else -> false
         }
@@ -1073,7 +1082,10 @@ class AchievementHandler(
         val animeHaremCount = animeHandler.awaitOneOrNull { db ->
             db.animesQueries.getLibraryGenreCount("Harem")
         } ?: 0L
-        return (mangaHaremCount + animeHaremCount) >= 20
+        val novelHaremCount = novelHandler.awaitOneOrNull { db ->
+            db.novelsQueries.getLibraryGenreCount("Harem")
+        } ?: 0L
+        return (mangaHaremCount + animeHaremCount + novelHaremCount) >= 20
     }
 
     /**
@@ -1086,19 +1098,30 @@ class AchievementHandler(
         val animeIsekaiCount = animeHandler.awaitOneOrNull { db ->
             db.animesQueries.getLibraryGenreCount("Isekai")
         } ?: 0L
-        return (mangaIsekaiCount + animeIsekaiCount) >= 20
+        val novelIsekaiCount = novelHandler.awaitOneOrNull { db ->
+            db.novelsQueries.getLibraryGenreCount("Isekai")
+        } ?: 0L
+        return (mangaIsekaiCount + animeIsekaiCount + novelIsekaiCount) >= 20
     }
 
     /**
-     * secret_chad: 10+ completed manga AND 0 ongoing manga (only completed)
+     * secret_chad: 10+ completed titles AND 0 ongoing titles (only completed)
      */
     private suspend fun checkChad(): Boolean {
-        val completedCount = getCompletedMangaCount()
-        val ongoingCount =
+        val completedCount = getCompletedMangaCount() + getCompletedAnimeCount() + getCompletedNovelCount()
+        val ongoingManga =
             mangaHandler.awaitOneOrNull { db ->
                 db.mangasQueries.getLibraryCountByStatus(SManga.ONGOING.toLong())
             }?.toInt() ?: 0
-        return completedCount >= 10 && ongoingCount == 0
+        val ongoingAnime =
+            animeHandler.awaitOneOrNull { db ->
+                db.animesQueries.getLibraryCountByStatus(SManga.ONGOING.toLong())
+            }?.toInt() ?: 0
+        val ongoingNovel =
+            novelHandler.awaitOneOrNull { db ->
+                db.novelsQueries.getLibraryCountByStatus(SManga.ONGOING.toLong())
+            }?.toInt() ?: 0
+        return completedCount >= 10 && (ongoingManga + ongoingAnime + ongoingNovel) == 0
     }
 
     /**
@@ -1121,7 +1144,15 @@ class AchievementHandler(
                     "Shonen",
                 )
             } ?: 0L
-        return (completedMangaShonen + completedAnimeShonen) >= 10
+        val completedNovelShonen =
+            novelHandler.awaitOneOrNull { db ->
+                db.novelsQueries.getCompletedLibraryCountByAnyGenre(
+                    SManga.COMPLETED.toLong(),
+                    "Shounen",
+                    "Shonen",
+                )
+            } ?: 0L
+        return (completedMangaShonen + completedAnimeShonen + completedNovelShonen) >= 10
     }
 
     /**
@@ -1136,6 +1167,10 @@ class AchievementHandler(
             is AchievementEvent.AnimeCompleted -> {
                 val anime = animeRepository.getAnimeById(event.animeId)
                 anime.hasGenre("Super Power")
+            }
+            is AchievementEvent.NovelCompleted -> {
+                val novel = novelRepository.getNovelById(event.novelId)
+                novel.hasGenre("Super Power")
             }
             else -> false
         }
@@ -1154,6 +1189,10 @@ class AchievementHandler(
                 val anime = animeRepository.getAnimeById(event.animeId)
                 anime.hasGenre("Military")
             }
+            is AchievementEvent.NovelCompleted -> {
+                val novel = novelRepository.getNovelById(event.novelId)
+                novel.hasGenre("Military")
+            }
             else -> false
         }
     }
@@ -1171,12 +1210,16 @@ class AchievementHandler(
                 val anime = animeRepository.getAnimeById(event.animeId)
                 anime.hasGenre("Psychological")
             }
+            is AchievementEvent.NovelCompleted -> {
+                val novel = novelRepository.getNovelById(event.novelId)
+                novel.hasGenre("Psychological")
+            }
             else -> false
         }
     }
 
     /**
-     * secret_saitama: Library has exactly 1 anime AND 1 manga (total 2 items)
+     * secret_saitama: Library has exactly 1 anime, 1 manga, and 1 novel (total 3 items)
      */
     private suspend fun checkSaitama(): Boolean {
         val mangaCount = mangaHandler.awaitOneOrNull { db ->
@@ -1185,8 +1228,11 @@ class AchievementHandler(
         val animeCount = animeHandler.awaitOneOrNull { db ->
             db.animesQueries.getLibraryCount()
         } ?: 0L
+        val novelCount = novelHandler.awaitOneOrNull { db ->
+            db.novelsQueries.getLibraryCount()
+        } ?: 0L
 
-        return mangaCount == 1L && animeCount == 1L
+        return mangaCount == 1L && animeCount == 1L && novelCount == 1L
     }
 
     /**
@@ -1199,18 +1245,24 @@ class AchievementHandler(
         val hasJojoAnime = animeHandler.awaitOneOrNull { db ->
             db.animesQueries.hasLibraryTitleLike("jojo")
         } ?: false
+        val hasJojoNovel = novelHandler.awaitOneOrNull { db ->
+            db.novelsQueries.hasLibraryTitleLike("jojo")
+        } ?: false
 
-        return hasJojoManga || hasJojoAnime
+        return hasJojoManga || hasJojoAnime || hasJojoNovel
     }
 
     /**
-     * secret_onepiece: Total chapters read >= 1000
+     * secret_onepiece: Total chapters/episodes read >= 1000
      */
     private suspend fun checkOnePiece(): Boolean {
-        val totalChapters = mangaHandler.awaitOneOrNull { db ->
+        val totalMangaChapters = mangaHandler.awaitOneOrNull { db ->
             db.historyQueries.getTotalChaptersRead()
         } ?: 0L
-        return totalChapters >= 1000
+        val totalNovelChapters = novelHandler.awaitOneOrNull { db ->
+            db.novel_historyQueries.getTotalChaptersRead()
+        } ?: 0L
+        return (totalMangaChapters + totalNovelChapters) >= 1000
     }
 
     /**
@@ -1228,6 +1280,10 @@ class AchievementHandler(
     }
 
     private fun Anime.hasGenre(genreName: String): Boolean {
+        return genre?.any { it.equals(genreName, ignoreCase = true) } == true
+    }
+
+    private fun Novel.hasGenre(genreName: String): Boolean {
         return genre?.any { it.equals(genreName, ignoreCase = true) } == true
     }
 }

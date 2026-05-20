@@ -207,6 +207,34 @@
     <string name="onboarding_permission_action_grant">Grant</string>
     <string name="onboarding_guides_new_user">New to %s? We recommend checking out the getting started guide.</string>
     <string name="onboarding_guides_returning_user">Reinstalling %s?</string>
+    <string name="onboarding_media_modes_title">Media Modes</string>
+    <string name="onboarding_media_modes_desc">Select which content types you want to use. You can always change this in the settings later.</string>
+    <string name="onboarding_media_modes_anime">Anime</string>
+    <string name="onboarding_media_modes_manga">Manga</string>
+    <string name="onboarding_media_modes_novels">Novels</string>
+    <string name="onboarding_media_modes_error">At least one mode must remain selected</string>
+    <string name="onboarding_sources_title">Source Repositories</string>
+    <string name="onboarding_sources_desc">Select which extension repositories to register. Predefined links will help you find extensions quickly.</string>
+    <string name="onboarding_sources_empty">No predefined repositories found for your selected modes</string>
+    <string name="onboarding_sources_loading">Adding repositories, please wait...</string>
+    <string name="onboarding_sources_tip">Tip: After the setup, you will be able to install extensions for your chosen content types from the "Browse" section.</string>
+    <string name="onboarding_storage_warning_title">Important Storage Notice</string>
+    <string name="onboarding_storage_warning_desc">Do NOT select the root directory (/storage/emulated/0), the system \"Android\" folder, or the \"Downloads\" folder. On Android 11+ these locations are restricted by Scoped Storage and will lead to permission and reading errors. Please select or create a dedicated subfolder instead (e.g. \"Documents/Tadami\").</string>
+    <string name="onboarding_language_title">Language</string>
+    <string name="onboarding_language_desc">Select your preferred language. The setup will continue in the chosen language.</string>
+    <string name="onboarding_theme_title">Theme \u0026 Appearance</string>
+    <string name="onboarding_media_modes_anime_subtitle">Anime, films, and series</string>
+    <string name="onboarding_media_modes_manga_subtitle">Manga, webtoons, and comics</string>
+    <string name="onboarding_media_modes_novels_subtitle">Light novels and web novels</string>
+    <string name="onboarding_storage_title">Storage</string>
+    <string name="onboarding_storage_no_folder">No folder selected</string>
+    <string name="onboarding_storage_selected_folder">Selected folder: %s</string>
+    <string name="onboarding_sources_add_repos">Add Repositories</string>
+    <string name="onboarding_sources_success">Repositories registered successfully!</string>
+    <string name="onboarding_guides_all_set">You are all set!</string>
+    <string name="onboarding_guides_welcome_desc">Your media center is ready to roll. Welcome to the Tadami experience.</string>
+    <string name="onboarding_guides_next_steps">Next Steps</string>
+
 
     <!-- Preferences -->
       <!-- Subsections -->

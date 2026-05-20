@@ -191,6 +191,7 @@ class AchievementLoader(
             unlockableId = unlockableId,
             version = 1,
             createdAt = System.currentTimeMillis(),
+            rewards = rewards,
         )
     }
 }

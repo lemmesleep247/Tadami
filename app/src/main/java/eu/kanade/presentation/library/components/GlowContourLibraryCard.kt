@@ -31,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,8 +67,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.PathParser
 import coil3.compose.AsyncImage
 import dev.icerock.moko.resources.StringResource
+import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.components.buildAuroraCoverImageRequest
 import eu.kanade.presentation.components.rememberAuroraCoverPlaceholderPainter
+import eu.kanade.presentation.components.resolveActiveAuraPalette
 import eu.kanade.presentation.components.resolveAuroraCardOverlaySpec
 import eu.kanade.presentation.entries.components.AuroraEntryDropdownMenu
 import eu.kanade.presentation.entries.components.aurora.rememberAuroraPosterColorFilter
@@ -77,6 +80,9 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.LocalAppHaptics
+import tachiyomi.presentation.core.util.collectAsState
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import android.graphics.Matrix as AndroidMatrix
 
 private const val GLOW_CONTOUR_SVG_WIDTH = 256f
@@ -508,6 +514,7 @@ internal fun GlowContourLibraryGridItem(
     isSelected: Boolean = false,
     gridColumns: Int? = null,
     customCover: @Composable (() -> Unit)? = null,
+    genres: List<String> = emptyList(),
 ) {
     val colors = AuroraTheme.colors
     val blendSpec = resolveGlowContourUnifiedBlendSpec(colors.isDark)
@@ -538,6 +545,7 @@ internal fun GlowContourLibraryGridItem(
             onClickContinueViewing = onClickContinueViewing,
             gridColumns = gridColumns,
             customCover = customCover,
+            genres = genres,
         )
 
         if (textSpec.showTextBlock) {
@@ -671,6 +679,7 @@ private fun GlowContourLibraryCard(
     gridColumns: Int?,
     modifier: Modifier = Modifier,
     customCover: @Composable (() -> Unit)? = null,
+    genres: List<String> = emptyList(),
 ) {
     val colors = AuroraTheme.colors
     val context = LocalContext.current
@@ -685,9 +694,16 @@ private fun GlowContourLibraryCard(
     val progressState = resolveGlowContourProgressRenderState(progressPercent)
     val coverTitleFontFamily = LocalCoverTitleFontFamily.current
 
+    val uiPreferences = remember { Injekt.get<UiPreferences>() }
+    val enabledAuras by uiPreferences.enabledAuras().collectAsState()
+    val auraColors = remember(enabledAuras) {
+        resolveActiveAuraPalette(enabledAuras)?.gradientColors
+    }
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
+            .padding(4.dp)
             .drawWithCache {
                 val zones = createGlowContourZonedPaths(size)
                 val selectedStrokeBrush = Brush.horizontalGradient(
@@ -701,6 +717,28 @@ private fun GlowContourLibraryCard(
 
                 onDrawWithContent {
                     drawContent()
+
+                    auraColors?.let { colors ->
+                        val auraStrokeBrush = Brush.horizontalGradient(
+                            colors = colors,
+                            startX = zones.shellPath.getBounds().left,
+                            endX = size.width,
+                        )
+                        // Diffused glow pass
+                        drawPath(
+                            path = zones.shellPath,
+                            brush = auraStrokeBrush,
+                            alpha = 0.28f,
+                            style = Stroke(width = 4.dp.toPx()),
+                        )
+                        // Core outline pass
+                        drawPath(
+                            path = zones.shellPath,
+                            brush = auraStrokeBrush,
+                            alpha = 0.85f,
+                            style = Stroke(width = 1.5.dp.toPx()),
+                        )
+                    }
 
                     if (isSelected) {
                         drawPath(
@@ -846,15 +884,23 @@ private fun GlowContourLibraryCard(
                         startY = progressBounds.top,
                         endY = progressBounds.bottom,
                     )
-                    val dividerGlowBrush = Brush.horizontalGradient(
-                        colors = listOf(
-                            colors.gradientPurple.copy(alpha = 0.92f),
-                            colors.glowEffect.copy(alpha = 1f),
-                            colors.progressCyan.copy(alpha = 0.92f),
-                        ),
-                        startX = accentBounds.left,
-                        endX = accentBounds.right,
-                    )
+                    val dividerGlowBrush = if (auraColors != null) {
+                        Brush.horizontalGradient(
+                            colors = auraColors,
+                            startX = accentBounds.left,
+                            endX = accentBounds.right,
+                        )
+                    } else {
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                colors.gradientPurple.copy(alpha = 0.92f),
+                                colors.glowEffect.copy(alpha = 1f),
+                                colors.progressCyan.copy(alpha = 0.92f),
+                            ),
+                            startX = accentBounds.left,
+                            endX = accentBounds.right,
+                        )
+                    }
                     val dividerGlowStrokeWidths = dividerSpec.glowStrokeWidths.map { it.toPx() }
                     val dividerClipBottom = if (dividerSpec.clipBottomToProgressTop) {
                         progressBounds.top + 1.dp.toPx()

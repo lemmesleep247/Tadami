@@ -383,7 +383,8 @@ class NovelJsSource internal constructor(
                     filters = resolveFilterValues(runtime, filters),
                     showLatest = true,
                 )
-                val payload = callPlugin(runtime, "popularNovels", page.toString(), options)
+                val latestListingMethod = capabilities?.latestListingMethod ?: "popularNovels"
+                val payload = callPlugin(runtime, latestListingMethod, page.toString(), options)
                 parseNovelItems(payload)
             }
             items.toNovelsPage()
@@ -813,10 +814,17 @@ class NovelJsSource internal constructor(
             settingsBridge.loadSettingsSchema(settingsPayload)
         }
         val hasSettings = settingsSchema.isNotEmpty()
+        val hasLatestNovels = (instance.evaluate("typeof __plugin.latestNovels === \"function\"") as? Boolean) == true
+        val hasLatestUpdates = (instance.evaluate("typeof __plugin.latestUpdates === \"function\"") as? Boolean) == true
         capabilities = NovelPluginCapabilities(
             hasParsePage = (instance.evaluate("typeof __plugin.parsePage === \"function\"") as? Boolean) == true,
             hasResolveUrl = (instance.evaluate("typeof __plugin.resolveUrl === \"function\"") as? Boolean) == true,
             hasFetchImage = (instance.evaluate("typeof __plugin.fetchImage === \"function\"") as? Boolean) == true,
+            latestListingMethod = when {
+                hasLatestNovels -> "latestNovels"
+                hasLatestUpdates -> "latestUpdates"
+                else -> null
+            },
             hasPluginSettings = hasSettings,
         )
         runtime = instance

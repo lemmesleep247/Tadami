@@ -419,6 +419,9 @@
     <string name="theme_aurora">Aurora</string>
     <string name="theme_doom">Doom</string>
     <string name="theme_matrix">Matrix</string>
+    <string name="theme_onyx_gold">Obsidian Gold</string>
+    <string name="theme_sakura_noir">Sakura Noir</string>
+    <string name="theme_nebula_tide">Nebula Tide</string>
     <string name="pref_library_rows">List size</string>
     <!-- Reader section -->
     <string name="pref_preserve_reading_position">Preserve reading position on read chapters</string>
@@ -1106,6 +1109,10 @@
     <string name="pref_manga_library_update_categories_details">Manga in excluded categories will not be updated even if they are also in included categories.</string>
     <string name="pref_anime_library_update_categories_details">Anime in excluded categories will not be updated even if they are also in included categories.</string>
     <string name="pref_novel_library_update_categories_details">Novels in excluded categories will not be updated even if they are also in included categories.</string>
+    <string name="pref_anime_library_update_interval_category">Anime update frequency</string>
+    <string name="pref_manga_library_update_interval_category">Manga update frequency</string>
+    <string name="pref_novel_library_update_interval_category">Novel update frequency</string>
+    <string name="update_use_general">Use general setting</string>
     <string name="unofficial_extension_message_aniyomi">This extension is not from the official list.</string>
     <string name="unofficial_anime_extension_message">This extension is not from the official list.</string>
     <string name="episode_download_progress">%1$d%%</string>
@@ -1773,7 +1780,35 @@
 
     <!-- Achievements -->
     <string name="label_achievements">Achievements</string>
-    <string name="pref_achievements_summary">Track your progress and unlock rewards</string>
+    <string name="label_treasury">Treasury</string>
+    <string name="pref_achievements_summary">Track your progress and rewards</string>
+    <string name="pref_treasury_summary">Exclusive rewards unlocked by your deeds</string>
+    <string name="treasury_themes">Themes</string>
+    <string name="treasury_unlocked_themes">Unlocked Themes</string>
+    <string name="treasury_auras">Visual Effects &amp; Auras</string>
+    <string name="treasury_profile_and_avatar">Profile and Avatar</string>
+    <string name="treasury_profile_effects">Profile Effects</string>
+    <string name="treasury_avatar_frames">Avatar Frames</string>
+    <string name="treasury_home_hub_rewards">Home Hub Rewards</string>
+    <string name="treasury_aura_subtitle">Enable special effects for covers and UI</string>
+    <string name="treasury_toggle_active">Active</string>
+    <string name="treasury_toggle_inactive">Inactive</string>
+    <string name="treasury_toggle_locked">Locked</string>
+    <string name="treasury_reward_aurora_crown_description">Royal nickname styling with a bright gold crown accent.</string>
+    <string name="treasury_reward_glitch_rune_description">Corrupted rune nickname effect with a synthetic glitch pulse.</string>
+    <string name="treasury_reward_cipher_description">Cipher-style nickname effect with bracketed secret energy.</string>
+    <string name="treasury_reward_neon_frame_description">Animated neon frame with an electric sweep around the avatar.</string>
+    <string name="treasury_reward_hologram_frame_description">Holographic avatar frame with a soft scanline shimmer.</string>
+    <string name="treasury_reward_prismatic_frame_description">Prismatic avatar frame with a shifting spectrum glow.</string>
+    <string name="treasury_reward_orbit_badge_description">Orbit badge that wraps the Home Hub nickname.</string>
+    <string name="treasury_reward_crown_badge_description">Crown badge for a more regal Home Hub header.</string>
+    <string name="treasury_reward_shuriken_badge_description">Sharp-edged badge with an arcade-like profile vibe.</string>
+    <string name="treasury_reward_petal_storm_background_description">Animated sakura petals drifting across the Aurora background.</string>
+    <string name="treasury_reward_neon_orbit_background_description">Neon orbital rings and particles that replace the default ambient bloom.</string>
+    <string name="treasury_visual_effects">Visual effects</string>
+    <string name="treasury_background_effects">Background effects</string>
+    <string name="treasury_empty_title">The Treasury is Empty</string>
+    <string name="treasury_empty_description">Complete rare or secret achievements to unlock exclusive rewards!</string>
     <string name="achievement_stats_points">Points • %d%%</string>
     <string name="achievement_stats_unlocked">Unlocked • %d%%</string>
     <string name="achievement_back">Back</string>
@@ -2050,4 +2085,10 @@
     <string name="feed_latest">Latest</string>
     <string name="feed_popular">Popular</string>
     <string name="pref_vertical_pinned_layout">Vertical pinned sources layout</string>
+
+    <!-- Treasury -->
+    <string name="treasury_requires_achievement">Requires achievement: %1$s</string>
+    <string name="pref_category_debug">Debug</string>
+    <string name="pref_debug_bypass_treasury_locks">Bypass locks for testing</string>
+    <string name="pref_debug_bypass_treasury_locks_summary">Temporarily unlocks all Treasury rewards for visual validation</string>
 </resources>

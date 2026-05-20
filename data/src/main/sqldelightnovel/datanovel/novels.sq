@@ -218,3 +218,47 @@ getCompletedNovelCount:
 SELECT COUNT(*) FROM novels
 WHERE favorite = 1
 AND status = 2;
+
+getLibraryCountByStatus:
+SELECT COUNT(*)
+FROM novels
+WHERE favorite = 1
+AND status = :status;
+
+getLibraryGenreCount:
+SELECT COUNT(*)
+FROM novels
+WHERE favorite = 1
+AND genre IS NOT NULL
+AND (
+    LOWER(genre) = LOWER(:genre)
+    OR LOWER(genre) LIKE LOWER(:genre) || ', %'
+    OR LOWER(genre) LIKE '%, ' || LOWER(:genre)
+    OR LOWER(genre) LIKE '%, ' || LOWER(:genre) || ', %'
+);
+
+getCompletedLibraryCountByAnyGenre:
+SELECT COUNT(*)
+FROM novels
+WHERE favorite = 1
+AND status = :status
+AND genre IS NOT NULL
+AND (
+    LOWER(genre) = LOWER(:genreA)
+    OR LOWER(genre) LIKE LOWER(:genreA) || ', %'
+    OR LOWER(genre) LIKE '%, ' || LOWER(:genreA)
+    OR LOWER(genre) LIKE '%, ' || LOWER(:genreA) || ', %'
+    OR LOWER(genre) = LOWER(:genreB)
+    OR LOWER(genre) LIKE LOWER(:genreB) || ', %'
+    OR LOWER(genre) LIKE '%, ' || LOWER(:genreB)
+    OR LOWER(genre) LIKE '%, ' || LOWER(:genreB) || ', %'
+);
+
+hasLibraryTitleLike:
+SELECT EXISTS(
+    SELECT 1
+    FROM novels
+    WHERE favorite = 1
+    AND LOWER(title) LIKE '%' || LOWER(:searchTerm) || '%'
+    LIMIT 1
+);

@@ -6,12 +6,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.entries.novel.model.Novel
@@ -363,69 +363,79 @@ object NovelDownloadQueueManager {
             }
 
             val nextTask = snapshot.tasks.firstOrNull { it.status == NovelQueuedDownloadStatus.QUEUED } ?: break
-            markTaskStatus(nextTask.taskId, NovelQueuedDownloadStatus.DOWNLOADING)
-            logcat(LogPriority.DEBUG) {
-                "Novel queue task starting: taskId=${nextTask.taskId}, novel=${nextTask.novel.id}, chapter=${nextTask.chapter.id}, type=${nextTask.type}"
-            }
-
-            val result = coroutineScope {
-                val downloadJob = async {
-                    when (nextTask.type) {
-                        NovelQueuedDownloadType.ORIGINAL -> {
-                            downloadManager.downloadChapter(nextTask.novel, nextTask.chapter)
-                        }
-                        NovelQueuedDownloadType.TRANSLATED -> {
-                            val format = when (nextTask.format) {
-                                NovelQueuedDownloadFormat.TXT -> NovelTranslatedDownloadFormat.TXT
-                                NovelQueuedDownloadFormat.DOCX -> NovelTranslatedDownloadFormat.DOCX
-                                NovelQueuedDownloadFormat.HTML -> NovelTranslatedDownloadFormat.TXT
-                            }
-                            translatedDownloadManager
-                                .exportTranslatedChapter(nextTask.novel, nextTask.chapter, format)
-                                .isSuccess
-                        }
-                    }
-                }
-                runtimeState.registerActiveDownload(nextTask.taskId, downloadJob)
-                try {
-                    runCatching { downloadJob.await() }
-                } finally {
-                    runtimeState.clearActiveDownload(nextTask.taskId, downloadJob)
-                }
-            }
-
-            val canceled = runtimeState.consumeCanceled(nextTask.taskId)
-            if (canceled) {
-                if (nextTask.type == NovelQueuedDownloadType.ORIGINAL) {
-                    downloadManager.deleteChapter(nextTask.novel, nextTask.chapter.id)
-                } else {
-                    val format = when (nextTask.format) {
-                        NovelQueuedDownloadFormat.TXT -> NovelTranslatedDownloadFormat.TXT
-                        NovelQueuedDownloadFormat.DOCX -> NovelTranslatedDownloadFormat.DOCX
-                        NovelQueuedDownloadFormat.HTML -> NovelTranslatedDownloadFormat.TXT
-                    }
-                    translatedDownloadManager.deleteTranslatedChapter(
-                        novel = nextTask.novel,
-                        chapter = nextTask.chapter,
-                        format = format,
-                    )
-                }
-                removeTask(nextTask.taskId)
-                continue
-            }
-
-            val success = result.getOrElse { false }
-            if (success) {
-                removeTask(nextTask.taskId)
+            try {
+                markTaskStatus(nextTask.taskId, NovelQueuedDownloadStatus.DOWNLOADING)
                 logcat(LogPriority.DEBUG) {
-                    "Novel queue task completed: taskId=${nextTask.taskId}, novel=${nextTask.novel.id}, chapter=${nextTask.chapter.id}"
+                    "Novel queue task starting: taskId=${nextTask.taskId}, novel=${nextTask.novel.id}, chapter=${nextTask.chapter.id}, type=${nextTask.type}"
                 }
-            } else {
-                val message = result.exceptionOrNull()?.message
-                markTaskFailed(nextTask.taskId, message ?: "Download failed")
-                logcat(LogPriority.WARN) {
-                    "Novel queue task failed: taskId=${nextTask.taskId}, novel=${nextTask.novel.id}, chapter=${nextTask.chapter.id}, error=${message ?: "Download failed"}"
+
+                val result = supervisorScope {
+                    val downloadJob = async {
+                        when (nextTask.type) {
+                            NovelQueuedDownloadType.ORIGINAL -> {
+                                downloadManager.downloadChapter(nextTask.novel, nextTask.chapter)
+                            }
+                            NovelQueuedDownloadType.TRANSLATED -> {
+                                val format = when (nextTask.format) {
+                                    NovelQueuedDownloadFormat.TXT -> NovelTranslatedDownloadFormat.TXT
+                                    NovelQueuedDownloadFormat.DOCX -> NovelTranslatedDownloadFormat.DOCX
+                                    NovelQueuedDownloadFormat.HTML -> NovelTranslatedDownloadFormat.TXT
+                                }
+                                translatedDownloadManager
+                                    .exportTranslatedChapter(nextTask.novel, nextTask.chapter, format)
+                                    .isSuccess
+                            }
+                        }
+                    }
+                    runtimeState.registerActiveDownload(nextTask.taskId, downloadJob)
+                    try {
+                        runCatching { downloadJob.await() }
+                    } finally {
+                        runtimeState.clearActiveDownload(nextTask.taskId, downloadJob)
+                    }
                 }
+
+                val canceled = runtimeState.consumeCanceled(nextTask.taskId)
+                if (canceled) {
+                    if (nextTask.type == NovelQueuedDownloadType.ORIGINAL) {
+                        downloadManager.deleteChapter(nextTask.novel, nextTask.chapter.id)
+                    } else {
+                        val format = when (nextTask.format) {
+                            NovelQueuedDownloadFormat.TXT -> NovelTranslatedDownloadFormat.TXT
+                            NovelQueuedDownloadFormat.DOCX -> NovelTranslatedDownloadFormat.DOCX
+                            NovelQueuedDownloadFormat.HTML -> NovelTranslatedDownloadFormat.TXT
+                        }
+                        translatedDownloadManager.deleteTranslatedChapter(
+                            novel = nextTask.novel,
+                            chapter = nextTask.chapter,
+                            format = format,
+                        )
+                    }
+                    removeTask(nextTask.taskId)
+                    continue
+                }
+
+                val success = result.getOrElse { false }
+                if (success) {
+                    removeTask(nextTask.taskId)
+                    logcat(LogPriority.DEBUG) {
+                        "Novel queue task completed: taskId=${nextTask.taskId}, novel=${nextTask.novel.id}, chapter=${nextTask.chapter.id}"
+                    }
+                } else {
+                    val message = result.exceptionOrNull()?.message
+                    markTaskFailed(nextTask.taskId, message ?: "Download failed")
+                    logcat(LogPriority.WARN) {
+                        "Novel queue task failed: taskId=${nextTask.taskId}, novel=${nextTask.novel.id}, chapter=${nextTask.chapter.id}, error=${message ?: "Download failed"}"
+                    }
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) {
+                    throw e
+                }
+                logcat(LogPriority.ERROR, e) {
+                    "Critical failure inside novel queue processLoop iteration for taskId=${nextTask.taskId}: ${e.message}"
+                }
+                markTaskFailed(nextTask.taskId, e.message ?: "Critical download failure")
             }
         }
     }

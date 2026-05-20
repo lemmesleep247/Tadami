@@ -496,6 +496,7 @@ private fun MangaLibraryAuroraCardGrid(
                     cardAspectRatio = 0.76f,
                     cornerIndicatorState = cornerIndicatorState,
                     seriesHeaderText = seriesHeaderText,
+                    genres = manga.genre ?: emptyList(),
                     customCover = if (isSeries) {
                         {
                             SeriesStackedCoverCard(

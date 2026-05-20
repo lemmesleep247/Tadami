@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.tadami.aurora.BuildConfig
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.more.auroraPrimaryMenuTitleTextStyle
@@ -78,7 +79,20 @@ object SettingsMainScreen : Screen() {
         val navigator = LocalNavigator.currentOrThrow
         val backPress = LocalBackPress.currentOrThrow
         val uiStyle = rememberResolvedSettingsUiStyle()
-        val items = remember { mainSettingsNavigationItems() }
+        val unlockableManager = remember { Injekt.get<tachiyomi.data.achievement.UnlockableManager>() }
+        val items = remember {
+            mainSettingsNavigationItems().filter { item ->
+                if (item.key == "treasury") {
+                    shouldShowTreasury(
+                        isDebugBuild = BuildConfig.DEBUG,
+                        unlockedUnlockables = unlockableManager.getUnlockedUnlockables(),
+                    )
+                } else {
+                    true
+                }
+            }
+        }
+
         val state = rememberLazyListState()
 
         // Track settings visit for achievement

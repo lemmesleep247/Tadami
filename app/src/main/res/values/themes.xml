@@ -539,6 +539,33 @@
         <item name="colorPrimaryInverse">@color/matrix_primaryInverse</item>
     </style>
 
+    <!--== Onyx Gold Theme ==-->
+    <style name="Theme.Tachiyomi.OnyxGold">
+        <!-- Theme Colors -->
+        <item name="colorPrimary">@color/onyxgold_primary</item>
+        <item name="colorOnPrimary">@color/onyxgold_onPrimary</item>
+        <item name="colorPrimaryContainer">@color/onyxgold_primaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/onyxgold_onPrimaryContainer</item>
+        <item name="colorSecondary">@color/onyxgold_secondary</item>
+        <item name="colorOnSecondary">@color/onyxgold_onSecondary</item>
+        <item name="colorSecondaryContainer">@color/onyxgold_secondaryContainer</item>
+        <item name="colorOnSecondaryContainer">@color/onyxgold_onSecondaryContainer</item>
+        <item name="colorTertiary">@color/onyxgold_tertiary</item>
+        <item name="colorOnTertiary">@color/onyxgold_onTertiary</item>
+        <item name="colorTertiaryContainer">@color/onyxgold_tertiaryContainer</item>
+        <item name="colorOnTertiaryContainer">@color/onyxgold_onTertiaryContainer</item>
+        <item name="android:colorBackground">@color/onyxgold_background</item>
+        <item name="colorOnBackground">@color/onyxgold_onBackground</item>
+        <item name="colorSurface">@color/onyxgold_surface</item>
+        <item name="colorOnSurface">@color/onyxgold_onSurface</item>
+        <item name="colorSurfaceVariant">@color/onyxgold_surfaceVariant</item>
+        <item name="colorOnSurfaceVariant">@color/onyxgold_onSurfaceVariant</item>
+        <item name="colorOutline">@color/onyxgold_outline</item>
+        <item name="colorOnSurfaceInverse">@color/onyxgold_inverseOnSurface</item>
+        <item name="colorSurfaceInverse">@color/onyxgold_inverseSurface</item>
+        <item name="colorPrimaryInverse">@color/onyxgold_primaryInverse</item>
+    </style>
+
     <!--== Tidal Wave Theme ==-->
     <style name="Theme.Tachiyomi.TidalWave">
         <!-- Theme Colors -->

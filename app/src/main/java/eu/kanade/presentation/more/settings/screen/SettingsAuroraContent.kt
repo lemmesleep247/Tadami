@@ -28,12 +28,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.navigator.Navigator
+import com.tadami.aurora.BuildConfig
 import eu.kanade.presentation.components.AuroraBackground
 import eu.kanade.presentation.more.settings.AURORA_SETTINGS_CARD_HORIZONTAL_INSET
 import eu.kanade.presentation.more.settings.AURORA_SETTINGS_CARD_SHAPE
@@ -41,14 +43,30 @@ import eu.kanade.presentation.theme.AuroraTheme
 import eu.kanade.presentation.theme.resolveAuroraBorderColor
 import eu.kanade.presentation.theme.resolveAuroraControlContainerColor
 import eu.kanade.presentation.theme.resolveAuroraIconSurfaceColor
+import tachiyomi.data.achievement.UnlockableManager
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 @Composable
 fun SettingsAuroraContent(
     navigator: Navigator,
     onBackClick: () -> Unit,
 ) {
+    val unlockableManager = remember { Injekt.get<UnlockableManager>() }
+    val items = remember {
+        mainSettingsNavigationItems().filter { item ->
+            if (item.key == "treasury") {
+                shouldShowTreasury(
+                    isDebugBuild = BuildConfig.DEBUG,
+                    unlockedUnlockables = unlockableManager.getUnlockedUnlockables(),
+                )
+            } else {
+                true
+            }
+        }
+    }
     AuroraBackground {
         LazyColumn(
             modifier = Modifier
@@ -60,7 +78,8 @@ fun SettingsAuroraContent(
                 SettingsAuroraHeader(onBackClick = onBackClick)
             }
 
-            items(mainSettingsNavigationItems()) { item ->
+            items(items) { item ->
+
                 SettingsAuroraItem(
                     title = stringResource(item.titleRes),
                     subtitle = item.subtitleText().orEmpty(),

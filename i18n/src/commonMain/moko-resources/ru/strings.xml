@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">Tadami</string>
     <string name="action_add">Добавить</string>
@@ -798,6 +798,34 @@
     <string name="onboarding_storage_selection_required">Необходимо выбрать папку</string>
     <string name="onboarding_heading">Добро пожаловать!</string>
     <string name="onboarding_guides_returning_user">Переустанавливаете %s?</string>
+    <string name="onboarding_media_modes_title">Режимы контента</string>
+    <string name="onboarding_media_modes_desc">Выберите типы контента, которые вы хотите использовать. Вы всегда можете изменить это в настройках позже.</string>
+    <string name="onboarding_media_modes_anime">Аниме</string>
+    <string name="onboarding_media_modes_manga">Манга</string>
+    <string name="onboarding_media_modes_novels">Ранобэ</string>
+    <string name="onboarding_media_modes_error">Должен быть выбран хотя бы один режим</string>
+    <string name="onboarding_sources_title">Репозитории источников</string>
+    <string name="onboarding_sources_desc">Выберите репозитории для добавления. Предустановленные ссылки помогут вам быстрее находить расширения.</string>
+    <string name="onboarding_sources_empty">Не найдено предустановленных репозиториев для выбранных режимов</string>
+    <string name="onboarding_sources_loading">Добавление репозиториев, пожалуйста, подождите...</string>
+    <string name="onboarding_sources_tip">Совет: После настройки вы сможете устанавливать расширения для выбранных типов контента в разделе «Обзор».</string>
+    <string name="onboarding_storage_warning_title">Важное примечание о хранилище</string>
+    <string name="onboarding_storage_warning_desc">НЕ выбирайте корневую директорию (/storage/emulated/0), системную папку \"Android\" или папку \"Загрузки\" (Downloads). На Android 11+ эти расположения ограничены системой Scoped Storage и приведут к ошибкам доступа и чтения. Рекомендуется создать отдельную папку (например, \"Documents/Tadami\").</string>
+    <string name="onboarding_language_title">Язык</string>
+    <string name="onboarding_language_desc">Выберите язык приложения. Дальнейшая настройка продолжится на выбранном языке.</string>
+    <string name="onboarding_theme_title">Тема и оформление</string>
+    <string name="onboarding_media_modes_anime_subtitle">Аниме, фильмы и сериалы</string>
+    <string name="onboarding_media_modes_manga_subtitle">Манга, вебтуны и комиксы</string>
+    <string name="onboarding_media_modes_novels_subtitle">Ранобэ и веб-новеллы</string>
+    <string name="onboarding_storage_title">Хранилище</string>
+    <string name="onboarding_storage_no_folder">Папка не выбрана</string>
+    <string name="onboarding_storage_selected_folder">Выбранная папка: %s</string>
+    <string name="onboarding_sources_add_repos">Добавить репозитории</string>
+    <string name="onboarding_sources_success">Репозитории успешно добавлены!</string>
+    <string name="onboarding_guides_all_set">Всё готово!</string>
+    <string name="onboarding_guides_welcome_desc">Ваш медиацентр настроен. Добро пожаловать в Tadami!</string>
+    <string name="onboarding_guides_next_steps">Что дальше?</string>
+
     <string name="onboarding_action_skip">Пропустить</string>
     <string name="onboarding_action_next">Следующее</string>
     <string name="onboarding_description">Давайте настроем парочку вещей. Вы всегда можете их поменять позже в настройках.</string>

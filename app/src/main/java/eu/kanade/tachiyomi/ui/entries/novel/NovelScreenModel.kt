@@ -320,36 +320,22 @@ class NovelScreenModel(
         }
 
         screenModelScope.launchIO {
-            getNovelExcludedScanlators.subscribe(novelId)
+            combine(
+                getNovelExcludedScanlators.subscribe(novelId),
+                getAvailableNovelScanlators.subscribe(novelId),
+                getNovelScanlatorChapterCounts.subscribe(novelId),
+            ) { excluded, available, counts ->
+                Triple(excluded, available, counts)
+            }
                 .flowWithLifecycle(lifecycle)
                 .distinctUntilChanged()
-                .collectLatest { excludedScanlators ->
+                .collectLatest { (excludedScanlators, availableScanlators, scanlatorChapterCounts) ->
                     updateSuccessState {
-                        it.copy(excludedScanlators = excludedScanlators)
-                    }
-                    maybeNormalizeNovelBranchSelection()
-                }
-        }
-
-        screenModelScope.launchIO {
-            getAvailableNovelScanlators.subscribe(novelId)
-                .flowWithLifecycle(lifecycle)
-                .distinctUntilChanged()
-                .collectLatest { availableScanlators ->
-                    updateSuccessState {
-                        it.copy(availableScanlators = availableScanlators)
-                    }
-                    maybeNormalizeNovelBranchSelection()
-                }
-        }
-
-        screenModelScope.launchIO {
-            getNovelScanlatorChapterCounts.subscribe(novelId)
-                .flowWithLifecycle(lifecycle)
-                .distinctUntilChanged()
-                .collectLatest { scanlatorChapterCounts ->
-                    updateSuccessState {
-                        it.copy(scanlatorChapterCounts = scanlatorChapterCounts)
+                        it.copy(
+                            excludedScanlators = excludedScanlators,
+                            availableScanlators = availableScanlators,
+                            scanlatorChapterCounts = scanlatorChapterCounts,
+                        )
                     }
                     maybeNormalizeNovelBranchSelection()
                 }
@@ -751,7 +737,7 @@ class NovelScreenModel(
                 if (downloadedIds == it.downloadedChapterIds) {
                     it
                 } else {
-                    it.copy(downloadedChapterIds = it.downloadedChapterIds union downloadedIds)
+                    it.copy(downloadedChapterIds = downloadedIds)
                 }
             }
         }
@@ -813,7 +799,10 @@ class NovelScreenModel(
     ): State.Success {
         val readerSettings = novelReaderPreferences.resolveSettings(novel.source)
         readerSettingsCache = readerSettings
-        val translatedCacheChapterIds = NovelReaderTranslationDiskCacheStore.chapterIds(readerSettings.geminiTargetLang)
+        val translatedCacheChapterIds = NovelReaderTranslationDiskCacheStore.chapterIds(
+            chapters.map { it.id },
+            readerSettings.geminiTargetLang,
+        )
         val translatedDownloadFormat = novelReaderPreferences.translatedDownloadFormat(novel.id)
         val translatedQueueChapterIds = resolveTranslatedQueueChapterIds(
             queueState = queueState,
@@ -1291,7 +1280,7 @@ class NovelScreenModel(
                 }
             }
             if (newRead) {
-                trackNovelChapter.await(context, novelId, chapter.chapterNumber)
+                maybeTrackMarkedRead(chapter.chapterNumber)
             }
         }
     }
@@ -1351,7 +1340,7 @@ class NovelScreenModel(
             }
             if (markRead && chaptersBecomingRead.isNotEmpty()) {
                 val maxChapter = chaptersBecomingRead.maxOf { it.chapterNumber }
-                trackNovelChapter.await(context, novelId, maxChapter)
+                maybeTrackMarkedRead(maxChapter)
             }
         }
     }
@@ -1450,33 +1439,12 @@ class NovelScreenModel(
                     eventBus?.tryEmit(AchievementEvent.NovelCompleted(chaptersToMarkRead.first().novelId))
                 }
             }
-            if (!markRead ||
-                chaptersToMarkRead.isEmpty() ||
-                successState?.hasLoggedInTrackers == false ||
-                autoTrackState == AutoTrackState.NEVER
-            ) {
+            if (!markRead || chaptersToMarkRead.isEmpty()) {
                 toggleAllSelection(false)
                 return@launchIO
             }
             val maxChapterNumber = chaptersToMarkRead.maxOf { it.chapterNumber }
-            if (autoTrackState == AutoTrackState.ALWAYS) {
-                trackNovelChapter.await(context, novelId, maxChapterNumber)
-                withUIContext {
-                    context.toast(
-                        context.stringResource(MR.strings.trackers_updated_summary, maxChapterNumber.toInt()),
-                    )
-                }
-            } else {
-                val result = snackbarHostState.showSnackbar(
-                    message = context.stringResource(MR.strings.confirm_tracker_update, maxChapterNumber.toInt()),
-                    actionLabel = context.stringResource(MR.strings.action_ok),
-                    duration = SnackbarDuration.Short,
-                    withDismissAction = true,
-                )
-                if (result == SnackbarResult.ActionPerformed) {
-                    trackNovelChapter.await(context, novelId, maxChapterNumber)
-                }
-            }
+            maybeTrackMarkedRead(maxChapterNumber, showSuccessToast = true)
             toggleAllSelection(false)
         }
     }
@@ -1522,9 +1490,40 @@ class NovelScreenModel(
             }
             if (chaptersToAchieve.isNotEmpty()) {
                 val maxChapter = chaptersToAchieve.maxOf { it.chapterNumber }
-                trackNovelChapter.await(context, novelId, maxChapter)
+                maybeTrackMarkedRead(maxChapter)
             }
             toggleAllSelection(false)
+        }
+    }
+
+    private suspend fun maybeTrackMarkedRead(
+        maxChapterNumber: Double,
+        showSuccessToast: Boolean = false,
+    ) {
+        if (successState?.hasLoggedInTrackers != true || autoTrackState == AutoTrackState.NEVER) {
+            return
+        }
+
+        if (autoTrackState == AutoTrackState.ALWAYS) {
+            trackNovelChapter.await(context, novelId, maxChapterNumber)
+            if (showSuccessToast) {
+                withUIContext {
+                    context.toast(
+                        context.stringResource(MR.strings.trackers_updated_summary, maxChapterNumber.toInt()),
+                    )
+                }
+            }
+            return
+        }
+
+        val result = snackbarHostState.showSnackbar(
+            message = context.stringResource(MR.strings.confirm_tracker_update, maxChapterNumber.toInt()),
+            actionLabel = context.stringResource(MR.strings.action_ok),
+            duration = SnackbarDuration.Short,
+            withDismissAction = true,
+        )
+        if (result == SnackbarResult.ActionPerformed) {
+            trackNovelChapter.await(context, novelId, maxChapterNumber)
         }
     }
 
@@ -1691,12 +1690,23 @@ class NovelScreenModel(
     ): Int {
         if (chapterIds.isEmpty()) return 0
         val state = successState ?: return 0
-        val chaptersById = state.chapters.associateBy { it.id }
-        val chapters = chapterIds
+        val downloadedTranslatedChapterIds = state.chapters
             .asSequence()
-            .mapNotNull { chaptersById[it] }
-            .filter { chapter -> novelTranslatedDownloadManager.hasTranslationCache(chapter.id) }
-            .toList()
+            .filter { chapter -> chapter.id in chapterIds }
+            .filter { chapter ->
+                novelTranslatedDownloadManager.isTranslatedChapterDownloaded(
+                    novel = state.novel,
+                    chapter = chapter,
+                    format = format,
+                )
+            }
+            .mapTo(mutableSetOf()) { chapter -> chapter.id }
+        val chapters = selectTranslatedChaptersForDownloadByIds(
+            chapterIds = chapterIds,
+            chapters = state.chapters,
+            downloadedTranslatedChapterIds = downloadedTranslatedChapterIds,
+            hasTranslationCache = { chapter -> novelTranslatedDownloadManager.hasTranslationCache(chapter.id) },
+        )
         if (chapters.isEmpty()) return 0
 
         val added = enqueueTranslated(
@@ -1782,6 +1792,7 @@ class NovelScreenModel(
 
         updateSuccessState { current ->
             val translatedCacheChapterIds = NovelReaderTranslationDiskCacheStore.chapterIds(
+                current.chapters.map { it.id },
                 resolveReaderSettings(current.novel.source).geminiTargetLang,
             )
             val updatedChapterActionStates = current.chapterActionStates.toMutableMap()
@@ -2269,11 +2280,24 @@ class NovelScreenModel(
                     notDownloadedChapters.filter { !it.read }
                 }
                 NovelDownloadAction.ALL -> {
-                    sortedChapters
+                    notDownloadedChapters
                 }
                 NovelDownloadAction.NOT_DOWNLOADED -> {
                     notDownloadedChapters
                 }
+            }
+        }
+
+        internal fun selectTranslatedChaptersForDownloadByIds(
+            chapterIds: Set<Long>,
+            chapters: List<NovelChapter>,
+            downloadedTranslatedChapterIds: Set<Long>,
+            hasTranslationCache: (NovelChapter) -> Boolean,
+        ): List<NovelChapter> {
+            return chapters.filter { chapter ->
+                chapter.id in chapterIds &&
+                    chapter.id !in downloadedTranslatedChapterIds &&
+                    hasTranslationCache(chapter)
             }
         }
     }

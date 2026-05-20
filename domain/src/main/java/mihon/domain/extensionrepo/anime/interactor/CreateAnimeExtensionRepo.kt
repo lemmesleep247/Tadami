@@ -1,5 +1,6 @@
 package mihon.domain.extensionrepo.anime.interactor
 
+import eu.kanade.tachiyomi.util.lang.Hash
 import logcat.LogPriority
 import mihon.domain.extensionrepo.anime.repository.AnimeExtensionRepoRepository
 import mihon.domain.extensionrepo.exception.SaveExtensionRepoException
@@ -14,22 +15,54 @@ class CreateAnimeExtensionRepo(
 ) {
     private val repoRegex = """^https://.*/index\.min\.json$""".toRegex()
 
-    suspend fun await(indexUrl: String, displayName: String? = null): Result {
+    suspend fun await(
+        indexUrl: String,
+        displayName: String? = null,
+        forceLocalInsert: Boolean = false,
+    ): Result {
         val formattedIndexUrl = indexUrl.toHttpUrlOrNull()
             ?.toString()
             ?.takeIf { it.matches(repoRegex) }
             ?: return Result.InvalidUrl
 
         val baseUrl = formattedIndexUrl.removeSuffix("/index.min.json")
-        return service.fetchRepoDetails(baseUrl)
-            ?.let { repo ->
-                insert(
-                    repo.copy(
-                        name = displayName.takeIf { !it.isNullOrBlank() } ?: repo.name,
-                    ),
-                )
+        val repoDetails = service.fetchRepoDetails(baseUrl)
+        return if (repoDetails != null) {
+            insert(
+                repoDetails.copy(
+                    name = displayName.takeIf { !it.isNullOrBlank() } ?: repoDetails.name,
+                ),
+            )
+        } else if (forceLocalInsert) {
+            insert(
+                ExtensionRepo(
+                    baseUrl = baseUrl,
+                    name = displayName.takeIf { !it.isNullOrBlank() } ?: extractRepoName(baseUrl),
+                    shortName = null,
+                    website = baseUrl,
+                    signingKeyFingerprint = "NOFINGERPRINT-${Hash.sha256(baseUrl)}",
+                ),
+            )
+        } else {
+            Result.InvalidUrl
+        }
+    }
+
+    private fun extractRepoName(baseUrl: String): String {
+        return try {
+            val uri = java.net.URI(baseUrl)
+            val segments = uri.path?.trim('/')?.split("/").orEmpty()
+            when {
+                uri.host == "raw.githubusercontent.com" && segments.size >= 2 ->
+                    "${segments[0]}/${segments[1]}"
+                uri.host == "github.com" && segments.size >= 2 ->
+                    "${segments[0]}/${segments[1]}"
+                segments.size >= 2 -> segments.take(2).joinToString("/")
+                else -> baseUrl
             }
-            ?: Result.InvalidUrl
+        } catch (_: Exception) {
+            baseUrl
+        }
     }
 
     private suspend fun insert(repo: ExtensionRepo): Result {

@@ -16,7 +16,6 @@ import tachiyomi.domain.items.novelchapter.repository.NovelChapterRepository
 import tachiyomi.domain.library.service.LibraryPreferences
 import java.time.Instant
 import java.time.ZonedDateTime
-import java.util.TreeSet
 
 class SyncNovelChaptersWithSource(
     private val novelChapterRepository: NovelChapterRepository,
@@ -62,15 +61,15 @@ class SyncNovelChaptersWithSource(
 
         val newChapters = mutableListOf<NovelChapter>()
         val updatedChapters = mutableListOf<NovelChapter>()
+
+        val sourceUrls = sourceChapters.mapTo(HashSet(sourceChapters.size)) { it.url }
         val removedChapters = if (retainMissingChapters) {
             emptyList()
         } else {
-            dbChapters.filterNot { dbChapter ->
-                sourceChapters.any { sourceChapter ->
-                    dbChapter.url == sourceChapter.url
-                }
-            }
+            dbChapters.filterNot { it.url in sourceUrls }
         }
+
+        val dbChaptersByUrl = dbChapters.associateBy { it.url }
 
         for (sourceChapter in sourceChapters) {
             var chapter = sourceChapter
@@ -83,7 +82,7 @@ class SyncNovelChaptersWithSource(
             )
             chapter = chapter.copy(chapterNumber = chapterNumber)
 
-            val dbChapter = dbChapters.find { it.url == chapter.url }
+            val dbChapter = dbChaptersByUrl[chapter.url]
 
             if (dbChapter == null) {
                 newChapters.add(chapter)
@@ -122,9 +121,9 @@ class SyncNovelChaptersWithSource(
 
         val changedOrDuplicateReadUrls = mutableSetOf<String>()
 
-        val deletedChapterNumbers = TreeSet<Double>()
-        val deletedReadChapterNumbers = TreeSet<Double>()
-        val deletedBookmarkedChapterNumbers = TreeSet<Double>()
+        val deletedChapterNumbers = HashSet<Double>()
+        val deletedReadChapterNumbers = HashSet<Double>()
+        val deletedBookmarkedChapterNumbers = HashSet<Double>()
 
         val readChapterNumbers = dbChapters
             .asSequence()
@@ -138,8 +137,12 @@ class SyncNovelChaptersWithSource(
             deletedChapterNumbers.add(chapter.chapterNumber)
         }
 
-        val deletedChapterNumberDateFetchMap = removedChapters.sortedByDescending { it.dateFetch }
-            .associate { it.chapterNumber to it.dateFetch }
+        val removedChaptersSortedDesc = removedChapters.sortedByDescending { it.dateFetch }
+        val deletedChapterNumberDateFetchMap = removedChaptersSortedDesc.associate { it.chapterNumber to it.dateFetch }
+        val deletedChapterNumberLastPageReadMap = removedChaptersSortedDesc.associate {
+            it.chapterNumber to
+                it.lastPageRead
+        }
 
         val markDuplicateAsRead = libraryPreferences.markDuplicateReadChapterAsRead().get()
             .contains(LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_NEW)
@@ -161,6 +164,9 @@ class SyncNovelChaptersWithSource(
                 read = chapter.chapterNumber in deletedReadChapterNumbers,
                 bookmark = chapter.chapterNumber in deletedBookmarkedChapterNumbers,
             )
+            deletedChapterNumberLastPageReadMap[chapter.chapterNumber]?.let { lastPageRead ->
+                chapter = chapter.copy(lastPageRead = lastPageRead)
+            }
 
             // Try to to use the fetch date of the original entry to not pollute 'Updates' tab
             deletedChapterNumberDateFetchMap[chapter.chapterNumber]?.let {
@@ -172,18 +178,18 @@ class SyncNovelChaptersWithSource(
             chapter
         }
 
-        if (removedChapters.isNotEmpty()) {
-            val toDeleteIds = removedChapters.map { it.id }
-            novelChapterRepository.removeChaptersWithIds(toDeleteIds)
-        }
+        val toDeleteIds = removedChapters.map { it.id }
+        val chapterUpdates = updatedChapters.map { it.toNovelChapterUpdate() }
 
-        if (updatedToAdd.isNotEmpty()) {
-            updatedToAdd = novelChapterRepository.addAllChapters(updatedToAdd)
-        }
-
-        if (updatedChapters.isNotEmpty()) {
-            val chapterUpdates = updatedChapters.map { it.toNovelChapterUpdate() }
-            novelChapterRepository.updateAllChapters(chapterUpdates)
+        if (toDeleteIds.isNotEmpty() || updatedToAdd.isNotEmpty() || chapterUpdates.isNotEmpty()) {
+            val syncResult = novelChapterRepository.syncChapters(
+                toAdd = updatedToAdd,
+                toUpdate = chapterUpdates,
+                toDelete = toDeleteIds,
+            )
+            if (updatedToAdd.isNotEmpty()) {
+                updatedToAdd = syncResult
+            }
         }
 
         // Set this novel as updated since chapters were changed

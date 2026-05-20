@@ -128,6 +128,10 @@ class UserProfileManager(
                     // Используем reward.id как ID темы
                     unlockTheme(reward.id.removePrefix("theme_"))
                 }
+                RewardType.AURA -> {
+                    // Auras are handled by UnlockableManager/Preferences
+                    logcat(LogPriority.INFO) { "[ACHIEVEMENTS] Aura unlocked: ${reward.title}" }
+                }
                 RewardType.SPECIAL -> {
                     // Специальные награды обрабатываются отдельно
                     logcat(LogPriority.INFO) { "[ACHIEVEMENTS] Special reward: ${reward.title}" }

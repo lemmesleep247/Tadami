@@ -2,6 +2,7 @@
 
 package eu.kanade.tachiyomi.animesource.model
 
+import eu.kanade.tachiyomi.source.model.parseSourceGenres
 import java.io.Serializable
 
 interface SAnime : Serializable {
@@ -33,8 +34,7 @@ interface SAnime : Serializable {
     var initialized: Boolean
 
     fun getGenres(): List<String>? {
-        if (genre.isNullOrBlank()) return null
-        return genre?.split(", ")?.map { it.trim() }?.filterNot { it.isBlank() }?.distinct()
+        return parseSourceGenres(genre)
     }
 
     fun copy() = create().also {

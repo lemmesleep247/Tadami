@@ -5,6 +5,8 @@ import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -378,6 +380,40 @@ class NovelJsSourceTest {
         chapters.size shouldBe 0
     }
 
+    @Test
+    fun `getLatestUpdates prefers plugin latest listing method when available`() {
+        mockkStatic(android.util.Log::class)
+        val loggedErrors = mutableListOf<Throwable?>()
+        every { android.util.Log.e(any(), any(), any()) } answers {
+            loggedErrors += (invocation.args[2] as Throwable?)
+            0
+        }
+
+        val runtimeFactory = mockk<NovelJsRuntimeFactory>()
+        val runtime = mockk<NovelJsRuntime>(relaxed = true)
+
+        every { runtimeFactory.create(any()) } returns runtime
+        every { runtime.evaluate(any(), any(), any()) } answers {
+            evaluateLatestListingScript(firstArg())
+        }
+
+        val source = createSource(
+            hasSettings = false,
+            runtimeFactory = runtimeFactory,
+        )
+
+        val result = try {
+            kotlinx.coroutines.runBlocking {
+                source.getLatestUpdates(1)
+            }
+        } finally {
+            unmockkStatic(android.util.Log::class)
+        }
+
+        loggedErrors.filterNotNull().map { it.message } shouldBe emptyList()
+        result.novels.map { it.title } shouldBe listOf("Latest 1")
+    }
+
     private fun createSource(
         hasSettings: Boolean,
         runtimeFactory: NovelJsRuntimeFactory = mockk(relaxed = true),
@@ -686,6 +722,37 @@ class NovelJsSourceTest {
             }
             script.contains("(function()") -> null
 
+            else -> null
+        }
+    }
+
+    private fun evaluateLatestListingScript(script: String): Any? {
+        return when {
+            script.contains("typeof __plugin.latestNovels === \"function\"") -> true
+            script.contains("typeof __plugin.latestUpdates === \"function\"") -> false
+            script.contains("typeof __plugin.pluginSettings === \"object\"") -> false
+            script.contains("JSON.stringify(__plugin.pluginSettings || {})") -> "{}"
+            script.contains("Array.isArray(__plugin && __plugin.settings)") -> false
+            script.contains("JSON.stringify(__plugin.settings || [])") -> "[]"
+            script.contains("JSON.stringify(__plugin && __plugin.filters ? __plugin.filters : {})") -> "{}"
+            script.contains("typeof __plugin.parsePage") -> false
+            script.contains("typeof __plugin.resolveUrl") -> false
+            script.contains("typeof __plugin.fetchImage") -> false
+            script.contains("(function()") && script.contains("__plugin.latestNovels") -> null
+            script.contains("globalThis.__d_") -> true
+            script.contains("globalThis.__e_") -> null
+            script.contains("globalThis.__r_") -> """
+                [
+                    {
+                        "name": "Latest 1",
+                        "path": "/latest-1",
+                        "cover": "https://example.com/latest-1.jpg"
+                    }
+                ]
+            """.trimIndent()
+            script.contains("(function()") -> null
+            script.contains("typeof __plugin") -> false
+            script.contains("JSON.stringify") -> "{}"
             else -> null
         }
     }

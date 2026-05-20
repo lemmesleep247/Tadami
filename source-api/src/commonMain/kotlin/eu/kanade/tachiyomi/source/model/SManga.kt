@@ -29,8 +29,7 @@ interface SManga : Serializable {
     var initialized: Boolean
 
     fun getGenres(): List<String>? {
-        if (genre.isNullOrBlank()) return null
-        return genre?.split(", ")?.map { it.trim() }?.filterNot { it.isBlank() }?.distinct()
+        return parseSourceGenres(genre)
     }
 
     fun copy() = create().also {
