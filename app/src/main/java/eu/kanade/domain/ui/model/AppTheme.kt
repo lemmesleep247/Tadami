@@ -4,7 +4,11 @@ import dev.icerock.moko.resources.StringResource
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 
-enum class AppTheme(val titleRes: StringResource?, val isAuroraStyle: Boolean = true) {
+enum class AppTheme(
+    val titleRes: StringResource?,
+    val isAuroraStyle: Boolean = true,
+    val isHidden: Boolean = false,
+) {
     DEFAULT(MR.strings.label_default),
     MONET(MR.strings.theme_monet),
     CLOUDFLARE(AYMR.strings.theme_cloudflare),
@@ -25,6 +29,9 @@ enum class AppTheme(val titleRes: StringResource?, val isAuroraStyle: Boolean = 
     YOTSUBA(MR.strings.theme_yotsuba),
     MONOCHROME(MR.strings.theme_monochrome),
     AURORA(AYMR.strings.theme_aurora),
+    ONYX_GOLD(AYMR.strings.theme_onyx_gold, isHidden = true),
+    SAKURA_NOIR(AYMR.strings.theme_sakura_noir, isHidden = true),
+    NEBULA_TIDE(AYMR.strings.theme_nebula_tide, isHidden = true),
 
     // Deprecated
     DARK_BLUE(null),

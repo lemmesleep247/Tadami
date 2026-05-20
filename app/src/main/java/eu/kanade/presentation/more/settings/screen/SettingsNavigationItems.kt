@@ -11,6 +11,7 @@ import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Gesture
 import androidx.compose.material.icons.outlined.GetApp
+import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Palette
@@ -109,7 +110,15 @@ internal fun mainSettingsNavigationItems(): List<SettingsNavigationItem> = listO
         screen = AchievementScreenVoyager,
     ),
     SettingsNavigationItem(
+        key = "treasury",
+        titleRes = AYMR.strings.label_treasury,
+        subtitleRes = AYMR.strings.pref_treasury_summary,
+        icon = Icons.Outlined.Inventory2,
+        screen = SettingsTreasuryScreen,
+    ),
+    SettingsNavigationItem(
         key = "downloads",
+
         titleRes = MR.strings.pref_category_downloads,
         subtitleRes = MR.strings.pref_downloads_summary,
         icon = Icons.Outlined.GetApp,

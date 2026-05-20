@@ -50,4 +50,5 @@ private val themeResources: Map<AppTheme, Int> = mapOf(
     AppTheme.DOOM to R.style.Theme_Tachiyomi_Doom,
     AppTheme.MATRIX to R.style.Theme_Tachiyomi_Matrix,
     AppTheme.TIDAL_WAVE to R.style.Theme_Tachiyomi_TidalWave,
+    AppTheme.ONYX_GOLD to R.style.Theme_Tachiyomi_OnyxGold,
 )

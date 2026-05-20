@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +38,9 @@ import eu.kanade.presentation.components.buildAuroraCoverImageRequest
 import eu.kanade.presentation.theme.AuroraTheme
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.util.collectAsState
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 /**
  * Aniview Universal Content Card
@@ -58,6 +62,8 @@ fun AniviewContentCard(
     val contentCardRequest = remember(imageUrl) {
         buildAuroraCoverImageRequest(context, imageUrl)
     }
+    val uiPreferences: eu.kanade.domain.ui.UiPreferences = Injekt.get()
+    val enabledAuras by uiPreferences.enabledAuras().collectAsState()
 
     Column(
         modifier = modifier.clickable { onClick() },
@@ -70,7 +76,18 @@ fun AniviewContentCard(
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
                     .clip(RoundedCornerShape(12.dp))
-                    .cyanGlow(blurRadius = 12.dp, alpha = 0.4f),
+                    .then(
+                        when (resolveActiveAuraPalette(enabledAuras)?.id) {
+                            "aura_harem" -> Modifier.haremGlow()
+                            "aura_matrix" -> Modifier.matrixGlow()
+                            "aura_level_up" -> Modifier.glowEffect(
+                                color = resolveAuraPalette("aura_level_up")?.accentColor ?: Color(0xFFFFD700),
+                                blurRadius = 14.dp,
+                                alpha = 0.5f,
+                            )
+                            else -> Modifier.cyanGlow(blurRadius = 12.dp, alpha = 0.4f)
+                        },
+                    ),
                 contentScale = ContentScale.Crop,
                 error = placeholderPainter,
                 fallback = placeholderPainter,

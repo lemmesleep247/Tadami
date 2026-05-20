@@ -127,6 +127,8 @@ class UiPreferences(
 
     fun animatedAuroraBackground() = preferenceStore.getBoolean("animated_aurora_background", true)
 
+    fun specialBackgroundStyle() = preferenceStore.getString("special_background_style", "none")
+
     fun eInkProfile() = preferenceStore.getEnum("e_ink_profile", EInkProfile.OFF)
 
     fun eInkThemeMode() = preferenceStore.getEnum("e_ink_theme_mode", EInkThemeMode.SYSTEM)
@@ -136,6 +138,10 @@ class UiPreferences(
     fun appUiFontId() = preferenceStore.getString("app_ui_font_id", DEFAULT_APP_UI_FONT_ID)
 
     fun coverTitleFontId() = preferenceStore.getString("cover_title_font_id", DEFAULT_COVER_TITLE_FONT_ID)
+
+    fun enabledAuras() = preferenceStore.getStringSet("enabled_auras", emptySet())
+
+    fun debugBypassTreasuryLocks() = preferenceStore.getBoolean("debug_bypass_treasury_locks", false)
 
     companion object {
         const val DEFAULT_APP_UI_FONT_ID = ""

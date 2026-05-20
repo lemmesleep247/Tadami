@@ -486,6 +486,7 @@ private fun NovelLibraryAuroraCard(
             cardAspectRatio = 0.76f,
             cornerIndicatorState = cornerIndicatorState,
             textSpec = textSpec,
+            genres = item.coverNovel?.genre ?: emptyList(),
             badge = if (badgeState.hasBadge()) {
                 {
                     NovelAuroraBadgeGroup(

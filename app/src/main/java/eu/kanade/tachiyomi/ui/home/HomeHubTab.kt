@@ -582,6 +582,9 @@ internal enum class NicknameEffectPreset(val key: String) {
     Cloud("cloud"),
     Ribbon("ribbon"),
     Sakura("sakura"),
+    AuroraCrown("aurora_crown"),
+    GlitchRune("glitch_rune"),
+    Cipher("cipher"),
     ;
 
     companion object {
@@ -748,6 +751,8 @@ object HomeHubTab : Tab {
         val nicknameOutlineWidth by userProfilePreferences.nicknameOutlineWidth().collectAsState()
         val nicknameGlow by userProfilePreferences.nicknameGlow().collectAsState()
         val nicknameEffectKey by userProfilePreferences.nicknameEffect().collectAsState()
+        val avatarFrameStyleKey by userProfilePreferences.avatarFrameStyle().collectAsState()
+        val homeBadgeStyleKey by userProfilePreferences.homeBadgeStyle().collectAsState()
         val nicknameStyle = NicknameStyle(
             font = NicknameFontPreset.fromKey(nicknameFontKey),
             fontSize = nicknameFontSize.coerceIn(14, 36),
@@ -1001,6 +1006,8 @@ object HomeHubTab : Tab {
                     greeting = headerGreeting,
                     userName = headerDisplayUserName,
                     userAvatar = headerUserAvatar,
+                    avatarFrameStyleKey = avatarFrameStyleKey,
+                    homeBadgeStyleKey = homeBadgeStyleKey,
                     nicknameStyle = nicknameStyle,
                     greetingStyle = greetingStyle,
                     showGreeting = showHomeGreeting && headerGreetingReady,
@@ -1226,6 +1233,9 @@ private fun applyNicknameEffect(text: String, effect: NicknameEffectPreset): Str
         NicknameEffectPreset.Cloud -> "☁ $text ☁"
         NicknameEffectPreset.Ribbon -> "୨୧ $text ୨୧"
         NicknameEffectPreset.Sakura -> "❀ $text ❀"
+        NicknameEffectPreset.AuroraCrown -> "⌈✦⌋ $text ⌈✦⌋"
+        NicknameEffectPreset.GlitchRune -> "⟦▓⟧ $text ⟦▓⟧"
+        NicknameEffectPreset.Cipher -> "⟨∆⟩ $text ⟨∆⟩"
     }
 }
 
@@ -1266,7 +1276,26 @@ private fun NicknameEffectPreset.label(): String {
         NicknameEffectPreset.Cloud -> stringResource(AYMR.strings.aurora_nickname_effect_cloud)
         NicknameEffectPreset.Ribbon -> stringResource(AYMR.strings.aurora_nickname_effect_ribbon)
         NicknameEffectPreset.Sakura -> stringResource(AYMR.strings.aurora_nickname_effect_sakura)
+        NicknameEffectPreset.AuroraCrown -> "Aurora Crown (Treasury)"
+        NicknameEffectPreset.GlitchRune -> "Glitch Rune (Treasury)"
+        NicknameEffectPreset.Cipher -> "Cipher Sigil (Treasury)"
     }
+}
+
+private fun nicknameEffectPickerPresets(): List<NicknameEffectPreset> {
+    return listOf(
+        NicknameEffectPreset.None,
+        NicknameEffectPreset.Sparkle,
+        NicknameEffectPreset.Hearts,
+        NicknameEffectPreset.Stars,
+        NicknameEffectPreset.Flowers,
+        NicknameEffectPreset.Kawaii,
+        NicknameEffectPreset.Cat,
+        NicknameEffectPreset.Moon,
+        NicknameEffectPreset.Cloud,
+        NicknameEffectPreset.Ribbon,
+        NicknameEffectPreset.Sakura,
+    )
 }
 
 @Composable
@@ -1605,7 +1634,7 @@ private fun NameDialog(
                         expanded = isEffectDropdownOpen,
                         onDismissRequest = { isEffectDropdownOpen = false },
                     ) {
-                        NicknameEffectPreset.entries.forEach { preset ->
+                        nicknameEffectPickerPresets().forEach { preset ->
                             DropdownMenuItem(
                                 text = { Text(preset.label()) },
                                 onClick = {

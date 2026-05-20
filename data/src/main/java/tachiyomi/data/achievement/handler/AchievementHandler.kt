@@ -1066,7 +1066,7 @@ class AchievementHandler(
             }
             is AchievementEvent.NovelCompleted -> {
                 val novel = novelRepository.getNovelById(event.novelId)
-                novel?.hasGenre("Tragedy") == true || novel?.hasGenre("Drama") == true
+                novel.hasGenre("Tragedy") || novel.hasGenre("Drama")
             }
             else -> false
         }
@@ -1170,7 +1170,7 @@ class AchievementHandler(
             }
             is AchievementEvent.NovelCompleted -> {
                 val novel = novelRepository.getNovelById(event.novelId)
-                novel?.hasGenre("Super Power") == true
+                novel.hasGenre("Super Power")
             }
             else -> false
         }
@@ -1191,7 +1191,7 @@ class AchievementHandler(
             }
             is AchievementEvent.NovelCompleted -> {
                 val novel = novelRepository.getNovelById(event.novelId)
-                novel?.hasGenre("Military") == true
+                novel.hasGenre("Military")
             }
             else -> false
         }
@@ -1212,7 +1212,7 @@ class AchievementHandler(
             }
             is AchievementEvent.NovelCompleted -> {
                 val novel = novelRepository.getNovelById(event.novelId)
-                novel?.hasGenre("Psychological") == true
+                novel.hasGenre("Psychological")
             }
             else -> false
         }

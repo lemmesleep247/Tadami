@@ -17,6 +17,18 @@ class UnlockableManager(
 
     companion object {
         private const val PREFIX = "unlocked_"
+        private val EXCLUSIVE_THEME_IDS = setOf("ONYX_GOLD", "SAKURA_NOIR", "NEBULA_TIDE")
+        private val FALLBACK_REWARDS_BY_ACHIEVEMENT = mapOf(
+            "master_achiever" to listOf("profile_nickname_effect_aurora_crown"),
+            "secret_crybaby" to listOf("profile_nickname_effect_glitch_rune"),
+            "secret_jojo" to listOf("profile_nickname_effect_cipher", "avatar_frame_neon"),
+            "secret_goku" to listOf("avatar_frame_hologram"),
+            "secret_onepiece" to listOf("theme_ONYX_GOLD"),
+            "read_100_novel_chapters" to listOf("home_badge_orbit"),
+            "secret_hall_unlocked" to listOf("home_badge_crown"),
+            "achievement_collector" to listOf("home_badge_shuriken"),
+            "achievement_hunter" to listOf("profile_nickname_glow_gold"),
+        )
     }
 
     /**
@@ -53,9 +65,21 @@ class UnlockableManager(
      * Called when an achievement is unlocked
      */
     suspend fun unlockAchievementRewards(achievement: Achievement) {
+        // Unlock main unlockable if exists
         achievement.unlockableId?.let { unlockableId ->
             setUnlockableUnlocked(unlockableId)
             // Apply the unlockable effect
+            applyUnlockable(unlockableId)
+        }
+
+        // Unlock all rewards in the rewards list
+        achievement.rewards?.forEach { reward ->
+            setUnlockableUnlocked(reward.id)
+            applyUnlockable(reward.id)
+        }
+
+        FALLBACK_REWARDS_BY_ACHIEVEMENT[achievement.id]?.forEach { unlockableId ->
+            setUnlockableUnlocked(unlockableId)
             applyUnlockable(unlockableId)
         }
     }
@@ -80,11 +104,41 @@ class UnlockableManager(
                 // Badge would be available in profile customization
             }
 
+            // Aura unlockables
+            unlockableId.startsWith("aura_") -> {
+                logcat(LogPriority.INFO) { "Aura unlocked: $unlockableId" }
+            }
+
             // Display preference unlockables
             unlockableId.startsWith("display_") -> {
                 logcat(LogPriority.INFO) { "Display preference unlocked: $unlockableId" }
                 // TODO: Unlock display options (grid sizes, layouts, etc.)
                 // Example: display_grid_large, display_list_compact
+            }
+
+            // Profile cosmetic unlockables
+            unlockableId.startsWith("profile_") -> {
+                logcat(LogPriority.INFO) { "Profile reward unlocked: $unlockableId" }
+            }
+
+            // Avatar cosmetic unlockables
+            unlockableId.startsWith("avatar_") -> {
+                logcat(LogPriority.INFO) { "Avatar reward unlocked: $unlockableId" }
+            }
+
+            // Reader preset unlockables
+            unlockableId.startsWith("reader_") -> {
+                logcat(LogPriority.INFO) { "Reader preset unlocked: $unlockableId" }
+            }
+
+            // Home/Aurora preset unlockables
+            unlockableId.startsWith("home_") -> {
+                logcat(LogPriority.INFO) { "Home preset unlocked: $unlockableId" }
+            }
+
+            // Special visual unlockables
+            unlockableId.startsWith("special_") -> {
+                logcat(LogPriority.INFO) { "Special visual reward unlocked: $unlockableId" }
             }
 
             else -> {
@@ -97,13 +151,14 @@ class UnlockableManager(
      * Check if a theme is available (unlocked)
      */
     fun isThemeAvailable(themeId: String): Boolean {
-        return when {
-            // Default themes are always available
-            themeId.startsWith("default_") -> true
-            // Achievement themes need to be unlocked
-            themeId.startsWith("achievement_") -> isUnlockableUnlocked("theme_$themeId")
-            else -> true
-        }
+        val normalizedThemeId = themeId.removePrefix("theme_")
+        if (!EXCLUSIVE_THEME_IDS.contains(normalizedThemeId.uppercase())) return true
+
+        val bypass = preferences.getBoolean("debug_bypass_treasury_locks", false)
+        if (bypass) return true
+
+        val canonicalThemeId = normalizedThemeId.uppercase()
+        return isUnlockableUnlocked("theme_$canonicalThemeId") || isUnlockableUnlocked("theme_${canonicalThemeId.lowercase()}")
     }
 
     /**
@@ -141,6 +196,9 @@ class UnlockableManager(
             "theme_achievement_gold" -> "Золотая тема достижений"
             "theme_achievement_sapphire" -> "Сапфировая тема достижений"
             "theme_master" -> "Тема мастера контента"
+            "theme_ONYX_GOLD" -> "Обсидиановое золото"
+            "theme_SAKURA_NOIR" -> "Сакура Ноир"
+            "theme_NEBULA_TIDE" -> "Туманность прилива"
 
             // Badges
             "badge_achievement_master" -> "Бейдж мастера достижений"
@@ -151,7 +209,37 @@ class UnlockableManager(
             "display_list_compact" -> "Компактный список"
             "display_grid_extra_large" -> "Очень большая сетка"
 
-            else -> unlockableId.replace("_", " ").capitalize()
+            // Auras
+            "aura_harem" -> "Гаремная аура"
+            "aura_level_up" -> "Аура мастера достижений"
+            "aura_matrix" -> "Цифровой дождь"
+
+            // Profile presets
+            "profile_nickname_effect_aurora_crown" -> "Никнейм-эффект «Aurora Crown»"
+            "profile_nickname_effect_glitch_rune" -> "Никнейм-эффект «Glitch Rune»"
+            "profile_nickname_effect_cipher" -> "Никнейм-эффект «Cipher Sigil»"
+            "profile_nickname_glow_gold" -> "Золотое свечение никнейма"
+
+            // Avatar presets
+            "avatar_frame_neon" -> "Неоновая рамка аватара"
+            "avatar_frame_hologram" -> "Голографическая рамка аватара"
+            "avatar_frame_prismatic" -> "Призматическая рамка аватара"
+
+            // Home presets
+            "home_badge_orbit" -> "Бейдж Home Hub «Orbit»"
+            "home_badge_crown" -> "Бейдж Home Hub «Crown»"
+            "home_badge_shuriken" -> "Бейдж Home Hub «Shuriken»"
+
+            // Special visual rewards
+            "special_background_petal_storm" -> "Фон «Лепестковый шторм»"
+            "special_background_neon_orbit" -> "Фон «Неоновая орбита»"
+
+            else -> unlockableId
+                .removePrefix("theme_")
+                .removePrefix("aura_")
+                .removePrefix("special_")
+                .replace("_", " ")
+                .capitalize()
         }
     }
 
@@ -161,8 +249,14 @@ class UnlockableManager(
     fun getUnlockableType(unlockableId: String): UnlockableType {
         return when {
             unlockableId.startsWith("theme_") -> UnlockableType.THEME
+            unlockableId.startsWith("aura_") -> UnlockableType.AURA
             unlockableId.startsWith("badge_") -> UnlockableType.BADGE
             unlockableId.startsWith("display_") -> UnlockableType.DISPLAY
+            unlockableId.startsWith("profile_") -> UnlockableType.PROFILE
+            unlockableId.startsWith("avatar_") -> UnlockableType.AVATAR
+            unlockableId.startsWith("reader_") -> UnlockableType.READER
+            unlockableId.startsWith("home_") -> UnlockableType.HOME
+            unlockableId.startsWith("special_") -> UnlockableType.SPECIAL
             else -> UnlockableType.UNKNOWN
         }
     }
@@ -184,8 +278,14 @@ class UnlockableManager(
  */
 enum class UnlockableType {
     THEME,
+    AURA,
     BADGE,
     DISPLAY,
+    PROFILE,
+    AVATAR,
+    READER,
+    HOME,
+    SPECIAL,
     UNKNOWN,
 }
 

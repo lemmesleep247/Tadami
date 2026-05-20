@@ -21,6 +21,13 @@ class UiPreferencesTest {
     }
 
     @Test
+    fun `special background style defaults to none`() {
+        val prefs = UiPreferences(InMemoryPreferenceStore())
+
+        prefs.specialBackgroundStyle().get() shouldBe "none"
+    }
+
+    @Test
     fun `app ui font defaults to system font`() {
         val prefs = UiPreferences(InMemoryPreferenceStore())
 

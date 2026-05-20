@@ -29,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +48,8 @@ import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.presentation.entries.components.ItemCover
 import eu.kanade.presentation.more.settings.LocalSettingsUiStyle
 import eu.kanade.presentation.more.settings.SettingsUiStyle
+import eu.kanade.presentation.more.settings.screen.isThemePreviewUnlocked
+import eu.kanade.presentation.more.settings.screen.visibleUnlockablesForTreasuryPreview
 import eu.kanade.presentation.more.settings.settingsTitleColor
 import eu.kanade.presentation.theme.TachiyomiTheme
 import eu.kanade.tachiyomi.util.system.DeviceUtil
@@ -55,9 +58,11 @@ import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.util.collectAsState
 import tachiyomi.presentation.core.util.secondaryItemAlpha
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.fullType
+import uy.kohesive.injekt.api.get
 
 @Composable
 internal fun AppThemePreferenceWidget(
@@ -84,14 +89,35 @@ private fun AppThemesList(
 ) {
     val context = LocalContext.current
     val isAurora = LocalSettingsUiStyle.current == SettingsUiStyle.Aurora
-    val appThemes = remember {
+
+    val uiPreferences = remember { Injekt.get<UiPreferences>() }
+    val debugBypassLocks by uiPreferences.debugBypassTreasuryLocks().collectAsState()
+
+    val userProfileManager = remember { Injekt.get<tachiyomi.data.achievement.UserProfileManager>() }
+    val userProfile by userProfileManager.profile.collectAsState(initial = null)
+
+    val unlockableManager = remember { Injekt.get<tachiyomi.data.achievement.UnlockableManager>() }
+
+    val appThemes = remember(userProfile, debugBypassLocks) {
+        val unlockedThemes = userProfile?.unlockedThemes?.toSet() ?: emptySet()
+        val unlockedUnlockables = visibleUnlockablesForTreasuryPreview(
+            debugBypassLocks = debugBypassLocks,
+            unlockedUnlockables = unlockableManager.getUnlockedUnlockables(),
+        )
+
         AppTheme.entries
             .filterNot {
                 it.titleRes == null ||
                     it == AppTheme.AURORA ||
-                    (it == AppTheme.MONET && !DeviceUtil.isDynamicColorAvailable)
+                    (it == AppTheme.MONET && !DeviceUtil.isDynamicColorAvailable) ||
+                    (
+                        it.isHidden &&
+                            !unlockedThemes.contains(it.name) &&
+                            !isThemePreviewUnlocked(it, unlockedUnlockables)
+                        )
             }
     }
+
     LazyRow(
         contentPadding = PaddingValues(horizontal = PrefsHorizontalPadding),
         horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
