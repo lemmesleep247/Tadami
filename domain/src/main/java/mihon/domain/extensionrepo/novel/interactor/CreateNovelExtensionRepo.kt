@@ -16,22 +16,39 @@ class CreateNovelExtensionRepo(
     private val indexSuffix = "/index.min.json"
     private val pluginsSuffixes = setOf("/plugins.min.json", "/plugins.json")
 
-    suspend fun await(url: String, displayName: String? = null): Result {
+    suspend fun await(
+        url: String,
+        displayName: String? = null,
+        forceLocalInsert: Boolean = false,
+    ): Result {
         val normalizedUrl = url.toHttpUrlOrNull()?.toString() ?: return Result.InvalidUrl
 
         return when {
             normalizedUrl.endsWith(indexSuffix) -> {
                 // Mihon-style extension repo (expects repo.json at baseUrl)
                 val baseUrl = normalizedUrl.removeSuffix(indexSuffix)
-                service.fetchRepoDetails(baseUrl)
-                    ?.let { repo ->
-                        insert(
-                            repo.copy(
-                                name = displayName.takeIf { !it.isNullOrBlank() } ?: repo.name,
-                            ),
-                        )
-                    }
-                    ?: Result.InvalidUrl
+                val repoDetails = service.fetchRepoDetails(baseUrl)
+                if (repoDetails != null) {
+                    insert(
+                        repoDetails.copy(
+                            name = displayName.takeIf { !it.isNullOrBlank() } ?: repoDetails.name,
+                        ),
+                    )
+                } else if (forceLocalInsert) {
+                    val fingerprint = "NOFINGERPRINT-${Hash.sha256(baseUrl)}"
+                    val name = displayName.takeIf { !it.isNullOrBlank() } ?: extractRepoName(baseUrl)
+                    insert(
+                        ExtensionRepo(
+                            baseUrl = baseUrl,
+                            name = name,
+                            shortName = null,
+                            website = baseUrl,
+                            signingKeyFingerprint = fingerprint,
+                        ),
+                    )
+                } else {
+                    Result.InvalidUrl
+                }
             }
             pluginsSuffixes.any { normalizedUrl.endsWith(it) } -> {
                 // LNReader-style novel plugin index repo
