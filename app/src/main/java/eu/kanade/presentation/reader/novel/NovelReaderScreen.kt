@@ -374,6 +374,14 @@ fun NovelReaderScreen(
     onRetrySelectedTextTranslation: () -> Unit = onTranslateSelectedText,
     onDismissSelectedTextTranslation: () -> Unit = {},
 ) {
+    // Sub-object selectors: derivedStateOf prevents recomposition of translation/gemini
+    // panels when unrelated state (scroll progress) changes.
+    val readerSettings by remember(state) { derivedStateOf { state.readerSettings } }
+    val geminiTranslation by remember(state) { derivedStateOf { state.geminiTranslation } }
+    val googleTranslation by remember(state) { derivedStateOf { state.googleTranslation } }
+    val aiProviders by remember(state) { derivedStateOf { state.aiProviders } }
+    val progress by remember(state) { derivedStateOf { state.progress } }
+
     var showSettings by remember { mutableStateOf(false) }
     var showChapterList by remember { mutableStateOf(false) }
     var showTtsBehaviorSettings by remember { mutableStateOf(false) }
