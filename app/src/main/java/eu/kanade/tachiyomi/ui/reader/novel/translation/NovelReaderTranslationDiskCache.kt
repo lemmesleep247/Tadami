@@ -14,12 +14,84 @@ import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 internal class NovelReaderTranslationDiskCache(
     private val directory: File,
     private val json: Json,
 ) {
     private val lock = Any()
+
+    // In-memory metadata index: chapterId -> lightweight metadata
+    // Avoids O(n) JSON parsing in chapterIds() scans
+    private data class IndexEntry(
+        val targetLang: String,
+        val provider: NovelTranslationProvider,
+        val model: String,
+        val sourceLang: String,
+        val promptMode: GeminiPromptMode,
+        val stylePreset: NovelTranslationStylePreset,
+        val hasTranslatedContent: Boolean,
+    )
+
+    private val index = ConcurrentHashMap<Long, IndexEntry>()
+
+    @Volatile
+    private var indexBuilt = false
+    @Volatile
+    private var indexBuilding = false
+
+    private fun ensureIndex() {
+        if (indexBuilt) return
+        if (indexBuilding) return // background rebuild already in progress, fallback to file-scan
+
+        synchronized(lock) {
+            if (indexBuilt || indexBuilding) return
+            indexBuilding = true
+            Thread {
+                try {
+                    rebuildIndex()
+                } finally {
+                    indexBuilt = true
+                    indexBuilding = false
+                }
+            }.apply {
+                name = "novel-translation-cache-index-rebuild"
+                isDaemon = true
+                start()
+            }
+        }
+    }
+
+    private fun rebuildIndex() {
+        index.clear()
+        if (!directory.exists()) return
+        directory.listFiles()?.filter { it.isFile }?.forEach { file ->
+            val chapterId = file.nameWithoutExtension.toLongOrNull() ?: return@forEach
+            readEntryDiskModel(chapterId)?.let { model ->
+                index[chapterId] = IndexEntry(
+                    targetLang = model.targetLang,
+                    provider = model.provider,
+                    model = model.model,
+                    sourceLang = model.sourceLang,
+                    promptMode = model.promptMode,
+                    stylePreset = model.stylePreset,
+                    hasTranslatedContent = model.translatedByIndex.isNotEmpty(),
+                )
+            }
+        }
+    }
+
+    private fun readEntryDiskModel(chapterId: Long): GeminiTranslationCacheDiskModel? {
+        val file = fileFor(chapterId)
+        if (!file.isFile) return null
+        return runCatching {
+            json.decodeFromString<GeminiTranslationCacheDiskModel>(file.readText(Charsets.UTF_8))
+        }.onFailure { error ->
+            logcat(LogPriority.WARN, error) { "Failed to parse novel translation cache for chapter=$chapterId" }
+            file.delete()
+        }.getOrNull()
+    }
 
     fun get(chapterId: Long): GeminiTranslationCacheEntry? {
         synchronized(lock) {
@@ -33,6 +105,16 @@ internal class NovelReaderTranslationDiskCache(
                 if (!directory.exists()) directory.mkdirs()
                 val file = fileFor(entry.chapterId)
                 file.writeText(json.encodeToString(GeminiTranslationCacheDiskModel.fromDomain(entry)), Charsets.UTF_8)
+                // Maintain in-memory index
+                index[entry.chapterId] = IndexEntry(
+                    targetLang = entry.targetLang,
+                    provider = entry.provider,
+                    model = entry.model,
+                    sourceLang = entry.sourceLang,
+                    promptMode = entry.promptMode,
+                    stylePreset = entry.stylePreset,
+                    hasTranslatedContent = entry.translatedByIndex.isNotEmpty(),
+                )
             }.onFailure { error ->
                 logcat(LogPriority.WARN, error) {
                     "Failed to write novel translation cache for chapter=${entry.chapterId}"
@@ -44,100 +126,159 @@ internal class NovelReaderTranslationDiskCache(
     fun remove(chapterId: Long) {
         synchronized(lock) {
             fileFor(chapterId).delete()
+            index.remove(chapterId)
         }
     }
 
+    private fun indexReady(): Boolean = indexBuilt && !indexBuilding
+
     fun has(chapterId: Long): Boolean {
-        synchronized(lock) {
-            return readEntryLocked(chapterId)?.translatedByIndex?.isNotEmpty() == true
-        }
+        ensureIndex()
+        if (!indexReady()) return hasFallback(chapterId)
+        return index[chapterId]?.hasTranslatedContent == true
     }
 
     fun has(
         chapterId: Long,
         requirements: NovelReaderTranslationCacheRequirements,
     ): Boolean {
-        synchronized(lock) {
-            return NovelReaderTranslationCacheResolver.matches(
-                cached = readEntryLocked(chapterId),
-                requirements = requirements,
-            )
-        }
+        ensureIndex()
+        if (!indexReady()) return hasFallback(chapterId, requirements)
+        val entry = index[chapterId] ?: return false
+        if (!entry.hasTranslatedContent) return false
+        return entry.provider == requirements.translationProvider &&
+            entry.model == requirements.modelId &&
+            entry.sourceLang == requirements.sourceLang &&
+            entry.targetLang == requirements.targetLang &&
+            entry.promptMode == requirements.promptMode &&
+            entry.stylePreset == requirements.stylePreset
     }
 
     fun has(
         chapterId: Long,
         targetLang: String,
     ): Boolean {
-        synchronized(lock) {
-            return readEntryLocked(chapterId)?.targetLang == targetLang
-        }
+        ensureIndex()
+        if (!indexReady()) return hasFallback(chapterId, targetLang)
+        return index[chapterId]?.takeIf { it.hasTranslatedContent }?.targetLang == targetLang
+    }
+
+    // -- Fallback methods (file-scan, used while index builds in background) --
+
+    private fun hasFallback(chapterId: Long): Boolean {
+        return readEntryLocked(chapterId)?.translatedByIndex?.isNotEmpty() == true
+    }
+
+    private fun hasFallback(chapterId: Long, requirements: NovelReaderTranslationCacheRequirements): Boolean {
+        return NovelReaderTranslationCacheResolver.matches(
+            cached = readEntryLocked(chapterId),
+            requirements = requirements,
+        )
+    }
+
+    private fun hasFallback(chapterId: Long, targetLang: String): Boolean {
+        return readEntryLocked(chapterId)?.targetLang == targetLang
+    }
+
+    private fun chapterIdsFallback(): Set<Long> {
+        if (!directory.exists()) return emptySet()
+        return directory.listFiles()
+            ?.asSequence()
+            ?.filter { it.isFile }
+            ?.mapNotNull { file ->
+                val chapterId = file.nameWithoutExtension.toLongOrNull() ?: return@mapNotNull null
+                readEntryLocked(chapterId)
+                    ?.takeIf { it.translatedByIndex.isNotEmpty() }
+                    ?.chapterId
+            }
+            ?.toSet()
+            ?: emptySet()
+    }
+
+    private fun chapterIdsFallback(targetLang: String): Set<Long> {
+        if (!directory.exists()) return emptySet()
+        return directory.listFiles()
+            ?.asSequence()
+            ?.filter { it.isFile }
+            ?.mapNotNull { file ->
+                val chapterId = file.nameWithoutExtension.toLongOrNull() ?: return@mapNotNull null
+                readEntryLocked(chapterId)
+                    ?.takeIf { it.targetLang == targetLang && it.translatedByIndex.isNotEmpty() }
+                    ?.chapterId
+            }
+            ?.toSet()
+            ?: emptySet()
+    }
+
+    private fun chapterIdsFallback(chapterIds: Collection<Long>, targetLang: String): Set<Long> {
+        if (!directory.exists() || chapterIds.isEmpty()) return emptySet()
+        return chapterIds.filter { chapterId ->
+            val file = fileFor(chapterId)
+            file.isFile && readEntryLocked(chapterId)?.targetLang == targetLang
+        }.toSet()
+    }
+
+    private fun chapterIdsFallback(requirements: NovelReaderTranslationCacheRequirements): Set<Long> {
+        if (!directory.exists()) return emptySet()
+        return directory.listFiles()
+            ?.asSequence()
+            ?.filter { it.isFile }
+            ?.mapNotNull { file ->
+                val chapterId = file.nameWithoutExtension.toLongOrNull() ?: return@mapNotNull null
+                readEntryLocked(chapterId)
+                    ?.takeIf { cached ->
+                        NovelReaderTranslationCacheResolver.matches(
+                            cached = cached,
+                            requirements = requirements,
+                        )
+                    }
+                    ?.chapterId
+            }
+            ?.toSet()
+            ?: emptySet()
     }
 
     fun chapterIds(): Set<Long> {
-        synchronized(lock) {
-            if (!directory.exists()) return emptySet()
-            return directory.listFiles()
-                ?.asSequence()
-                ?.filter { it.isFile }
-                ?.mapNotNull { file ->
-                    val chapterId = file.nameWithoutExtension.toLongOrNull() ?: return@mapNotNull null
-                    readEntryLocked(chapterId)
-                        ?.takeIf { it.translatedByIndex.isNotEmpty() }
-                        ?.chapterId
-                }
-                ?.toSet()
-                ?: emptySet()
-        }
+        ensureIndex()
+        if (!indexReady()) return chapterIdsFallback()
+        return index.entries
+            .filter { it.value.hasTranslatedContent }
+            .map { it.key }
+            .toSet()
     }
 
     fun chapterIds(targetLang: String): Set<Long> {
-        synchronized(lock) {
-            if (!directory.exists()) return emptySet()
-            return directory.listFiles()
-                ?.asSequence()
-                ?.filter { it.isFile }
-                ?.mapNotNull { file ->
-                    val chapterId = file.nameWithoutExtension.toLongOrNull() ?: return@mapNotNull null
-                    readEntryLocked(chapterId)
-                        ?.takeIf { cached -> cached.targetLang == targetLang }
-                        ?.chapterId
-                }
-                ?.toSet()
-                ?: emptySet()
-        }
+        ensureIndex()
+        if (!indexReady()) return chapterIdsFallback(targetLang)
+        return index.entries
+            .filter { it.value.targetLang == targetLang && it.value.hasTranslatedContent }
+            .map { it.key }
+            .toSet()
     }
 
     fun chapterIds(chapterIds: Collection<Long>, targetLang: String): Set<Long> {
-        synchronized(lock) {
-            if (!directory.exists() || chapterIds.isEmpty()) return emptySet()
-            return chapterIds.filter { chapterId ->
-                val file = fileFor(chapterId)
-                file.isFile && readEntryLocked(chapterId)?.targetLang == targetLang
-            }.toSet()
-        }
+        ensureIndex()
+        if (!indexReady()) return chapterIdsFallback(chapterIds, targetLang)
+        return chapterIds.filter { chapterId ->
+            index[chapterId]?.takeIf { it.targetLang == targetLang && it.hasTranslatedContent } != null
+        }.toSet()
     }
 
     fun chapterIds(requirements: NovelReaderTranslationCacheRequirements): Set<Long> {
-        synchronized(lock) {
-            if (!directory.exists()) return emptySet()
-            return directory.listFiles()
-                ?.asSequence()
-                ?.filter { it.isFile }
-                ?.mapNotNull { file ->
-                    val chapterId = file.nameWithoutExtension.toLongOrNull() ?: return@mapNotNull null
-                    readEntryLocked(chapterId)
-                        ?.takeIf { cached ->
-                            NovelReaderTranslationCacheResolver.matches(
-                                cached = cached,
-                                requirements = requirements,
-                            )
-                        }
-                        ?.chapterId
-                }
-                ?.toSet()
-                ?: emptySet()
-        }
+        ensureIndex()
+        if (!indexReady()) return chapterIdsFallback(requirements)
+        return index.entries
+            .filter { (_, entry) ->
+                entry.hasTranslatedContent &&
+                    entry.provider == requirements.translationProvider &&
+                    entry.model == requirements.modelId &&
+                    entry.sourceLang == requirements.sourceLang &&
+                    entry.targetLang == requirements.targetLang &&
+                    entry.promptMode == requirements.promptMode &&
+                    entry.stylePreset == requirements.stylePreset
+            }
+            .map { it.key }
+            .toSet()
     }
 
     fun clear() {
@@ -146,6 +287,8 @@ internal class NovelReaderTranslationDiskCache(
             directory.listFiles()?.forEach { file ->
                 if (file.isFile) file.delete()
             }
+            index.clear()
+            indexBuilt = false
         }
     }
 
