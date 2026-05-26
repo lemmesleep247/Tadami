@@ -215,6 +215,7 @@ class NovelReaderScreen(
                     state = successState,
                     showReaderUi = showReaderUi,
                     onSetShowReaderUi = { showReaderUi = it },
+                    onOpenBottomSheet = screenModel::loadFullChapterOrderList,
                     onBack = {
                         coroutineScope.launch {
                             screenModel.persistCurrentChapterExitState()

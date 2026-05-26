@@ -369,6 +369,7 @@ fun NovelReaderScreen(
     onDownloadChapter: ((Long) -> Unit)? = null,
     showReaderUi: Boolean,
     onSetShowReaderUi: (Boolean) -> Unit,
+    onOpenBottomSheet: () -> Unit = {},
     onSelectedTextSelectionChanged: (NovelSelectedTextSelection?) -> Unit = {},
     onTranslateSelectedText: () -> Unit = {},
     onRetrySelectedTextTranslation: () -> Unit = onTranslateSelectedText,
@@ -3761,8 +3762,16 @@ fun NovelReaderScreen(
                 )
             }
             if (showChapterList) {
+                LaunchedEffect(Unit) {
+                    onOpenBottomSheet()
+                }
                 val currentChapterId = state.chapter.id
-                val chapterListItems = state.chapterOrderList.map { chapter ->
+                val chapters = if (state.fullChapterOrderList.isNotEmpty()) {
+                    state.fullChapterOrderList
+                } else {
+                    state.chapterOrderList
+                }
+                val chapterListItems = chapters.map { chapter ->
                     ReaderChapterListItem(
                         id = chapter.id,
                         title = chapter.name,

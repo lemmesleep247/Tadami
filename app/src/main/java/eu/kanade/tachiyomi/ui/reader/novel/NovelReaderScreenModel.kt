@@ -365,6 +365,7 @@ class NovelReaderScreenModel(
     private var currentNovel: Novel? = null
     private var currentChapter: NovelChapter? = null
     private var chapterOrderList: MutableList<NovelChapter> = mutableListOf()
+    private var fullChapterOrderList: List<NovelChapter> = emptyList()
     private var customCss: String? = null
     private var customJs: String? = null
     private var pluginSite: String? = null
@@ -502,7 +503,12 @@ class NovelReaderScreenModel(
         clearChapterTransientState()
         currentNovel = novel
         currentChapter = chapter
-        chapterOrderList = snapshot.chapterOrderList.toMutableList()
+        fullChapterOrderList = snapshot.chapterOrderList
+        chapterOrderList = NovelReaderChapterWindow.resolveWindow(
+            chapters = fullChapterOrderList,
+            currentChapterId = chapter.id,
+            windowRadius = 50,
+        ).toMutableList()
         val normalizedChapterHtml = withContext(Dispatchers.Default) {
             val normalizedChapterHtml = prependChapterHeadingIfMissing(
                 rawHtml = snapshot.rawHtml.normalizeStructuredChapterPayload(),
@@ -573,6 +579,22 @@ class NovelReaderScreenModel(
             NovelTranslationProvider.OLLAMA_CLOUD -> refreshOllamaCloudModels()
         }
     }
+    fun loadFullChapterOrderList() {
+        if (fullChapterOrderList.isNotEmpty()) {
+            val successState = mutableState.value as? State.Success ?: return
+            if (successState.fullChapterOrderList.isEmpty()) {
+                mutableState.value = successState.copy(fullChapterOrderList = fullChapterOrderList)
+            }
+            return
+        }
+        screenModelScope.launch {
+            val novel = currentNovel ?: return@launch
+            fullChapterOrderList = loadChapterOrderList(novel.id)
+            val successState = mutableState.value as? State.Success ?: return@launch
+            mutableState.value = successState.copy(fullChapterOrderList = fullChapterOrderList)
+        }
+    }
+
     private fun setError(message: String?) {
         mutableState.value = State.Error(message)
     }
@@ -662,10 +684,11 @@ class NovelReaderScreenModel(
         startGeminiTranslation()
     }
     private fun findNextChapter(currentChapter: NovelChapter): NovelChapter? {
-        return chapterOrderList
+        val list = if (fullChapterOrderList.isNotEmpty()) fullChapterOrderList else chapterOrderList
+        return list
             .indexOfFirst { it.id == currentChapter.id }
             .takeIf { it >= 0 }
-            ?.let { chapterOrderList.getOrNull(it + 1) }
+            ?.let { list.getOrNull(it + 1) }
     }
     private fun setSeriesInterstitialState(value: SeriesInterstitialState?) {
         seriesInterstitialState = value
@@ -774,7 +797,12 @@ class NovelReaderScreenModel(
                 retainMissingChapters = true,
                 sourceOrderOffset = (pageResult.page - 1L) * JAOMIX_PAGE_SOURCE_ORDER_STRIDE,
             )
-            chapterOrderList = loadChapterOrderList(novel.id).toMutableList()
+            fullChapterOrderList = loadChapterOrderList(novel.id)
+            chapterOrderList = NovelReaderChapterWindow.resolveWindow(
+                chapters = fullChapterOrderList,
+                currentChapterId = chapter.id,
+                windowRadius = 50,
+            ).toMutableList()
             withContext(Dispatchers.Main.immediate) {
                 updateContent(settings)
             }
@@ -829,17 +857,28 @@ class NovelReaderScreenModel(
             decodedNativeProgress != null || decodedPageReaderProgress != null -> 0
             else -> chapter.lastPageRead.coerceIn(0L, 100L).toInt()
         }
-        val chapterNavigation = chapterOrderList.let { chapters ->
-            val index = chapters.indexOfFirst { it.id == chapter.id }
-            val previousChapter = chapters.getOrNull(index - 1)
-            val nextChapter = chapters.getOrNull(index + 1)
-            ChapterNavigation(
-                previousChapterId = previousChapter?.id,
-                previousChapterName = previousChapter?.name,
-                nextChapterId = nextChapter?.id,
-                nextChapterName = nextChapter?.name,
-            )
-        }
+        val previousResult = NovelReaderChapterWindow.navigate(
+            currentChapterId = chapter.id,
+            allChapters = if (fullChapterOrderList.isNotEmpty()) fullChapterOrderList else chapterOrderList,
+            direction = -1,
+            windowRadius = 50,
+        )
+        val previousChapter = previousResult.newCurrentChapter.takeIf { it.id != chapter.id }
+
+        val nextResult = NovelReaderChapterWindow.navigate(
+            currentChapterId = chapter.id,
+            allChapters = if (fullChapterOrderList.isNotEmpty()) fullChapterOrderList else chapterOrderList,
+            direction = 1,
+            windowRadius = 50,
+        )
+        val nextChapter = nextResult.newCurrentChapter.takeIf { it.id != chapter.id }
+
+        val chapterNavigation = ChapterNavigation(
+            previousChapterId = previousChapter?.id,
+            previousChapterName = previousChapter?.name,
+            nextChapterId = nextChapter?.id,
+            nextChapterName = nextChapter?.name,
+        )
         maybeEnsureJaomixAdjacentPage(
             chapter = chapter,
             previousChapterId = chapterNavigation.previousChapterId,
@@ -924,6 +963,7 @@ class NovelReaderScreenModel(
             richContentBlocks = displayRichBlocks,
             richContentUnsupportedFeaturesDetected = richContentResult.unsupportedFeaturesDetected,
             chapterOrderList = chapterOrderList,
+            fullChapterOrderList = if (fullChapterOrderList.isNotEmpty()) fullChapterOrderList else emptyList(),
             progress = State.ReaderProgressState(
                 lastSavedIndex = lastSavedIndex,
                 lastSavedScrollOffsetPx = lastSavedScrollOffsetPx,
@@ -3782,6 +3822,7 @@ class NovelReaderScreenModel(
             val richContentBlocks: List<NovelRichContentBlock>,
             val richContentUnsupportedFeaturesDetected: Boolean,
             val chapterOrderList: List<NovelChapter> = emptyList(),
+            val fullChapterOrderList: List<NovelChapter> = emptyList(),
             val progress: ReaderProgressState = ReaderProgressState(),
             val previousChapterId: Long?,
             val previousChapterName: String? = null,

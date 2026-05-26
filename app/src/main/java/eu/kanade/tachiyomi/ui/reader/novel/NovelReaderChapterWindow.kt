@@ -39,8 +39,15 @@ object NovelReaderChapterWindow {
         direction: Int, // -1 for previous, +1 for next
         windowRadius: Int,
     ): NavigationResult {
+        if (allChapters.isEmpty()) {
+            return NavigationResult(
+                newWindow = emptyList(),
+                newCurrentChapter = NovelChapter.create().copy(id = currentChapterId),
+                reloadRequired = false,
+            )
+        }
         val currentIndex = allChapters.indexOfFirst { it.id == currentChapterId }
-        if (currentIndex < 0) return fallback(allChapters, direction, windowRadius)
+        if (currentIndex < 0) return fallback(allChapters, currentChapterId, direction, windowRadius)
         val targetIndex = (currentIndex + direction).coerceIn(0, allChapters.lastIndex)
         val targetChapter = allChapters[targetIndex]
 
@@ -58,11 +65,12 @@ object NovelReaderChapterWindow {
 
     private fun fallback(
         allChapters: List<NovelChapter>,
+        currentChapterId: Long,
         direction: Int,
         windowRadius: Int,
     ): NavigationResult {
         val targetIndex = if (direction < 0) 0 else allChapters.lastIndex
-        val target = allChapters[targetIndex]
+        val target = allChapters.getOrNull(targetIndex) ?: NovelChapter.create().copy(id = currentChapterId)
         val window = resolveWindow(allChapters, target.id, windowRadius)
         return NavigationResult(window, target, reloadRequired = true)
     }

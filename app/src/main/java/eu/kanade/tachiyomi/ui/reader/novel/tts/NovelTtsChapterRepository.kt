@@ -71,6 +71,19 @@ class NovelTtsChapterRepository internal constructor(
         },
     ),
 ) {
+    private val chapterListCache = mutableMapOf<Long, Pair<Long, List<NovelChapter>>>()
+
+    private suspend fun getCachedOrLoadChapterList(novelId: Long): List<NovelChapter> {
+        val now = System.currentTimeMillis()
+        val cached = chapterListCache[novelId]
+        if (cached != null && (now - cached.first) < 60_000L) {
+            return cached.second
+        }
+        val loaded = loadChapterOrderList(novelId)
+        chapterListCache[novelId] = Pair(now, loaded)
+        return loaded
+    }
+
     suspend fun loadChapterSnapshot(chapterId: Long): NovelTtsChapterSnapshot {
         val chapter = withContext(Dispatchers.IO) {
             novelChapterRepository.getChapterById(chapterId)
@@ -79,7 +92,7 @@ class NovelTtsChapterRepository internal constructor(
             getNovel.await(chapter.novelId)
         } ?: error("Novel not found")
         val source = sourceManager.get(novel.source) ?: error("Source not found")
-        val chapterOrderList = loadChapterOrderList(novel.id)
+        val chapterOrderList = getCachedOrLoadChapterList(novel.id)
         val html = withContext(Dispatchers.IO) {
             contentPrefetchService.resolveNovelChapterText(
                 novel = novel,
