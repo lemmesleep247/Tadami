@@ -628,6 +628,12 @@
     <string name="pref_restore_backup">Restore backup</string>
     <string name="pref_restore_backup_summ">Restore library from backup file</string>
     <string name="pref_backup_interval">Automatic backup frequency</string>
+    <string name="pref_backup_slots">Automatic backups to keep</string>
+    <string name="backup_slots_4">4 backups (default)</string>
+    <string name="backup_slots_10">10 backups</string>
+    <string name="backup_slots_20">20 backups</string>
+    <string name="backup_slots_50">50 backups</string>
+    <string name="backup_slots_all">Keep all backups</string>
     <string name="action_create">Create</string>
     <string name="backup_created">Backup created</string>
     <string name="invalid_backup_file">Invalid backup file:</string>

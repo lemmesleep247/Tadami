@@ -223,6 +223,12 @@
     <string name="manga">Серии библиотеки</string>
     <string name="no_more_results">Больше нет результатов</string>
     <string name="pref_backup_interval">Частота автоматических резервных копий</string>
+    <string name="pref_backup_slots">Сохранять авторезервных копий</string>
+    <string name="backup_slots_4">4 копии (по умолчанию)</string>
+    <string name="backup_slots_10">10 копий</string>
+    <string name="backup_slots_20">20 копий</string>
+    <string name="backup_slots_50">50 копий</string>
+    <string name="backup_slots_all">Сохранять все копии</string>
     <string name="pref_create_backup">Создать резервную копию</string>
     <string name="pref_create_backup_summ">Можно использовать для восстановления текущей библиотеки</string>
     <string name="pref_crop_borders">Обрезать поля</string>

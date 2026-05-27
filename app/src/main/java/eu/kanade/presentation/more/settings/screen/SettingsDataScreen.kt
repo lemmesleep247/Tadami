@@ -210,6 +210,7 @@ object SettingsDataScreen : SearchableSettings {
         val navigator = LocalNavigator.currentOrThrow
 
         val lastAutoBackup by backupPreferences.lastAutoBackupTimestamp().collectAsState()
+        val backupInterval by backupPreferences.backupInterval().collectAsState()
 
         val chooseBackup = rememberLauncherForActivityResult(
             object : ActivityResultContracts.GetContent() {
@@ -304,6 +305,21 @@ object SettingsDataScreen : SearchableSettings {
                     title = stringResource(MR.strings.pref_backup_interval),
                     onValueChanged = {
                         BackupCreateJob.setupTask(context, it)
+                        true
+                    },
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = backupPreferences.numberOfBackupsToKeep(),
+                    entries = persistentMapOf(
+                        4 to stringResource(MR.strings.backup_slots_4),
+                        10 to stringResource(MR.strings.backup_slots_10),
+                        20 to stringResource(MR.strings.backup_slots_20),
+                        50 to stringResource(MR.strings.backup_slots_50),
+                        0 to stringResource(MR.strings.backup_slots_all),
+                    ),
+                    title = stringResource(MR.strings.pref_backup_slots),
+                    enabled = backupInterval != 0,
+                    onValueChanged = {
                         true
                     },
                 ),

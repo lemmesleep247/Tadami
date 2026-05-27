@@ -104,11 +104,14 @@ class BackupCreator(
                 // Get dir of file and create
                 val dir = UniFile.fromUri(context, uri)
                 // Delete older backups
-                dir?.listFiles { _, filename -> FILENAME_REGEX.matches(filename) }
-                    .orEmpty()
-                    .sortedByDescending { it.name }
-                    .drop(MAX_AUTO_BACKUPS - 1)
-                    .forEach { it.delete() }
+                val limit = backupPreferences.numberOfBackupsToKeep().get()
+                if (limit > 0) {
+                    dir?.listFiles { _, filename -> FILENAME_REGEX.matches(filename) }
+                        .orEmpty()
+                        .sortedByDescending { it.name }
+                        .drop(limit - 1)
+                        .forEach { it.delete() }
+                }
                 // Create new file to place backup
                 dir?.createFile(getFilename())
             } else {
