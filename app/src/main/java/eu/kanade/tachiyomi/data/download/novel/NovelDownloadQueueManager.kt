@@ -213,6 +213,7 @@ object NovelDownloadQueueManager {
 
     private val runtimeState = NovelDownloadQueueRuntimeState()
     private var previousNotifiedSummary = QueueNotifySummary()
+    private var notifyJob: kotlinx.coroutines.Job? = null
 
     fun startDownloads() {
         updateState { it.copy(isRunning = true) }
@@ -492,7 +493,15 @@ object NovelDownloadQueueManager {
             val transformed = transform(state)
             transformed.copy(tasks = pruneFailedTasks(transformed.tasks))
         }
-        notifyQueueState(_state.value)
+        scheduleNotifyQueueState()
+    }
+
+    private fun scheduleNotifyQueueState() {
+        notifyJob?.cancel()
+        notifyJob = queueScope.launch {
+            delay(200L)
+            notifyQueueState(_state.value)
+        }
     }
 
     private fun notifyQueueState(state: NovelDownloadQueueState) {

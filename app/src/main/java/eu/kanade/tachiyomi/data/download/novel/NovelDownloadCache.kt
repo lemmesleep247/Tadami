@@ -258,7 +258,7 @@ class NovelDownloadCache(
         updateDiskCacheJob?.cancel()
         updateDiskCacheJob = scope.launch {
             if (!immediate) {
-                delay(1000)
+                delay(2000L)
             }
             writeDiskCacheMutex.withLock {
                 writeDiskCacheSnapshot()

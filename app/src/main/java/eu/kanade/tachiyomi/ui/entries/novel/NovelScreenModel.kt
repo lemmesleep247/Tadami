@@ -744,11 +744,9 @@ class NovelScreenModel(
     }
 
     internal fun handleDownloadCacheEvent(event: NovelDownloadCacheEvent) {
-        // Targeted chapter changes may update state incrementally, but we keep InvalidateAll as the
-        // reconciliation path after storage changes, process restarts, or any suspected mismatch.
         when (event) {
             is NovelDownloadCacheEvent.ChaptersChanged -> {
-                updateDownloadedStateFromCacheEvent(event)
+                enqueueBatchDownloadEvent(event)
             }
             NovelDownloadCacheEvent.InvalidateAll -> {
                 syncDownloadedState(deferFilesystemFallback = false)
@@ -790,6 +788,41 @@ class NovelScreenModel(
                 it
             } else {
                 it.copy(downloadedChapterIds = emptySet())
+            }
+        }
+    }
+
+    private var downloadBatchCollectionJob: kotlinx.coroutines.Job? = null
+    private val downloadBatchLock = Any()
+    private val pendingDownloadBatchEvents = mutableListOf<NovelDownloadCacheEvent.ChaptersChanged>()
+
+    private fun enqueueBatchDownloadEvent(event: NovelDownloadCacheEvent.ChaptersChanged) {
+        val state = successState ?: return
+        if (event.novelId != state.novel.id) return
+
+        synchronized(downloadBatchLock) {
+            pendingDownloadBatchEvents += event
+        }
+
+        downloadBatchCollectionJob?.cancel()
+        downloadBatchCollectionJob = screenModelScope.launchIO {
+            delay(200L) // coalesce rapid events within 200ms window
+
+            val batch: List<NovelDownloadCacheEvent.ChaptersChanged>
+            synchronized(downloadBatchLock) {
+                batch = pendingDownloadBatchEvents.toList()
+                pendingDownloadBatchEvents.clear()
+            }
+
+            if (batch.isEmpty()) return@launchIO
+            val currentIds = successState?.downloadedChapterIds ?: return@launchIO
+            val novelId = state.novel.id
+            val mergedIds = mergeDownloadBatchEvents(novelId, currentIds, batch)
+
+            downloadedStateVersion.incrementAndGet()
+            updateSuccessState {
+                if (mergedIds == it.downloadedChapterIds) it
+                else it.copy(downloadedChapterIds = mergedIds)
             }
         }
     }
@@ -2594,4 +2627,29 @@ internal fun resolveNovelChapterRowIndex(
 
 internal fun resolveNovelChapterGroupKey(chapterNumber: Double): Long {
     return chapterNumber.toBits()
+}
+
+/**
+ * Merges a batch of [NovelDownloadCacheEvent.ChaptersChanged] events into a single
+ * set of downloaded chapter IDs. This eliminates per-chapter recompositions
+ * when downloading many chapters at once.
+ *
+ * For 500 chapters downloaded sequentially, this reduces recompositions from
+ * 500 (one per chapter) to ~5 (one per ~200ms batch window).
+ */
+internal fun mergeDownloadBatchEvents(
+    novelId: Long,
+    currentIds: Set<Long>,
+    events: List<NovelDownloadCacheEvent.ChaptersChanged>,
+): Set<Long> {
+    var result = currentIds
+    for (event in events) {
+        if (event.novelId != novelId) continue
+        result = if (event.downloaded) {
+            result + event.chapterIds
+        } else {
+            result - event.chapterIds
+        }
+    }
+    return result
 }
