@@ -49,13 +49,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.player.components.LeftSideOvalShape
 import eu.kanade.presentation.player.components.RightSideOvalShape
 import eu.kanade.presentation.theme.playerRippleConfiguration
+import eu.kanade.tachiyomi.ui.player.LongPressGesture
 import eu.kanade.tachiyomi.ui.player.Panels
 import eu.kanade.tachiyomi.ui.player.PlayerUpdates
 import eu.kanade.tachiyomi.ui.player.PlayerViewModel
@@ -82,6 +85,8 @@ fun GestureHandler(
     val playerPreferences = remember { Injekt.get<PlayerPreferences>() }
     val gesturePreferences = remember { Injekt.get<GesturePreferences>() }
     val audioPreferences = remember { Injekt.get<AudioPreferences>() }
+    val longPressAction by gesturePreferences.longPressGesture().collectAsState()
+    val isDynamicSpeedActive by viewModel.isDynamicSpeedActive.collectAsState()
 
     val panelShown by viewModel.panelShown.collectAsState()
     val allowGesturesInPanels by playerPreferences.allowGestures().collectAsState()
@@ -118,7 +123,58 @@ fun GestureHandler(
         modifier = modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeGestures)
-            .pointerInput(Unit) {
+            .pointerInput(longPressAction) {
+                if (areControlsLocked || longPressAction != LongPressGesture.PlaybackSpeed) return@pointerInput
+                awaitPointerEventScope {
+                    var startingX = 0f
+                    var hasDragged = false
+                    val presets = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f, 5.0f)
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val changes = event.changes
+                        val downChange = changes.firstOrNull { it.pressed && !it.previousPressed }
+                        if (downChange != null) {
+                            startingX = downChange.position.x
+                            hasDragged = false
+                        }
+                        if (viewModel.isDynamicSpeedActive.value) {
+                            val activeChange = changes.firstOrNull { it.pressed }
+                            if (activeChange != null) {
+                                val currentX = activeChange.position.x
+                                val deltaX = currentX - startingX
+                                val presetStep = 40.dp.toPx()
+                                val stepsShifted = (deltaX / presetStep).toInt()
+                                val baseIndex = 5 // 2.0f is at presets[5]
+                                val newIndex = (baseIndex + stepsShifted).coerceIn(0, presets.size - 1)
+                                val targetSpeed = presets[newIndex]
+                                if (viewModel.gesturePlaybackSpeed.value != targetSpeed) {
+                                    hasDragged = true
+                                    viewModel.gesturePlaybackSpeed.update { targetSpeed }
+                                    MPVLib.setPropertyDouble("speed", targetSpeed.toDouble())
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                                activeChange.consume()
+                            }
+                            val upChange = changes.firstOrNull { !it.pressed && it.previousPressed }
+                            if (upChange != null || changes.all { !it.pressed }) {
+                                viewModel.isDynamicSpeedActive.update { false }
+                                isLongPressing = false
+                                viewModel.playerUpdate.update { PlayerUpdates.None }
+                                if (hasDragged) {
+                                    // User slid to a chosen speed - KEEP IT!
+                                } else {
+                                    // User just released without sliding - restore original speed!
+                                    MPVLib.setPropertyDouble(
+                                        "speed",
+                                        viewModel.preGesturePlaybackSpeed.value.toDouble(),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .pointerInput(longPressAction) {
                 val originalSpeed = viewModel.playbackSpeed.value
                 detectTapGestures(
                     onTap = {
@@ -162,7 +218,11 @@ fun GestureHandler(
                         tryAwaitRelease()
                         if (isLongPressing) {
                             isLongPressing = false
-                            MPVLib.setPropertyDouble("speed", originalSpeed.toDouble())
+                            if (longPressAction == LongPressGesture.PlaybackSpeed) {
+                                // Handled in outer Initial pointerInput
+                            } else {
+                                MPVLib.setPropertyDouble("speed", originalSpeed.toDouble())
+                            }
                             viewModel.playerUpdate.update { PlayerUpdates.None }
                         }
                         interactionSource.emit(PressInteraction.Release(press))
@@ -170,16 +230,26 @@ fun GestureHandler(
                     onLongPress = {
                         if (areControlsLocked) return@detectTapGestures
                         if (!isLongPressing) {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            isLongPressing = true
-                            viewModel.pause()
-                            viewModel.sheetShown.update { Sheets.Screenshot }
+                            if (longPressAction == LongPressGesture.Screenshot) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                isLongPressing = true
+                                viewModel.pause()
+                                viewModel.sheetShown.update { Sheets.Screenshot }
+                            } else if (longPressAction == LongPressGesture.PlaybackSpeed) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                isLongPressing = true
+                                viewModel.preGesturePlaybackSpeed.update { viewModel.playbackSpeed.value }
+                                viewModel.gesturePlaybackSpeed.update { 2.0f }
+                                viewModel.isDynamicSpeedActive.update { true }
+                                viewModel.hideControls()
+                                MPVLib.setPropertyDouble("speed", 2.0)
+                            }
                         }
                     },
                 )
             }
-            .pointerInput(areControlsLocked) {
-                if (!seekGesture || areControlsLocked) return@pointerInput
+            .pointerInput(areControlsLocked, isDynamicSpeedActive) {
+                if (!seekGesture || areControlsLocked || isDynamicSpeedActive) return@pointerInput
                 var startingPosition = position.toInt()
                 var startingX = 0f
                 var wasPlayerAlreadyPause = false

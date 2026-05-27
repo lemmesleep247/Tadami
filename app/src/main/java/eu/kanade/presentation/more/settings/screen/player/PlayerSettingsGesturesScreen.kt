@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.SearchableSettings
+import eu.kanade.tachiyomi.ui.player.LongPressGesture
 import eu.kanade.tachiyomi.ui.player.SingleActionGesture
 import eu.kanade.tachiyomi.ui.player.settings.GesturePreferences
 import kotlinx.collections.immutable.persistentListOf
@@ -46,6 +47,7 @@ object PlayerSettingsGesturesScreen : SearchableSettings {
             getSlidersGroup(gesturePreferences = gesturePreferences),
             getSeekingGroup(gesturePreferences = gesturePreferences),
             getDoubleTapGroup(gesturePreferences = gesturePreferences),
+            getLongPressGroup(gesturePreferences = gesturePreferences),
             getMediaControlsGroup(gesturePreferences = gesturePreferences),
         )
     }
@@ -218,6 +220,26 @@ object PlayerSettingsGesturesScreen : SearchableSettings {
                 ),
                 Preference.PreferenceItem.InfoPreference(
                     title = stringResource(AYMR.strings.pref_media_info),
+                ),
+            ),
+        )
+    }
+
+    @Composable
+    private fun getLongPressGroup(gesturePreferences: GesturePreferences): Preference.PreferenceGroup {
+        val longPress = gesturePreferences.longPressGesture()
+
+        return Preference.PreferenceGroup(
+            title = stringResource(AYMR.strings.pref_category_long_press),
+            preferenceItems = persistentListOf(
+                Preference.PreferenceItem.ListPreference(
+                    preference = longPress,
+                    entries = listOf(
+                        LongPressGesture.None,
+                        LongPressGesture.Screenshot,
+                        LongPressGesture.PlaybackSpeed,
+                    ).associateWith { stringResource(it.stringRes) }.toPersistentMap(),
+                    title = stringResource(AYMR.strings.pref_long_press_action),
                 ),
             ),
         )

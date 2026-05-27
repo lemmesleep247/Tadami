@@ -293,6 +293,10 @@ class PlayerViewModel @JvmOverloads constructor(
     // Pair(startingPosition, seekAmount)
     val gestureSeekAmount = MutableStateFlow<Pair<Int, Int>?>(null)
 
+    val isDynamicSpeedActive = MutableStateFlow(false)
+    val preGesturePlaybackSpeed = MutableStateFlow(1f)
+    val gesturePlaybackSpeed = MutableStateFlow(1f)
+
     val sheetShown = MutableStateFlow(Sheets.None)
     val panelShown = MutableStateFlow(Panels.None)
     val dialogShown = MutableStateFlow<Dialogs>(Dialogs.None)

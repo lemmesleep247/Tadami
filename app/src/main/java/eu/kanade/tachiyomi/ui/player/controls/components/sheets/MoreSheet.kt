@@ -67,11 +67,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import eu.kanade.presentation.player.components.PlayerSheet
 import eu.kanade.tachiyomi.ui.player.Decoder
+import eu.kanade.tachiyomi.ui.player.LongPressGesture
 import eu.kanade.tachiyomi.ui.player.execute
 import eu.kanade.tachiyomi.ui.player.executeLongPress
 import eu.kanade.tachiyomi.ui.player.settings.AdvancedPlayerPreferences
 import eu.kanade.tachiyomi.ui.player.settings.AudioChannels
 import eu.kanade.tachiyomi.ui.player.settings.AudioPreferences
+import eu.kanade.tachiyomi.ui.player.settings.GesturePreferences
 import `is`.xyz.mpv.MPVLib
 import kotlinx.collections.immutable.ImmutableList
 import tachiyomi.domain.custombuttons.model.CustomButton
@@ -96,7 +98,9 @@ fun MoreSheet(
 ) {
     val advancedPreferences = remember { Injekt.get<AdvancedPlayerPreferences>() }
     val audioPreferences = remember { Injekt.get<AudioPreferences>() }
+    val gesturePreferences = remember { Injekt.get<GesturePreferences>() }
     val statisticsPage by advancedPreferences.playerStatisticsPage().collectAsState()
+    val longPressGesture by gesturePreferences.longPressGesture().collectAsState()
     val wrapFilterChips = shouldWrapMoreSheetFilterChips(LocalConfiguration.current.screenWidthDp)
 
     PlayerSheet(
@@ -338,6 +342,19 @@ fun MoreSheet(
                             label = { Text(text = stringResource(it.titleRes)) },
                         )
                     }
+                }
+            }
+            Text(text = stringResource(AYMR.strings.pref_long_press_action))
+            FlowRow(
+                verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+            ) {
+                LongPressGesture.entries.forEach { gesture ->
+                    FilterChip(
+                        selected = longPressGesture == gesture,
+                        onClick = { gesturePreferences.longPressGesture().set(gesture) },
+                        label = { Text(text = stringResource(gesture.stringRes)) },
+                    )
                 }
             }
         }

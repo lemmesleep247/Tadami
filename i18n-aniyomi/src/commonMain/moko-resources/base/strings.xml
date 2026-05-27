@@ -197,6 +197,11 @@
     <string name="single_action_playpause">Play/Pause</string>
     <string name="single_action_switch">Change episode</string>
     <string name="single_action_custom">Custom</string>
+    <string name="pref_category_long_press">Long press</string>
+    <string name="pref_long_press_action">Long press action</string>
+    <string name="long_press_action_none">None</string>
+    <string name="long_press_action_screenshot">Take screenshot</string>
+    <string name="long_press_action_playback_speed">Dynamic playback speed</string>
     <string name="pref_category_media_controls">Media controls</string>
     <string name="pref_media_previous">Previous</string>
     <string name="pref_media_playpause">Play/Pause</string>

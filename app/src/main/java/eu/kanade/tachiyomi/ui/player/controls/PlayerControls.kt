@@ -22,7 +22,11 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -30,15 +34,21 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -48,18 +58,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.constraintlayout.compose.Dimension
 import eu.kanade.presentation.more.settings.screen.player.custombutton.getButtons
 import eu.kanade.presentation.theme.playerRippleConfiguration
 import eu.kanade.tachiyomi.ui.player.Dialogs
+import eu.kanade.tachiyomi.ui.player.LongPressGesture
 import eu.kanade.tachiyomi.ui.player.Panels
 import eu.kanade.tachiyomi.ui.player.PlayerActivity
 import eu.kanade.tachiyomi.ui.player.PlayerUpdates
@@ -121,6 +135,9 @@ fun PlayerControls(
     val currentChapter by viewModel.currentChapter.collectAsState()
     val chapters by viewModel.chapters.collectAsState()
     val currentBrightness by viewModel.currentBrightness.collectAsState()
+    val isDynamicSpeedActive by viewModel.isDynamicSpeedActive.collectAsState()
+    val gesturePlaybackSpeed by viewModel.gesturePlaybackSpeed.collectAsState()
+    val longPressAction by gesturePreferences.longPressGesture().collectAsState()
 
     val playerTimeToDisappear by playerPreferences.playerTimeToDisappear().collectAsState()
     val showCustomButtons by playerPreferences.showCustomButtons().collectAsState()
@@ -195,6 +212,7 @@ fun PlayerControls(
                 val centerControls = createRef()
                 val seekbar = createRef()
                 val (playerUpdates) = createRefs()
+                val speedPill = createRef()
 
                 val hasPreviousEpisode by viewModel.hasPreviousEpisode.collectAsState()
                 val hasNextEpisode by viewModel.hasNextEpisode.collectAsState()
@@ -347,7 +365,7 @@ fun PlayerControls(
                 }
                 AnimatedVisibility(
                     visible =
-                    (controlsShown && !areControlsLocked || gestureSeekAmount != null) ||
+                    ((controlsShown && !areControlsLocked && !isDynamicSpeedActive) || gestureSeekAmount != null) ||
                         isLoading ||
                         isLoadingEpisode,
                     enter = fadeIn(playerControlsEnterAnimationSpec()),
@@ -378,7 +396,7 @@ fun PlayerControls(
                     )
                 }
                 AnimatedVisibility(
-                    visible = (controlsShown || seekBarShown) && !areControlsLocked,
+                    visible = (controlsShown || seekBarShown) && !areControlsLocked && !isDynamicSpeedActive,
                     enter = if (!reduceMotion) {
                         slideInVertically(playerControlsEnterAnimationSpec()) { it } +
                             fadeIn(playerControlsEnterAnimationSpec())
@@ -417,7 +435,7 @@ fun PlayerControls(
                 val mediaTitle by viewModel.mediaTitle.collectAsState()
                 val animeTitle by viewModel.animeTitle.collectAsState()
                 AnimatedVisibility(
-                    controlsShown && !areControlsLocked,
+                    controlsShown && !areControlsLocked && !isDynamicSpeedActive,
                     enter = if (!reduceMotion) {
                         slideInHorizontally(playerControlsEnterAnimationSpec()) { -it } +
                             fadeIn(playerControlsEnterAnimationSpec())
@@ -448,7 +466,7 @@ fun PlayerControls(
                 val autoPlayEnabled by playerPreferences.autoplayEnabled().collectAsState()
                 val isEpisodeOnline by viewModel.isEpisodeOnline.collectAsState()
                 AnimatedVisibility(
-                    controlsShown && !areControlsLocked,
+                    controlsShown && !areControlsLocked && !isDynamicSpeedActive,
                     enter = if (!reduceMotion) {
                         slideInHorizontally(playerControlsEnterAnimationSpec()) { it } +
                             fadeIn(playerControlsEnterAnimationSpec())
@@ -477,6 +495,8 @@ fun PlayerControls(
                         isEpisodeOnline = isEpisodeOnline,
                         onMoreClick = { viewModel.showSheet(Sheets.More) },
                         onMoreLongClick = { viewModel.showPanel(Panels.VideoFilters) },
+                        showScreenshotButton = longPressAction == LongPressGesture.PlaybackSpeed,
+                        onScreenshotClick = { viewModel.showSheet(Sheets.Screenshot) },
                     )
                 }
                 // Bottom right controls
@@ -485,7 +505,7 @@ fun PlayerControls(
                 val visibleCustomButton = resolveVisibleCustomButton(showCustomButtons, customButton)
                 val visibleSkipIntroButton = skipIntroButton
                 AnimatedVisibility(
-                    controlsShown && !areControlsLocked,
+                    controlsShown && !areControlsLocked && !isDynamicSpeedActive,
                     enter = if (!reduceMotion) {
                         slideInHorizontally(playerControlsEnterAnimationSpec()) { it } +
                             fadeIn(playerControlsEnterAnimationSpec())
@@ -530,7 +550,7 @@ fun PlayerControls(
                 // Bottom left controls
                 val playbackSpeed by viewModel.playbackSpeed.collectAsState()
                 AnimatedVisibility(
-                    controlsShown && !areControlsLocked,
+                    controlsShown && !areControlsLocked && !isDynamicSpeedActive,
                     enter = if (!reduceMotion) {
                         slideInHorizontally(playerControlsEnterAnimationSpec()) { -it } +
                             fadeIn(playerControlsEnterAnimationSpec())
@@ -561,6 +581,22 @@ fun PlayerControls(
                         },
                         onOpenSheet = viewModel::showSheet,
                     )
+                }
+
+                AnimatedVisibility(
+                    visible = isDynamicSpeedActive,
+                    enter =
+                    fadeIn(playerControlsEnterAnimationSpec()) +
+                        slideInVertically(playerControlsEnterAnimationSpec()) { -it },
+                    exit =
+                    fadeOut(playerControlsExitAnimationSpec()) +
+                        slideOutVertically(playerControlsExitAnimationSpec()) { -it },
+                    modifier = Modifier.constrainAs(speedPill) {
+                        top.linkTo(parent.top, spacing.medium)
+                        linkTo(parent.start, parent.end)
+                    },
+                ) {
+                    PlaybackSpeedPill(speed = gesturePlaybackSpeed)
                 }
             }
         }
@@ -680,3 +716,59 @@ fun <T> playerControlsEnterAnimationSpec(): FiniteAnimationSpec<T> = tween(
     durationMillis = 100,
     easing = LinearOutSlowInEasing,
 )
+
+@Composable
+fun PlaybackSpeedPill(
+    speed: Float,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = Color.Black.copy(alpha = 0.75f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+        modifier = modifier,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (speed < 1.0f) {
+                FlashingArrows(isForward = false)
+            }
+            Text(
+                text = "${speed}x",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+            )
+            if (speed > 1.0f) {
+                FlashingArrows(isForward = true)
+            }
+        }
+    }
+}
+
+@Composable
+fun FlashingArrows(
+    isForward: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "arrows_flash")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 600, easing = LinearOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "arrows_alpha",
+    )
+    Text(
+        text = if (isForward) ">>" else "<<",
+        style = MaterialTheme.typography.labelLarge,
+        color = Color.White.copy(alpha = alpha),
+        fontWeight = FontWeight.Bold,
+        modifier = modifier,
+    )
+}
