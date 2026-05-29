@@ -46,7 +46,7 @@ class SetAnimeDefaultEpisodeFlagsTest {
             .setFlag(Anime.SHOW_ALL, Anime.EPISODE_DOWNLOADED_MASK)
             .setFlag(Anime.SHOW_ALL, Anime.EPISODE_BOOKMARKED_MASK)
             .setFlag(Anime.SHOW_ALL, Anime.EPISODE_FILLERMARKED_MASK)
-            .setFlag(Anime.EPISODE_SORTING_NUMBER, Anime.EPISODE_SORTING_MASK)
+            .setFlag(Anime.EPISODE_SORTING_SOURCE, Anime.EPISODE_SORTING_MASK)
             .setFlag(Anime.EPISODE_SORT_DESC, Anime.EPISODE_SORT_DIR_MASK)
             .setFlag(Anime.EPISODE_DISPLAY_NAME, Anime.EPISODE_DISPLAY_MASK)
             .setFlag(Anime.EPISODE_SHOW_PREVIEWS, Anime.EPISODE_PREVIEWS_MASK)
@@ -94,5 +94,14 @@ class SetAnimeDefaultEpisodeFlagsTest {
         override suspend fun removeParentIdByIds(animeIds: List<Long>) = error("not used")
         override fun getDeletableParentAnime(): Flow<List<DeletableAnime>> = error("not used")
         override suspend fun getChildrenByParentId(parentId: Long): List<Anime> = error("not used")
+        override suspend fun updateAnimeMetadata(
+            animeId: Long,
+            customTitle: String?,
+            customArtist: String?,
+            customAuthor: String?,
+            customDescription: String?,
+            customGenre: List<String>?,
+            customStatus: Long?,
+        ): Boolean = error("not used")
     }
 }

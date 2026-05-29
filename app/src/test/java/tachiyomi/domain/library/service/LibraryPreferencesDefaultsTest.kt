@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.manga.model.Manga
+import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.library.anime.model.AnimeLibrarySort
 import tachiyomi.domain.library.manga.model.MangaLibrarySort
 import tachiyomi.domain.library.model.AuroraLibraryCardStyle
@@ -21,7 +22,7 @@ class LibraryPreferencesDefaultsTest {
             type = AnimeLibrarySort.Type.LastSeen,
             direction = AnimeLibrarySort.Direction.Descending,
         )
-        prefs.sortEpisodeBySourceOrNumber().get() shouldBe Anime.EPISODE_SORTING_NUMBER
+        prefs.sortEpisodeBySourceOrNumber().get() shouldBe Anime.EPISODE_SORTING_SOURCE
         prefs.mangaSortingMode().get() shouldBe MangaLibrarySort(
             type = MangaLibrarySort.Type.LastRead,
             direction = MangaLibrarySort.Direction.Descending,
@@ -31,6 +32,7 @@ class LibraryPreferencesDefaultsTest {
             type = NovelLibrarySort.Type.LastRead,
             direction = NovelLibrarySort.Direction.Descending,
         )
+        prefs.sortNovelChapterBySourceOrNumber().get() shouldBe Novel.CHAPTER_SORTING_SOURCE
 
         prefs.displayMode().get() shouldBe LibraryDisplayMode.ComfortableGrid
         prefs.animeDisplayMode().get() shouldBe LibraryDisplayMode.ComfortableGrid

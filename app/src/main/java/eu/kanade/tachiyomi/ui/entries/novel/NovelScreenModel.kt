@@ -390,7 +390,7 @@ class NovelScreenModel(
 
         screenModelScope.launchIO {
             val novel = getNovelWithChapters.awaitNovel(novelId)
-            if (!novel.favorite) {
+            if (shouldApplyDefaultChapterFlags(novel)) {
                 setNovelDefaultChapterFlags.await(novel)
             }
 
@@ -2711,4 +2711,8 @@ internal fun mergeDownloadBatchEvents(
         }
     }
     return result
+}
+
+internal fun shouldApplyDefaultChapterFlags(novel: Novel): Boolean {
+    return !novel.favorite && novel.chapterFlags == Novel.SHOW_ALL
 }

@@ -357,8 +357,10 @@ class AnimeScreenModel(
                     .toAnimeSeasonItems()
             }
 
-            if (!anime.favorite) {
+            if (shouldApplyDefaultEpisodeFlags(anime)) {
                 setAnimeDefaultEpisodeFlags.await(anime)
+            }
+            if (shouldApplyDefaultSeasonFlags(anime)) {
                 setAnimeDefaultSeasonFlags.await(anime)
             }
 
@@ -2176,4 +2178,12 @@ sealed class EpisodeList {
         val id = episode.id
         val isDownloaded = downloadState == AnimeDownload.State.DOWNLOADED
     }
+}
+
+internal fun shouldApplyDefaultEpisodeFlags(anime: Anime): Boolean {
+    return !anime.favorite && anime.episodeFlags == Anime.SHOW_ALL
+}
+
+internal fun shouldApplyDefaultSeasonFlags(anime: Anime): Boolean {
+    return !anime.favorite && anime.seasonFlags == Anime.SHOW_ALL
 }

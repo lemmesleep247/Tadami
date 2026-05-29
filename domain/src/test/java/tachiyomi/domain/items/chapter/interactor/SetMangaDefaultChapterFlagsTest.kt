@@ -82,5 +82,14 @@ class SetMangaDefaultChapterFlagsTest {
             receivedUpdates = mangaUpdates
             return true
         }
+        override suspend fun updateMangaMetadata(
+            mangaId: Long,
+            customTitle: String?,
+            customArtist: String?,
+            customAuthor: String?,
+            customDescription: String?,
+            customGenre: List<String>?,
+            customStatus: Long?,
+        ): Boolean = error("not used")
     }
 }

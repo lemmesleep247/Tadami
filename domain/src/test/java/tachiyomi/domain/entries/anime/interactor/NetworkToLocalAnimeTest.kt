@@ -149,5 +149,14 @@ class NetworkToLocalAnimeTest {
         override suspend fun removeParentIdByIds(animeIds: List<Long>) = error("not used")
         override fun getDeletableParentAnime(): Flow<List<DeletableAnime>> = error("not used")
         override suspend fun getChildrenByParentId(parentId: Long): List<Anime> = error("not used")
+        override suspend fun updateAnimeMetadata(
+            animeId: Long,
+            customTitle: String?,
+            customArtist: String?,
+            customAuthor: String?,
+            customDescription: String?,
+            customGenre: List<String>?,
+            customStatus: Long?,
+        ): Boolean = error("not used")
     }
 }

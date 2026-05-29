@@ -308,7 +308,7 @@ class LibraryPreferences(
     // and upload date
     fun sortEpisodeBySourceOrNumber() = preferenceStore.getLong(
         "default_episode_sort_by_source_or_number",
-        Anime.EPISODE_SORTING_NUMBER,
+        Anime.EPISODE_SORTING_SOURCE,
     )
 
     fun sortChapterBySourceOrNumber() = preferenceStore.getLong(
@@ -384,7 +384,7 @@ class LibraryPreferences(
 
     fun sortNovelChapterBySourceOrNumber() = preferenceStore.getLong(
         "default_novel_chapter_sort_by_source_or_number",
-        Novel.CHAPTER_SORTING_NUMBER,
+        Novel.CHAPTER_SORTING_SOURCE,
     )
 
     fun displayNovelChapterByNameOrNumber() = preferenceStore.getLong(
