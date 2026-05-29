@@ -43,7 +43,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,7 +56,6 @@ import eu.kanade.presentation.entries.components.aurora.AURORA_DIMMED_ITEM_ALPHA
 import eu.kanade.presentation.entries.components.aurora.AURORA_NEW_ITEM_HIGHLIGHT_ALPHA
 import eu.kanade.presentation.entries.manga.components.aurora.GlassmorphismCard
 import eu.kanade.presentation.theme.AuroraTheme
-import eu.kanade.presentation.util.toDurationString
 import eu.kanade.tachiyomi.data.download.anime.model.AnimeDownload
 import eu.kanade.tachiyomi.ui.entries.anime.EpisodeList
 import me.saket.swipe.SwipeableActionsBox
@@ -228,6 +226,8 @@ fun AnimeEpisodeCardCompact(
                             fontSize = 12.sp,
                             color = colors.textSecondary,
                         )
+
+
                     }
 
                     Row(
@@ -255,45 +255,53 @@ fun AnimeEpisodeCardCompact(
                                 label = stringResource(AYMR.strings.aurora_episode_badge_seen),
                             )
                         }
-                        if (!episode.seen && episode.lastSecondSeen > 0L && episode.totalSeconds > 0L) {
-                            val context = LocalContext.current
-                            val lastSeenDurationText = episode.lastSecondSeen.milliseconds.toDurationString(
-                                context,
-                                "0s",
-                            )
-                            val totalDurationText = episode.totalSeconds.milliseconds.toDurationString(context, "0s")
-                            AuroraEpisodeStatusBadge(
-                                status = AuroraEpisodeStatus.InProgress,
-                                icon = Icons.Outlined.Schedule,
-                                label = "$lastSeenDurationText / $totalDurationText",
-                            )
-                        }
                     }
 
                     // Progress bar for seen/in-progress episodes
-                    if (episode.seen || episode.lastSecondSeen > 0L) {
+                    if (episode.seen || episode.totalSeconds > 0L) {
                         Spacer(modifier = Modifier.height(2.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(3.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(colors.divider),
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            val progress = if (episode.seen) {
-                                1f
-                            } else {
-                                (
-                                    episode.lastSecondSeen.toFloat() /
-                                        maxOf(1L, episode.totalSeconds).toFloat()
-                                    ).coerceIn(0f, 1f)
-                            }
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(progress)
+                                    .weight(1f)
                                     .height(3.dp)
-                                    .background(colors.accent),
-                            )
+                                    .clip(RoundedCornerShape(50))
+                                    .background(colors.divider),
+                            ) {
+                                val progress = if (episode.seen) {
+                                    1f
+                                } else {
+                                    (
+                                        episode.lastSecondSeen.toFloat() /
+                                            maxOf(1L, episode.totalSeconds).toFloat()
+                                        ).coerceIn(0f, 1f)
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(progress)
+                                        .height(3.dp)
+                                        .background(colors.accent),
+                                )
+                            }
+
+                            if (episode.totalSeconds > 0L) {
+                                val totalDurationText = episode.totalSeconds.milliseconds.toDigitalString()
+                                val durationText = if (!episode.seen && episode.lastSecondSeen > 0L) {
+                                    val lastSeenDurationText = episode.lastSecondSeen.milliseconds.toDigitalString()
+                                    "$lastSeenDurationText / $totalDurationText"
+                                } else {
+                                    totalDurationText
+                                }
+                                Text(
+                                    text = durationText,
+                                    fontSize = 11.sp,
+                                    color = colors.textSecondary,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
                         }
                     }
                 }
@@ -451,3 +459,15 @@ private fun auroraSwipeAction(
 }
 
 private val auroraSwipeActionThreshold = 56.dp
+
+private fun kotlin.time.Duration.toDigitalString(): String {
+    return toComponents { _, hours, minutes, seconds, _ ->
+        val minutesStr = if (hours > 0) minutes.toString().padStart(2, '0') else minutes.toString()
+        val secondsStr = seconds.toString().padStart(2, '0')
+        if (hours > 0) {
+            "$hours:$minutesStr:$secondsStr"
+        } else {
+            "$minutes:$secondsStr"
+        }
+    }
+}
