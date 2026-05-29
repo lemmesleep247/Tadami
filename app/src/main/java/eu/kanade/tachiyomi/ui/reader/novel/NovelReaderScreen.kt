@@ -26,7 +26,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.reader.novel.NovelAtmosphereBackground
 import eu.kanade.presentation.reader.novel.NovelReaderBackdropSession
 import eu.kanade.presentation.reader.novel.NovelReaderChapterHandoffPolicy
@@ -52,7 +51,6 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
-import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
@@ -97,8 +95,6 @@ class NovelReaderScreen(
         val initialBackdropColor = remember(initialReaderSettings) {
             resolveInitialBackdropColor()
         }
-        val uiPreferences = remember { Injekt.get<UiPreferences>() }
-        val eInkProfile by uiPreferences.eInkProfile().collectAsState()
 
         val activeReaderSettings = (currentState as? NovelReaderScreenModel.State.Success)?.readerSettings
         val loadingReaderSettings = (currentState as? NovelReaderScreenModel.State.Loading)
@@ -113,8 +109,7 @@ class NovelReaderScreen(
             activeValue = activeReaderSettings?.keepScreenOn,
             loadingValue = loadingReaderSettings?.keepScreenOn,
             initialValue = initialReaderSettings?.keepScreenOn,
-        ) &&
-            eInkProfile.isEnabled
+        )
 
         SystemUIController(
             fullScreenMode = fullScreenMode,
