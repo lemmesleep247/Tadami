@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.entries.novel.model.Novel
@@ -28,53 +29,32 @@ class NovelDownloadQueueScreenModelTest {
         }
 
         @JvmStatic
-        @org.junit.jupiter.api.AfterAll
+        @AfterAll
         fun resetMainDispatcher() {
             Dispatchers.resetMain()
         }
     }
 
     @Test
-    fun `queue updates do not trigger storage summary recalculation`() {
+    fun `queue state changes are reflected in screen model state`() {
         runBlocking {
             val queueState = MutableStateFlow(NovelDownloadQueueState())
-            var downloadCountCalls = 0
-            var downloadSizeCalls = 0
-            val screenModel = NovelDownloadQueueScreenModel(
-                queueState = queueState,
-                getDownloadCount = {
-                    downloadCountCalls++
-                    5
-                },
-                getDownloadSize = {
-                    downloadSizeCalls++
-                    10L
-                },
-            )
+            val screenModel = NovelDownloadQueueScreenModel(queueState = queueState)
 
             try {
-                withTimeout(1_000) {
-                    while (screenModel.state.value.downloadCount != 5 || screenModel.state.value.downloadSize != 10L) {
-                        yield()
-                    }
-                }
-
-                downloadCountCalls shouldBe 1
-                downloadSizeCalls shouldBe 1
-
                 queueState.value = NovelDownloadQueueState(
                     tasks = listOf(queuedTask(1L)),
-                    isRunning = false,
+                    isRunning = true,
                 )
 
                 withTimeout(1_000) {
-                    while (screenModel.state.value.queueCount != 1 || screenModel.state.value.isQueueRunning) {
+                    while (screenModel.state.value.queueCount != 1 || !screenModel.state.value.isQueueRunning) {
                         yield()
                     }
                 }
 
-                downloadCountCalls shouldBe 1
-                downloadSizeCalls shouldBe 1
+                screenModel.state.value.queueCount shouldBe 1
+                screenModel.state.value.isQueueRunning shouldBe true
             } finally {
                 screenModel.onDispose()
             }
@@ -82,46 +62,23 @@ class NovelDownloadQueueScreenModelTest {
     }
 
     @Test
-    fun `refresh storage recalculates storage summary explicitly`() {
-        var downloadCountCalls = 0
-        var downloadSizeCalls = 0
-        val screenModel = NovelDownloadQueueScreenModel(
-            queueState = MutableStateFlow(NovelDownloadQueueState()),
-            getDownloadCount = {
-                downloadCountCalls++
-                7
-            },
-            getDownloadSize = {
-                downloadSizeCalls++
-                14L
-            },
-        )
+    fun `empty queue results in zero queueCount`() {
+        runBlocking {
+            val queueState = MutableStateFlow(NovelDownloadQueueState())
+            val screenModel = NovelDownloadQueueScreenModel(queueState = queueState)
 
-        try {
-            runBlocking {
+            try {
                 withTimeout(1_000) {
-                    while (downloadCountCalls != 1 || downloadSizeCalls != 1) {
+                    while (screenModel.state.value.queueCount != 0) {
                         yield()
                     }
                 }
+
+                screenModel.state.value.queueCount shouldBe 0
+                screenModel.state.value.isQueueRunning shouldBe true
+            } finally {
+                screenModel.onDispose()
             }
-
-            screenModel.refreshStorage()
-
-            runBlocking {
-                withTimeout(1_000) {
-                    while (screenModel.state.value.downloadCount != 7 || screenModel.state.value.downloadSize != 14L) {
-                        yield()
-                    }
-                }
-            }
-
-            downloadCountCalls shouldBe 2
-            downloadSizeCalls shouldBe 2
-            screenModel.state.value.downloadCount shouldBe 7
-            screenModel.state.value.downloadSize shouldBe 14L
-        } finally {
-            screenModel.onDispose()
         }
     }
 
