@@ -17,7 +17,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -48,6 +53,7 @@ import eu.kanade.presentation.more.settings.AuroraTopBarIconButton
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.SettingsUiStyle
 import eu.kanade.presentation.more.settings.rememberResolvedSettingsUiStyle
+import eu.kanade.presentation.more.settings.screen.data.CloudSyncOptionsScreen
 import eu.kanade.presentation.more.settings.screen.data.CreateBackupScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
 import eu.kanade.presentation.more.settings.screen.data.StorageInfo
@@ -64,6 +70,7 @@ import eu.kanade.tachiyomi.data.export.LibraryExporter.ExportOptions
 import eu.kanade.tachiyomi.data.sync.SyncManager
 import eu.kanade.tachiyomi.data.sync.service.GoogleDriveService
 import eu.kanade.tachiyomi.data.sync.service.GoogleDriveSyncService
+import eu.kanade.tachiyomi.data.sync.service.SyncJob
 import eu.kanade.tachiyomi.ui.storage.StorageTab
 import eu.kanade.tachiyomi.util.system.DeviceUtil
 import eu.kanade.tachiyomi.util.system.toast
@@ -130,6 +137,7 @@ object SettingsDataScreen : SearchableSettings {
             Preference.PreferenceItem.InfoPreference(stringResource(MR.strings.pref_storage_location_info)),
 
             getBackupAndRestoreGroup(backupPreferences = backupPreferences),
+            getCloudSyncGroup(),
             getDataGroup(),
             getExportGroup(),
         )
@@ -413,9 +421,11 @@ object SettingsDataScreen : SearchableSettings {
         val scope = rememberCoroutineScope()
         val syncPreferences = remember { Injekt.get<SyncPreferences>() }
         val googleDriveService = remember { Injekt.get<GoogleDriveService>() }
+        val navigator = LocalNavigator.currentOrThrow
 
         val googleDriveAccessToken by syncPreferences.googleDriveAccessToken().collectAsState()
         val googleDriveRefreshToken by syncPreferences.googleDriveRefreshToken().collectAsState()
+        val googleDriveEmail by syncPreferences.googleDriveEmail().collectAsState()
         val isSignedIn = googleDriveAccessToken.isNotBlank() && googleDriveRefreshToken.isNotBlank()
         val cloudSyncEnabledPref = syncPreferences.cloudSyncEnabled()
         val syncService by syncPreferences.syncService().collectAsState()
@@ -474,6 +484,39 @@ object SettingsDataScreen : SearchableSettings {
             )
         }
 
+        var showSignOutDialog by remember { mutableStateOf(false) }
+
+        if (showSignOutDialog) {
+            AlertDialog(
+                onDismissRequest = { showSignOutDialog = false },
+                title = { Text(stringResource(AYMR.strings.pref_sign_out_confirmation_title)) },
+                text = { Text(stringResource(AYMR.strings.pref_sign_out_confirmation_message)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showSignOutDialog = false
+                            scope.launchNonCancellable {
+                                googleDriveService.signOut()
+                                syncPreferences.syncService().set(SyncPreferences.SYNC_SERVICE_NONE)
+                                cloudSyncEnabledPref.set(false)
+                                SyncJob.setupTask(context, 0)
+                                withUIContext {
+                                    context.toast(AYMR.strings.pref_google_drive_sign_out)
+                                }
+                            }
+                        },
+                    ) {
+                        Text(stringResource(AYMR.strings.pref_google_drive_sign_out))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showSignOutDialog = false }) {
+                        Text(stringResource(MR.strings.action_cancel))
+                    }
+                },
+            )
+        }
+
         return Preference.PreferenceGroup(
             title = stringResource(AYMR.strings.cloud_sync),
             preferenceItems = persistentListOf(
@@ -481,22 +524,20 @@ object SettingsDataScreen : SearchableSettings {
                 Preference.PreferenceItem.TextPreference(
                     title = stringResource(AYMR.strings.google_drive),
                     subtitle = if (isSignedIn) {
-                        stringResource(AYMR.strings.google_drive_login_success)
+                        val email = remember(googleDriveEmail) { googleDriveEmail }
+                        if (email.isNotBlank()) {
+                            stringResource(AYMR.strings.pref_google_drive_connected, email)
+                        } else {
+                            stringResource(AYMR.strings.google_drive_login_success)
+                        }
                     } else {
                         stringResource(AYMR.strings.google_drive_not_signed_in)
                     },
-                    onClick = {
-                        if (isSignedIn) {
-                            // Sign out
-                            scope.launchNonCancellable {
-                                googleDriveService.signOut()
-                                syncPreferences.syncService().set(SyncPreferences.SYNC_SERVICE_NONE)
-                                cloudSyncEnabledPref.set(false)
-                                withUIContext {
-                                    context.toast(AYMR.strings.pref_google_drive_sign_out)
-                                }
-                            }
-                        } else {
+                    icon = Icons.Outlined.Cloud,
+                    onClick = if (isSignedIn) {
+                        null
+                    } else {
+                        {
                             // Sign in
                             try {
                                 val intent = googleDriveService.getSignInIntent()
@@ -511,6 +552,19 @@ object SettingsDataScreen : SearchableSettings {
                             }
                         }
                     },
+                    widget = if (isSignedIn) {
+                        {
+                            TextButton(
+                                onClick = {
+                                    showSignOutDialog = true
+                                },
+                            ) {
+                                Text(stringResource(AYMR.strings.pref_google_drive_sign_out))
+                            }
+                        }
+                    } else {
+                        null
+                    },
                 ),
 
                 // Enable/disable sync toggle
@@ -522,14 +576,48 @@ object SettingsDataScreen : SearchableSettings {
                     } else {
                         stringResource(MR.strings.off)
                     },
+                    icon = Icons.Outlined.Backup,
                     enabled = isSignedIn,
                     onValueChanged = { enabled ->
                         if (enabled) {
                             syncPreferences.syncService().set(SyncPreferences.SYNC_SERVICE_GOOGLE_DRIVE)
+                            SyncJob.setupTask(context)
                         } else {
                             syncPreferences.syncService().set(SyncPreferences.SYNC_SERVICE_NONE)
+                            SyncJob.setupTask(context, 0)
                         }
                         true
+                    },
+                ),
+
+                // Auto Sync Interval selection
+                Preference.PreferenceItem.ListPreference(
+                    preference = syncPreferences.syncInterval(),
+                    entries = persistentMapOf(
+                        0 to stringResource(MR.strings.off),
+                        6 to stringResource(MR.strings.update_6hour),
+                        12 to stringResource(MR.strings.update_12hour),
+                        24 to stringResource(MR.strings.update_24hour),
+                        48 to stringResource(MR.strings.update_48hour),
+                        168 to stringResource(MR.strings.update_weekly),
+                    ),
+                    title = stringResource(AYMR.strings.pref_sync_interval),
+                    icon = Icons.Outlined.Sync,
+                    enabled = isSignedIn && syncService == SyncPreferences.SYNC_SERVICE_GOOGLE_DRIVE,
+                    onValueChanged = {
+                        SyncJob.setupTask(context, it)
+                        true
+                    },
+                ),
+
+                // Cloud Sync Options
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(AYMR.strings.pref_cloud_sync_options),
+                    subtitle = stringResource(AYMR.strings.pref_cloud_sync_options_summary),
+                    icon = Icons.Outlined.Settings,
+                    enabled = isSignedIn && syncService == SyncPreferences.SYNC_SERVICE_GOOGLE_DRIVE,
+                    onClick = {
+                        navigator.push(CloudSyncOptionsScreen())
                     },
                 ),
 
@@ -541,6 +629,7 @@ object SettingsDataScreen : SearchableSettings {
                     } else {
                         stringResource(AYMR.strings.never)
                     },
+                    icon = Icons.Outlined.Sync,
                     enabled = isSignedIn && syncService == SyncPreferences.SYNC_SERVICE_GOOGLE_DRIVE,
                     onClick = {
                         scope.launchNonCancellable {
@@ -565,6 +654,7 @@ object SettingsDataScreen : SearchableSettings {
                 // Delete sync data
                 Preference.PreferenceItem.TextPreference(
                     title = stringResource(AYMR.strings.pref_google_drive_purge_sync_data),
+                    icon = Icons.Outlined.Delete,
                     enabled = isSignedIn,
                     onClick = {
                         showPurgeDialog = true

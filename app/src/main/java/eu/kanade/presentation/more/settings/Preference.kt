@@ -53,11 +53,10 @@ sealed class Preference {
             val preference: PreferenceData<Boolean>,
             override val title: String,
             override val subtitle: String? = null,
+            override val icon: ImageVector? = null,
             override val enabled: Boolean = true,
             override val onValueChanged: suspend (value: Boolean) -> Boolean = { true },
-        ) : PreferenceItem<Boolean>() {
-            override val icon: ImageVector? = null
-        }
+        ) : PreferenceItem<Boolean>()
 
         /**
          * A [PreferenceItem] that provides a slider to select an integer number.

@@ -293,7 +293,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="com.googleusercontent.apps.YOUR_GOOGLE_CLIENT_ID"/>
+                <data android:scheme="com.googleusercontent.apps.427391568161-b9v081f3ok5svm7pnvf8lp6d719pas5b"/>
             </intent-filter>
         </activity>
 

@@ -5,7 +5,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,11 +53,11 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.theme.TachiyomiPreviewTheme
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
-import kotlin.math.roundToInt
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Slider
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.LocalAppHaptics
+import kotlin.math.roundToInt
 
 @Composable
 fun VerticalSlider(
@@ -89,7 +87,7 @@ fun VerticalSlider(
                     val newValue = valueRange.start + percentage * (valueRange.endInclusive - valueRange.start)
                     onValueChange(newValue.roundToInt())
                 }
-            }
+            },
     ) {
         val height = constraints.maxHeight.toFloat()
         val density = LocalDensity.current
@@ -108,7 +106,7 @@ fun VerticalSlider(
                 .align(Alignment.Center)
                 .width(trackWidth)
                 .fillMaxHeight()
-                .background(inactiveColor, shape = RoundedCornerShape(2.dp))
+                .background(inactiveColor, shape = RoundedCornerShape(2.dp)),
         )
 
         // Active Track
@@ -117,7 +115,7 @@ fun VerticalSlider(
                 .align(Alignment.BottomCenter)
                 .width(trackWidth)
                 .fillMaxHeight(valuePercentage)
-                .background(activeColor, shape = RoundedCornerShape(2.dp))
+                .background(activeColor, shape = RoundedCornerShape(2.dp)),
         )
 
         // Thumb
@@ -132,7 +130,7 @@ fun VerticalSlider(
                 .align(Alignment.TopCenter)
                 .offset(y = thumbOffsetDp)
                 .size(thumbSize)
-                .background(activeColor, shape = CircleShape)
+                .background(activeColor, shape = CircleShape),
         )
     }
 }

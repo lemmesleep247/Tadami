@@ -1257,6 +1257,11 @@
     <string name="pref_sync_now">Sync now</string>
     <string name="pref_last_sync">Last sync</string>
     <string name="pref_sync_interval">Sync interval</string>
+    <string name="pref_google_drive_connected">Connected (%1$s)</string>
+    <string name="pref_cloud_sync_options">Sync settings</string>
+    <string name="pref_cloud_sync_options_summary">Choose what data to sync</string>
+    <string name="pref_sign_out_confirmation_title">Sign out</string>
+    <string name="pref_sign_out_confirmation_message">Are you sure you want to sign out from Google Drive?</string>
     <string name="action_ok">OK</string>
     <string name="cloud_sync_successful">Sync completed successfully</string>
     <string name="cloud_sync_error">Sync error: %s</string>

@@ -9,8 +9,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -148,7 +147,7 @@ fun ReaderAppBars(
         .copy(alpha = if (isSystemInDarkTheme()) 0.9f else 0.95f)
 
     Box(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -170,8 +169,8 @@ fun ReaderAppBars(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
-                          color = backgroundColor,
-                          shape = RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp),
+                            color = backgroundColor,
+                            shape = RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp),
                         )
                         .clickable(onClick = {
                             appHaptics.tap()
@@ -479,13 +478,13 @@ fun ReaderAppBars(
                     targetOffsetX = { if (isLeft) -it else it },
                     animationSpec = panelSlideSpec,
                 ) + fadeOut(animationSpec = panelFadeSpec),
-                modifier = Modifier.align(if (isLeft) Alignment.CenterStart else Alignment.CenterEnd)
+                modifier = Modifier.align(if (isLeft) Alignment.CenterStart else Alignment.CenterEnd),
             ) {
                 Box(
                     modifier = Modifier
                         .padding(horizontal = 8.dp)
                         .statusBarsPadding()
-                        .navigationBarsPadding()
+                        .navigationBarsPadding(),
                 ) {
                     ChapterNavigator(
                         isRtl = isRtl,
@@ -506,10 +505,9 @@ fun ReaderAppBars(
                         isVertical = true,
                     )
                 }
+            }
         }
     }
-}
-
 }
 
 private fun autoScrollPageDelayMs(speed: Int): Long {

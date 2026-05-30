@@ -2118,4 +2118,35 @@
     <string name="pref_category_debug">Режим отладки</string>
     <string name="pref_debug_bypass_treasury_locks">Обойти блокировки для тестирования</string>
     <string name="pref_debug_bypass_treasury_locks_summary">Временно разблокирует все награды Сокровищницы для визуальной проверки</string>
+
+    <!-- Cloud Sync / Google Drive -->
+    <string name="cloud_sync">Облачная синхронизация</string>
+    <string name="google_drive">Google Drive</string>
+    <string name="pref_google_drive_sign_in">Войти</string>
+    <string name="pref_google_drive_sign_out">Выйти</string>
+    <string name="pref_google_drive_purge_sync_data">Удалить данные синхронизации с Google Drive</string>
+    <string name="google_drive_sync_data_purged">Данные синхронизации удалены с Google Drive</string>
+    <string name="google_drive_sync_data_not_found">Данные синхронизации не найдены на Google Drive</string>
+    <string name="google_drive_sync_data_purge_error">Ошибка удаления данных синхронизации с Google Drive. Попробуйте войти снова</string>
+    <string name="google_drive_login_success">Вход в Google Drive выполнен</string>
+    <string name="google_drive_login_failed">Не удалось войти в Google Drive: %s</string>
+    <string name="google_drive_not_signed_in">Не выполнен вход в Google Drive</string>
+    <string name="error_uploading_sync_data">Ошибка загрузки данных синхронизации на Google Drive</string>
+    <string name="error_before_sync_gdrive">Ошибка перед началом синхронизации: %s</string>
+    <string name="error_deleting_google_drive_lock_file">Ошибка удаления файла блокировки Google Drive</string>
+    <string name="pref_purge_confirmation_message">Удаление данных синхронизации удалит все данные синхронизации с вашего Google Drive. Вы уверены, что хотите продолжить?</string>
+    <string name="pref_cloud_sync">Включить синхронизацию</string>
+    <string name="pref_cloud_sync_summary">Синхронизируйте медиатеку на ваших устройствах через Google Drive</string>
+    <string name="pref_sync_now">Синхронизировать сейчас</string>
+    <string name="pref_last_sync">Последняя синхронизация</string>
+    <string name="pref_sync_interval">Интервал синхронизации</string>
+    <string name="pref_google_drive_connected">Подключено (%1$s)</string>
+    <string name="pref_cloud_sync_options">Настройка синхронизации</string>
+    <string name="pref_cloud_sync_options_summary">Выбрать, какие данные синхронизировать</string>
+    <string name="pref_sign_out_confirmation_title">Выход из аккаунта</string>
+    <string name="pref_sign_out_confirmation_message">Вы уверены, что хотите выйти из аккаунта Google Drive?</string>
+    <string name="action_ok">ОК</string>
+    <string name="cloud_sync_successful">Синхронизация успешно завершена</string>
+    <string name="cloud_sync_error">Ошибка синхронизации: %s</string>
+    <string name="never">Никогда</string>
 </resources>
