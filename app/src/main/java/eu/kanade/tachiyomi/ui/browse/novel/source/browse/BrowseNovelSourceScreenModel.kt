@@ -240,6 +240,8 @@ class BrowseNovelSourceScreenModel(
 
     private val hideInLibraryItems = sourcePreferences.hideInNovelLibraryItems().get()
 
+    private val autoFavoriteLocalNovels = sourcePreferences.importEpubAddToLibrary().get()
+
     val novelPagerFlowFlow = state
         .map { state ->
             val listing = state.listing
@@ -262,7 +264,11 @@ class BrowseNovelSourceScreenModel(
                 .map { pagingData ->
                     pagingData
                         .map { networkNovel ->
-                            val localNovel = networkToLocalNovel.await(networkNovel.toDomainNovel(sourceId))
+                            val autoFavorite = autoFavoriteLocalNovels && sourceId == 0L
+                            val localNovel = networkToLocalNovel.await(
+                                networkNovel.toDomainNovel(sourceId),
+                                autoFavorite = autoFavorite,
+                            )
                             maybeFetchMissingNovelDetails(localNovel)
                             resolveGetNovel()
                                 ?.subscribe(localNovel.url, localNovel.source)
