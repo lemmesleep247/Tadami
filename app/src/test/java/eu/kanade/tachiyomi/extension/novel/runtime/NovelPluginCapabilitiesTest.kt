@@ -17,6 +17,7 @@ class NovelPluginCapabilitiesTest {
             usesWebStorage = true,
             hasCustomJs = false,
             hasCustomCss = true,
+            hasRelatedNovels = true,
         )
 
         assertTrue(capabilities.hasParsePage)
@@ -26,6 +27,7 @@ class NovelPluginCapabilitiesTest {
         assertTrue(capabilities.usesWebStorage)
         assertFalse(capabilities.hasCustomJs)
         assertTrue(capabilities.hasCustomCss)
+        assertTrue(capabilities.hasRelatedNovels)
     }
 
     @Test
@@ -39,6 +41,7 @@ class NovelPluginCapabilitiesTest {
         assertFalse(capabilities.usesWebStorage)
         assertFalse(capabilities.hasCustomJs)
         assertFalse(capabilities.hasCustomCss)
+        assertFalse(capabilities.hasRelatedNovels)
     }
 
     @Test

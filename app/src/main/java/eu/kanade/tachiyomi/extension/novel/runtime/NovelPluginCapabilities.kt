@@ -9,4 +9,5 @@ data class NovelPluginCapabilities(
     val usesWebStorage: Boolean = false,
     val hasCustomJs: Boolean = false,
     val hasCustomCss: Boolean = false,
+    val hasRelatedNovels: Boolean = false,
 )
