@@ -117,7 +117,7 @@ private fun resolveAuroraCoverModelCandidate(data: Any?): Any? {
         is String -> data.takeIf { it.isNotBlank() }
         is AnimeCover -> data.takeIf { !it.url.isNullOrBlank() }
         is MangaCover -> data.takeIf { !it.url.isNullOrBlank() }
-        is NovelCover -> data.takeIf { !it.url.isNullOrBlank() }
+        is NovelCover -> data
         else -> data
     }
 }
