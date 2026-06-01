@@ -655,6 +655,7 @@
     <string name="restore_duration">%1$02d min, %2$02d sec</string>
     <string name="backup_in_progress">Backup is already in progress</string>
     <string name="pref_cloud_backup_folder">Cloud backup folder</string>
+    <string name="pref_cloud_backup_folder_subtitle">Sync automatic backups to cloud storage</string>
     <string name="cloud_backup_folder_not_set">No cloud backup folder set</string>
     <string name="cloud_backup_info">Save automatic backups to a cloud storage folder. Uses Android\'s Storage Access Framework — compatible with Google Drive, Dropbox, OneDrive, and other SAF-enabled apps.</string>
     <string name="backup_choice">What do you want to backup?</string>
@@ -673,7 +674,7 @@
     <string name="restoring_backup">Restoring backup</string>
     <string name="restoring_backup_error">Restoring backup failed</string>
     <string name="restoring_backup_canceled">Canceled restore</string>
-    <string name="backup_info">You should keep copies of backups in other places as well. Backups may contain sensitive data including any stored passwords; be careful if sharing.</string>
+    <string name="backup_info">Backups contain sensitive data, including stored passwords. Do not store them in untrusted locations or share them carelessly — choose your backup location carefully.</string>
     <string name="last_auto_backup_info">Last automatically backed up: %s</string>
     <string name="label_data">Data</string>
     <string name="pref_storage_usage">Storage usage</string>

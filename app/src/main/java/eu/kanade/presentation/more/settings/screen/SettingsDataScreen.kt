@@ -635,7 +635,8 @@ object SettingsDataScreen : SearchableSettings {
                 // ── Cloud Backup ────────────────────────────────────────────────
                 Preference.PreferenceItem.TextPreference(
                     title = stringResource(MR.strings.pref_cloud_backup_folder),
-                    subtitle = cloudBackupSubtitle(context, backupPreferences),
+                    subtitle = stringResource(MR.strings.pref_cloud_backup_folder_subtitle) +
+                        "\n" + cloudBackupSubtitle(context, backupPreferences),
                     onClick = {
                         try {
                             cloudBackupPicker.launch(null)
