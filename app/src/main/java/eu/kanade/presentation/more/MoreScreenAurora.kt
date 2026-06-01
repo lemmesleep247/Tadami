@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.VideoSettings
@@ -55,6 +56,7 @@ import eu.kanade.presentation.theme.AuroraTheme
 import eu.kanade.presentation.theme.LocalIsDefaultAppUiFont
 import eu.kanade.presentation.theme.resolveAuroraElevation
 import eu.kanade.tachiyomi.ui.more.DownloadQueueState
+import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.LocalAppHaptics
@@ -72,6 +74,7 @@ fun MoreScreenAurora(
     onCategoriesClick: () -> Unit,
     onDataStorageClick: () -> Unit,
     onPlayerSettingsClick: () -> Unit,
+    onMangaReaderSettingsClick: () -> Unit,
     onNovelReaderSettingsClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onAboutClick: () -> Unit,
@@ -129,8 +132,14 @@ fun MoreScreenAurora(
                 )
 
                 AuroraSettingItem(
-                    title = stringResource(AYMR.strings.pref_category_novel_reader),
+                    title = stringResource(MR.strings.pref_category_reader),
                     icon = Icons.AutoMirrored.Outlined.ChromeReaderMode,
+                    onClick = onMangaReaderSettingsClick,
+                )
+
+                AuroraSettingItem(
+                    title = stringResource(AYMR.strings.pref_category_novel_reader),
+                    icon = Icons.Outlined.Book,
                     onClick = onNovelReaderSettingsClick,
                 )
 

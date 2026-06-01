@@ -23,6 +23,7 @@ import eu.kanade.presentation.more.MoreScreen
 import eu.kanade.presentation.more.MoreScreenAurora
 import eu.kanade.presentation.more.settings.screen.HelpScreen
 import eu.kanade.presentation.more.settings.screen.SettingsNovelReaderScreen
+import eu.kanade.presentation.more.settings.screen.SettingsReaderScreen
 import eu.kanade.presentation.more.settings.screen.about.AboutScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
@@ -93,6 +94,7 @@ data object MoreTab : Tab {
                 onCategoriesClick = { navigator.push(CategoriesTab) },
                 onDataStorageClick = { navigator.push(SettingsScreen(SettingsScreen.Destination.DataAndStorage)) },
                 onPlayerSettingsClick = { navigator.push(PlayerSettingsScreen(mainSettings = false)) },
+                onMangaReaderSettingsClick = { navigator.push(SettingsReaderScreen) },
                 onNovelReaderSettingsClick = { navigator.push(SettingsNovelReaderScreen) },
                 onSettingsClick = { navigator.push(SettingsScreen()) },
                 onAboutClick = { navigator.push(AboutScreen) },
@@ -116,6 +118,7 @@ data object MoreTab : Tab {
                 onClickStorage = { navigator.push(StorageTab) },
                 onClickDataAndStorage = { navigator.push(SettingsScreen(SettingsScreen.Destination.DataAndStorage)) },
                 onClickPlayerSettings = { navigator.push(PlayerSettingsScreen(mainSettings = false)) },
+                onClickMangaReaderSettings = { navigator.push(SettingsReaderScreen) },
                 onClickNovelReaderSettings = { navigator.push(SettingsNovelReaderScreen) },
                 onClickSettings = { navigator.push(SettingsScreen()) },
                 onClickAbout = { navigator.push(AboutScreen) },
