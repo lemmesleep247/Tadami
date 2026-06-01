@@ -212,68 +212,77 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
             init(ProcessLifecycleOwner.get().lifecycleScope)
         }
 
-        // Initialize achievements from JSON
-        achievementScope.launch {
-            try {
-                val loader = Injekt.get<tachiyomi.data.achievement.loader.AchievementLoader>()
-                loader.loadAchievements()
-            } catch (e: Exception) {
-                logcat(LogPriority.ERROR) { "Error during achievement initialization: ${e.message}" }
-            }
-        }
-
-        // Migrate legacy activity data from SharedPreferences to database (v4 → v5)
-        achievementScope.launch {
-            try {
-                val migrator = eu.kanade.tachiyomi.data.backup.restore.LegacyActivityDataMigrator(
-                    context = this@App,
-                    repository = Injekt.get(),
-                )
-
-                if (migrator.isMigrationNeeded()) {
-                    logcat(LogPriority.INFO) { "[MIGRATION] Starting legacy activity data migration..." }
-                    val result = migrator.migrate()
-
-                    if (result.success) {
-                        logcat(LogPriority.INFO) {
-                            "[MIGRATION] Migration completed: ${result.recordsMigrated} records migrated, " +
-                                "${result.recordsFailed} failed in ${result.duration}ms"
-                        }
-                        // Optional: Clear legacy data after successful migration
-                        // migrator.clearLegacyData()
-                    } else {
-                        logcat(LogPriority.ERROR) { "[MIGRATION] Migration failed: ${result.error}" }
-                    }
+        // Defer achievement initialization past the first frame.
+        // Handler.post fires in the next main-thread message-queue cycle, after onCreate() has
+        // returned and the first activity draw pass has been scheduled. All Injekt modules are
+        // fully imported by then, so DI resolution inside achievementScope (Dispatchers.IO)
+        // is safe. Achievement events can only come from user actions that haven't happened yet.
+        Handler(Looper.getMainLooper()).post {
+            // Initialize achievements from JSON
+            achievementScope.launch {
+                try {
+                    val loader = Injekt.get<tachiyomi.data.achievement.loader.AchievementLoader>()
+                    loader.loadAchievements()
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR) { "Error during achievement initialization: ${e.message}" }
                 }
-            } catch (e: Exception) {
-                logcat(LogPriority.ERROR) { "[MIGRATION] Error during legacy data migration: ${e.message}" }
             }
-        }
 
-        // Start achievement handler
-        achievementScope.launch {
-            try {
-                logcat(LogPriority.INFO) { "[ACHIEVEMENTS-INIT] About to get AchievementHandler from Injekt..." }
-                val achievementHandler = Injekt.get<tachiyomi.data.achievement.handler.AchievementHandler>()
-                logcat(LogPriority.INFO) { "[ACHIEVEMENTS-INIT] AchievementHandler obtained successfully" }
+            // Migrate legacy activity data from SharedPreferences to database (v4 → v5)
+            achievementScope.launch {
+                try {
+                    val migrator = eu.kanade.tachiyomi.data.backup.restore.LegacyActivityDataMigrator(
+                        context = this@App,
+                        repository = Injekt.get(),
+                    )
 
-                // Set up callback to show unlock banners
-                achievementHandler.unlockCallback =
-                    object : tachiyomi.data.achievement.handler.AchievementHandler.AchievementUnlockCallback {
-                        override fun onAchievementUnlocked(
-                            achievement: tachiyomi.domain.achievement.model.Achievement,
-                        ) {
-                            AchievementBannerManager.showAchievement(achievement)
+                    if (migrator.isMigrationNeeded()) {
+                        logcat(LogPriority.INFO) { "[MIGRATION] Starting legacy activity data migration..." }
+                        val result = migrator.migrate()
+
+                        if (result.success) {
+                            logcat(LogPriority.INFO) {
+                                "[MIGRATION] Migration completed: ${result.recordsMigrated} records migrated, " +
+                                    "${result.recordsFailed} failed in ${result.duration}ms"
+                            }
+                            // Optional: Clear legacy data after successful migration
+                            // migrator.clearLegacyData()
+                        } else {
+                            logcat(LogPriority.ERROR) { "[MIGRATION] Migration failed: ${result.error}" }
                         }
                     }
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR) { "[MIGRATION] Error during legacy data migration: ${e.message}" }
+                }
+            }
 
-                logcat(LogPriority.INFO) { "[ACHIEVEMENTS-INIT] Calling achievementHandler.start()..." }
-                achievementHandler.start()
-                logcat(LogPriority.INFO) { "[ACHIEVEMENTS-INIT] AchievementHandler started successfully" }
-            } catch (e: Exception) {
-                logcat(LogPriority.ERROR) { "[ACHIEVEMENTS-INIT] Failed to start achievement handler: ${e.message}" }
-                logcat(LogPriority.ERROR) {
-                    "[ACHIEVEMENTS-INIT] Failed to start achievement handler: ${e.stackTraceToString()}"
+            // Start achievement handler
+            achievementScope.launch {
+                try {
+                    logcat(LogPriority.INFO) { "[ACHIEVEMENTS-INIT] About to get AchievementHandler from Injekt..." }
+                    val achievementHandler = Injekt.get<tachiyomi.data.achievement.handler.AchievementHandler>()
+                    logcat(LogPriority.INFO) { "[ACHIEVEMENTS-INIT] AchievementHandler obtained successfully" }
+
+                    // Set up callback to show unlock banners
+                    achievementHandler.unlockCallback =
+                        object : tachiyomi.data.achievement.handler.AchievementHandler.AchievementUnlockCallback {
+                            override fun onAchievementUnlocked(
+                                achievement: tachiyomi.domain.achievement.model.Achievement,
+                            ) {
+                                AchievementBannerManager.showAchievement(achievement)
+                            }
+                        }
+
+                    logcat(LogPriority.INFO) { "[ACHIEVEMENTS-INIT] Calling achievementHandler.start()..." }
+                    achievementHandler.start()
+                    logcat(LogPriority.INFO) { "[ACHIEVEMENTS-INIT] AchievementHandler started successfully" }
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR) {
+                        "[ACHIEVEMENTS-INIT] Failed to start achievement handler: ${e.message}"
+                    }
+                    logcat(LogPriority.ERROR) {
+                        "[ACHIEVEMENTS-INIT] Failed to start achievement handler: ${e.stackTraceToString()}"
+                    }
                 }
             }
         }
