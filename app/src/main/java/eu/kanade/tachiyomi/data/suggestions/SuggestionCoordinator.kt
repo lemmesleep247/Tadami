@@ -1,25 +1,55 @@
 package eu.kanade.tachiyomi.data.suggestions
 
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.suggestions.sources.AniListRecommendationSource
 import eu.kanade.tachiyomi.data.suggestions.sources.MangaUpdatesSimilarSource
 import eu.kanade.tachiyomi.data.suggestions.sources.MyAnimeListRecommendationSource
+import eu.kanade.tachiyomi.data.suggestions.sources.NovelUpdatesSimilarSource
 import eu.kanade.tachiyomi.data.suggestions.sources.RecommendationPagingSource
 import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
+import eu.kanade.tachiyomi.data.suggestions.util.bestMatchScoreFor
+import eu.kanade.tachiyomi.data.suggestions.util.dedupeByCleanTitle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.util.system.logcat
+import uy.kohesive.injekt.api.get
 
-class SuggestionCoordinator {
+class SuggestionCoordinator(
+    // Defaulted to a permissive in-memory shim so unit tests can construct
+    // a coordinator without an Injekt registry. In production this is
+    // overwritten by the [Injekt.get()] lookup.
+    private val sourcePreferences: SourcePreferences = SourcePreferences(InMemoryPreferenceStore()),
+) {
 
+    /**
+     * Build the set of external recommendation sources for [mediaType].
+     *
+     * - AniList is always included (covers MANGA, ANIME, and NOVEL via
+     *   AniList's "Novel" format on the MANGA type).
+     * - MAL is only added for ANIME.
+     * - MangaUpdates is added for both MANGA and NOVEL (it stores light
+     *   novels under type "Novel") — gated by the
+     *   [SourcePreferences.suggestionsUseMangaUpdatesNovel] flag.
+     * - NovelUpdates is added for NOVEL only — gated by
+     *   [SourcePreferences.suggestionsUseNovelUpdates].
+     */
     fun createSources(mediaType: SuggestionMediaType): List<RecommendationPagingSource> =
         buildList {
             add(AniListRecommendationSource(mediaType))
             if (mediaType == SuggestionMediaType.ANIME) {
                 add(MyAnimeListRecommendationSource(mediaType))
             }
-            if (mediaType == SuggestionMediaType.MANGA) {
-                add(MangaUpdatesSimilarSource(mediaType))
+            if (mediaType == SuggestionMediaType.MANGA || mediaType == SuggestionMediaType.NOVEL) {
+                if (sourcePreferences.suggestionsUseMangaUpdatesNovel().get()) {
+                    add(MangaUpdatesSimilarSource(mediaType))
+                }
+            }
+            if (mediaType == SuggestionMediaType.NOVEL) {
+                if (sourcePreferences.suggestionsUseNovelUpdates().get()) {
+                    add(NovelUpdatesSimilarSource(mediaType))
+                }
             }
         }
 
@@ -76,7 +106,8 @@ class SuggestionCoordinator {
         val attemptedSources = sources.size
         val failedSources = results.count { it.second }
         val items = results.flatMap { it.first }
-            .distinctBy { it.providerId ?: it.providerUrl }
+            .dedupeByCleanTitle()
+            .sortedByDescending { SuggestionSourceWeight.finalScore(it.reason, it.bestMatchScoreFor(enrichedSeed)) }
             .take(limit) // Cap at requested limit
 
         val matchedBase = sources.any { it.matchedBase } || results.any { it.first.isNotEmpty() }

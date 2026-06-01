@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.data.suggestions.manga
 
 import eu.kanade.tachiyomi.data.suggestions.SuggestionCache
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
+import eu.kanade.tachiyomi.data.suggestions.SuggestionReason
 import eu.kanade.tachiyomi.data.suggestions.SuggestionSeed
 import eu.kanade.tachiyomi.data.suggestions.SuggestionTitleResolver
 import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
@@ -227,11 +228,17 @@ class MangaSearchFallbackEngine {
                                 }
 
                                 if (finalScore >= 30) {
+                                    val itemReason = when {
+                                        isAuthorQuery -> SuggestionReason.SEARCH_AUTHOR
+                                        isGenreQuery -> SuggestionReason.SEARCH_GENRE
+                                        else -> SuggestionReason.SEARCH_TITLE
+                                    }
                                     val item = SuggestionItem(
                                         title = sManga.title,
-                                        searchQuery = sManga.title,
+                                        searchQueries = listOf(sManga.title),
                                         thumbnailUrl = sManga.thumbnail_url,
                                         providerName = source.name,
+                                        reason = itemReason,
                                         providerUrl = sManga.url,
                                         providerId = "${source.id}:${sManga.url}",
                                         mediaType = SuggestionMediaType.MANGA,

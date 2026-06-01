@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.data.suggestions.novel
 import eu.kanade.domain.entries.novel.model.toSNovel
 import eu.kanade.tachiyomi.data.suggestions.SuggestionCache
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
+import eu.kanade.tachiyomi.data.suggestions.SuggestionReason
 import eu.kanade.tachiyomi.data.suggestions.SuggestionSeed
 import eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
@@ -55,12 +56,13 @@ class NovelRelatedSuggestionCoordinator {
                     .map { sNovel ->
                         SuggestionItem(
                             title = sNovel.title,
-                            searchQuery = sNovel.title,
+                            searchQueries = listOf(sNovel.title),
                             thumbnailUrl = sNovel.thumbnail_url,
                             providerName = source.name,
                             providerUrl = sNovel.url,
                             providerId = "${source.id}:${sNovel.url}",
                             mediaType = SuggestionMediaType.NOVEL,
+                            reason = SuggestionReason.RELATED,
                         )
                     }
                     .take(maxResults)
