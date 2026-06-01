@@ -20,6 +20,10 @@ class NetworkHelper(
 
     val cookieJar = AndroidCookieJar()
 
+    private val isDebug: Boolean by lazy {
+        (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    }
+
     private val clientBuilder: OkHttpClient.Builder = run {
         val builder = OkHttpClient.Builder()
             .cookieJar(cookieJar)
@@ -29,7 +33,7 @@ class NetworkHelper(
             .cache(
                 Cache(
                     directory = File(context.cacheDir, "network_cache"),
-                    maxSize = 5L * 1024 * 1024, // 5 MiB
+                    maxSize = preferences.networkCacheSize().get().toLong() * 1024 * 1024,
                 ),
             )
             .addInterceptor(UncaughtExceptionInterceptor())
@@ -38,7 +42,7 @@ class NetworkHelper(
             .addNetworkInterceptor(IgnoreGzipInterceptor())
             .addNetworkInterceptor(BrotliInterceptor)
 
-        if (preferences.verboseLogging().get()) {
+        if (isDebug && preferences.verboseLogging().get()) {
             val httpLoggingInterceptor = HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.HEADERS
             }

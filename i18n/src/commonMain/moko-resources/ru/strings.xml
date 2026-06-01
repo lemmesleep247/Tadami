@@ -439,6 +439,7 @@
     <string name="loader_not_implemented_error">Источник не найден</string>
     <string name="action_disable">Отключить</string>
     <string name="requires_app_restart">Для вступления в силу требуется перезапуск приложения</string>
+    <string name="pref_network_cache_size">Размер сетевого кэша</string>
     <string name="label_network">Сеть</string>
     <string name="tapping_inverted_both">Обе оси</string>
     <string name="tapping_inverted_vertical">Вертикально</string>

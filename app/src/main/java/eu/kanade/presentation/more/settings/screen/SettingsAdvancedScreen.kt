@@ -282,6 +282,20 @@ object SettingsAdvancedScreen : SearchableSettings {
                     },
                 ),
                 Preference.PreferenceItem.ListPreference(
+                    preference = networkPreferences.networkCacheSize(),
+                    entries = persistentMapOf(
+                        32 to "32 MiB",
+                        64 to "64 MiB",
+                        128 to "128 MiB",
+                        256 to "256 MiB",
+                    ),
+                    title = stringResource(MR.strings.pref_network_cache_size),
+                    onValueChanged = {
+                        context.toast(MR.strings.requires_app_restart)
+                        true
+                    },
+                ),
+                Preference.PreferenceItem.ListPreference(
                     preference = networkPreferences.dohProvider(),
                     entries = persistentMapOf(
                         -1 to stringResource(MR.strings.disabled),
