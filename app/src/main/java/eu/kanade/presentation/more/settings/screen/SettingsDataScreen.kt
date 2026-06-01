@@ -335,9 +335,12 @@ object SettingsDataScreen : SearchableSettings {
                                             navigator.push(CreateBackupScreen())
                                         },
                                     ),
-                                shape = cardShape,
                                 colors = CardDefaults.cardColors(
-                                    containerColor = resolveAuroraMoreCardContainerColor(auroraColors),
+                                    containerColor = if (auroraColors.isDark || auroraColors.isEInk) {
+                                        resolveAuroraMoreCardContainerColor(auroraColors)
+                                    } else {
+                                        Color.White
+                                    },
                                 ),
                                 border = if (auroraColors.isEInk) {
                                     BorderStroke(
@@ -350,7 +353,7 @@ object SettingsDataScreen : SearchableSettings {
                                         color = if (auroraColors.isDark) {
                                             Color.White.copy(alpha = 0.08f)
                                         } else {
-                                            auroraColors.accent.copy(alpha = 0.12f)
+                                            Color.Transparent
                                         },
                                     )
                                 },
@@ -470,9 +473,12 @@ object SettingsDataScreen : SearchableSettings {
                                             }
                                         },
                                     ),
-                                shape = cardShape,
                                 colors = CardDefaults.cardColors(
-                                    containerColor = resolveAuroraMoreCardContainerColor(auroraColors),
+                                    containerColor = if (auroraColors.isDark || auroraColors.isEInk) {
+                                        resolveAuroraMoreCardContainerColor(auroraColors)
+                                    } else {
+                                        Color.White
+                                    },
                                 ),
                                 border = if (auroraColors.isEInk) {
                                     BorderStroke(
@@ -485,7 +491,7 @@ object SettingsDataScreen : SearchableSettings {
                                         color = if (auroraColors.isDark) {
                                             Color.White.copy(alpha = 0.08f)
                                         } else {
-                                            auroraColors.accent.copy(alpha = 0.12f)
+                                            Color.Transparent
                                         },
                                     )
                                 },

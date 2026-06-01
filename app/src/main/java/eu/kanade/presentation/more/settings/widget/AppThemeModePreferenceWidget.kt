@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.domain.ui.model.ThemeMode
 import eu.kanade.presentation.more.resolveAuroraMoreCardBorderColor
-import eu.kanade.presentation.more.resolveAuroraMoreCardContainerColor
 import eu.kanade.presentation.more.settings.LocalSettingsUiStyle
 import eu.kanade.presentation.more.settings.SettingsUiStyle
 import eu.kanade.presentation.theme.AuroraSurfaceLevel
@@ -92,7 +91,7 @@ internal fun AppThemeModePreferenceWidget(
                     else -> if (isSelected) {
                         auroraColors.accent.copy(alpha = 0.12f)
                     } else {
-                        resolveAuroraMoreCardContainerColor(auroraColors)
+                        Color.White
                     }
                 }
 
@@ -110,7 +109,7 @@ internal fun AppThemeModePreferenceWidget(
                     else -> if (isSelected) {
                         auroraColors.accent.copy(alpha = 0.35f)
                     } else {
-                        auroraColors.accent.copy(alpha = 0.08f)
+                        Color.Transparent
                     }
                 }
 
