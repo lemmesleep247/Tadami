@@ -52,7 +52,8 @@ class NovelCoverFetcher(
         get() = diskCacheKeyLazy.value
 
     override suspend fun fetch(): FetchResult {
-        val rawUrl = data.url ?: error("No cover specified")
+        val rawUrl = data.url?.takeIf { it.isNotBlank() }
+            ?: throw IOException("No cover URL specified for novel ${data.novelId}")
         return when (getResourceType(rawUrl)) {
             Type.URL -> httpLoader(rawUrl)
             Type.PLUGIN_IMAGE -> pluginImageLoader(rawUrl)
@@ -291,6 +292,9 @@ class NovelCoverFetcher(
         private val sourceManager: NovelSourceManager by injectLazy()
 
         override fun create(data: NovelCover, options: Options, imageLoader: ImageLoader): Fetcher? {
+            // Return null when there is no URL — Coil will fall back to the placeholder/error
+            // drawable instead of invoking the fetcher and crashing on a null URL.
+            if (data.url.isNullOrBlank()) return null
             return NovelCoverFetcher(
                 data = data,
                 options = options,
