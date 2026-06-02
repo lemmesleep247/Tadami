@@ -74,6 +74,8 @@ fun NovelLibrarySettingsDialog(
                 2 -> DisplayPage(libraryPreferences)
                 3 -> GroupPage(
                     groupPreference = libraryPreferences.novelGroupLibraryBy(),
+                    globalGroupPreference = libraryPreferences.globalGroupLibrary(),
+                    globalGroupByPreference = libraryPreferences.globalGroupLibraryBy(),
                 )
             }
         }
