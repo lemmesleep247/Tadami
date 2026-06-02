@@ -109,6 +109,11 @@ class NovelLibraryScreenModel(
     private val trackerManager: TrackerManager = Injekt.get(),
 ) : StateScreenModel<NovelLibraryScreenModel.State>(
     State(
+        groupType = if (libraryPreferences.globalGroupLibrary().get()) {
+            libraryPreferences.globalGroupLibraryBy().get()
+        } else {
+            libraryPreferences.novelGroupLibraryBy().get()
+        },
         downloadedOnly = basePreferences.downloadedOnly().get(),
         downloadedFilter = libraryPreferences.filterDownloadedNovel().get(),
         unreadFilter = libraryPreferences.filterUnreadNovel().get(),
@@ -177,7 +182,15 @@ class NovelLibraryScreenModel(
                             value
                         }
                     }
-                    .filterValues { it.isNotEmpty() }
+                    .let { map ->
+                        if (groupType == LibraryGroup.BY_DEFAULT && searchQuery == null) {
+                            // Keep all user-created categories visible even when empty,
+                            // so category tabs don't disappear after creation.
+                            map
+                        } else {
+                            map.filterValues { it.isNotEmpty() }
+                        }
+                    }
             }
                 .collectLatest { libraryMap ->
                     mutableState.update { state ->
@@ -205,7 +218,13 @@ class NovelLibraryScreenModel(
             }
             .launchIn(screenModelScope)
 
-        libraryPreferences.novelGroupLibraryBy().changes()
+        libraryPreferences.globalGroupLibrary().changes()
+            .combine(libraryPreferences.globalGroupLibraryBy().changes()) { isGlobal, globalType ->
+                isGlobal to globalType
+            }
+            .combine(libraryPreferences.novelGroupLibraryBy().changes()) { (isGlobal, globalType), mediaType ->
+                if (isGlobal) globalType else mediaType
+            }
             .onEach { groupType ->
                 mutableState.update { it.copy(groupType = groupType) }
                 activeCategoryIndex = 0
