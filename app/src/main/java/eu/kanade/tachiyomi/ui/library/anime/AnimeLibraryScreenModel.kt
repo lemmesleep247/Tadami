@@ -104,7 +104,11 @@ class AnimeLibraryScreenModel(
     private val trackerManager: TrackerManager = Injekt.get(),
 ) : StateScreenModel<AnimeLibraryScreenModel.State>(
     State(
-        groupType = libraryPreferences.animeGroupLibraryBy().get(),
+        groupType = if (libraryPreferences.globalGroupLibrary().get()) {
+            libraryPreferences.globalGroupLibraryBy().get()
+        } else {
+            libraryPreferences.animeGroupLibraryBy().get()
+        },
     ),
 ) {
 
@@ -142,7 +146,15 @@ class AnimeLibraryScreenModel(
                             value
                         }
                     }
-                    .filterValues { it.isNotEmpty() }
+                    .let { map ->
+                        if (groupType == LibraryGroup.BY_DEFAULT && searchQuery == null) {
+                            // Keep all user-created categories visible even when empty,
+                            // so category tabs don't disappear after creation.
+                            map
+                        } else {
+                            map.filterValues { it.isNotEmpty() }
+                        }
+                    }
             }
                 .collectLatest {
                     mutableState.update { state ->
@@ -193,7 +205,13 @@ class AnimeLibraryScreenModel(
             }
             .launchIn(screenModelScope)
 
-        libraryPreferences.animeGroupLibraryBy().changes()
+        libraryPreferences.globalGroupLibrary().changes()
+            .combine(libraryPreferences.globalGroupLibraryBy().changes()) { isGlobal, globalType ->
+                isGlobal to globalType
+            }
+            .combine(libraryPreferences.animeGroupLibraryBy().changes()) { (isGlobal, globalType), mediaType ->
+                if (isGlobal) globalType else mediaType
+            }
             .onEach { groupType ->
                 mutableState.update { it.copy(groupType = groupType) }
                 activeCategoryIndex = 0
