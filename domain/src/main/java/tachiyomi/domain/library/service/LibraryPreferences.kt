@@ -270,6 +270,9 @@ class LibraryPreferences(
     fun animeGroupLibraryBy() = preferenceStore.getInt("anime_group_library_by", LibraryGroup.BY_DEFAULT)
     fun novelGroupLibraryBy() = preferenceStore.getInt("novel_group_library_by", LibraryGroup.BY_DEFAULT)
 
+    fun globalGroupLibrary() = preferenceStore.getBoolean("global_group_library", false)
+    fun globalGroupLibraryBy() = preferenceStore.getInt("global_group_library_by", LibraryGroup.BY_DEFAULT)
+
     fun mangaGroupLibraryUpdateType() = preferenceStore.getEnum(
         "manga_group_library_update_type",
         GroupLibraryMode.GLOBAL,
