@@ -123,7 +123,6 @@ fun BackupManga.toBackupAnime(): BackupAnime {
             BackupAnimeTracking(
                 syncId = it.syncId,
                 libraryId = it.libraryId,
-                mediaIdInt = it.mediaIdInt,
                 trackingUrl = it.trackingUrl,
                 title = it.title,
                 lastEpisodeSeen = it.lastChapterRead,

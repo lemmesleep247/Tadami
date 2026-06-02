@@ -533,11 +533,9 @@ class NovelSearchFallbackEngine {
                 if (matched) return
                 when (filter) {
                     is NovelFilter.Group<*> -> {
-                        val groupList = filter.state as? List<*>
-                        if (groupList != null) {
-                            @Suppress("UNCHECKED_CAST")
-                            traverse(groupList as List<NovelFilter<*>>)
-                        }
+                        val groupList = filter.state
+                        @Suppress("UNCHECKED_CAST")
+                        traverse(groupList as List<NovelFilter<*>>)
                     }
                     is NovelFilter.CheckBox -> {
                         val nameLower = filter.name.lowercase()
@@ -567,11 +565,9 @@ class NovelSearchFallbackEngine {
             for (filter in filters) {
                 when (filter) {
                     is NovelFilter.Group<*> -> {
-                        val groupList = filter.state as? List<*>
-                        if (groupList != null) {
-                            @Suppress("UNCHECKED_CAST")
-                            traverse(groupList as List<NovelFilter<*>>)
-                        }
+                        val groupList = filter.state
+                        @Suppress("UNCHECKED_CAST")
+                        traverse(groupList as List<NovelFilter<*>>)
                     }
                     is NovelFilter.CheckBox -> {
                         val nameLower = filter.name.lowercase()
