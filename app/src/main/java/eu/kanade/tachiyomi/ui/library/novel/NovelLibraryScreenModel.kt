@@ -221,6 +221,26 @@ class NovelLibraryScreenModel(
             }
             .launchIn(screenModelScope)
 
+        getFilterPreferencesFlow()
+            .map { filterPrefs ->
+                filterPrefs.downloadedOnly ||
+                    listOf(
+                        filterPrefs.downloadedFilter,
+                        filterPrefs.unreadFilter,
+                        filterPrefs.startedFilter,
+                        filterPrefs.bookmarkedFilter,
+                        filterPrefs.completedFilter,
+                        filterPrefs.filterIntervalCustom,
+                    ).any { it != TriState.DISABLED }
+            }
+            .distinctUntilChanged()
+            .onEach { hasActiveFilters ->
+                mutableState.update { state ->
+                    state.copy(hasActiveFilters = hasActiveFilters)
+                }
+            }
+            .launchIn(screenModelScope)
+
         libraryPreferences.globalGroupLibrary().changes()
             .combine(libraryPreferences.globalGroupLibraryBy().changes()) { isGlobal, globalType ->
                 isGlobal to globalType

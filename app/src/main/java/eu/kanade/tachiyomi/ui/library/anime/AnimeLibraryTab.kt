@@ -169,8 +169,6 @@ import kotlinx.coroutines.withContext
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.category.model.Category
-import tachiyomi.domain.category.novel.interactor.GetVisibleNovelCategories
-import tachiyomi.domain.category.novel.model.NovelCategory
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovel
@@ -268,10 +266,6 @@ data object AnimeLibraryTab : Tab {
             .libraryPreferences
             .categoryNumberOfItems()
             .collectAsStateWithLifecycle()
-        val getVisibleNovelCategories = remember { Injekt.get<GetVisibleNovelCategories>() }
-        val visibleNovelCategories by getVisibleNovelCategories.subscribe().collectAsStateWithLifecycle(
-            initialValue = emptyList(),
-        )
         val isAurora = theme.isAuroraStyle
         val configuration = LocalConfiguration.current
         val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -461,29 +455,10 @@ data object AnimeLibraryTab : Tab {
             requestedIndex = mangaScreenModel.activeCategoryIndex,
             categoryCount = mangaState.categories.size,
         )
-        val novelsByCategory = remember(novelState.items) {
-            novelState.items.groupBy { it.category }
-        }
-        val novelCategories = remember(visibleNovelCategories, novelsByCategory) {
-            val mappedCategories = visibleNovelCategories.map(NovelCategory::toCategory)
-            if (novelsByCategory.isNotEmpty() && !novelsByCategory.containsKey(Category.UNCATEGORIZED_ID)) {
-                mappedCategories.filterNot(Category::isSystemCategory)
-            } else {
-                mappedCategories
-            }
-        }
         val novelCategoryIndex = coerceAuroraLibraryCategoryIndex(
             requestedIndex = novelScreenModel?.activeCategoryIndex ?: 0,
-            categoryCount = novelCategories.size,
+            categoryCount = novelState.categories.size,
         )
-        val currentNovelCategoryItems = remember(novelState.items, novelCategories, novelCategoryIndex) {
-            val categoryId = novelCategories.getOrNull(novelCategoryIndex)?.id
-            if (categoryId == null) {
-                novelState.items
-            } else {
-                novelState.items.filter { it.category == categoryId }
-            }
-        }
 
         LaunchedEffect(state.categories.size, animeCategoryIndex) {
             if (shouldSyncAuroraLibraryCategoryIndex(
@@ -505,10 +480,10 @@ data object AnimeLibraryTab : Tab {
                 mangaScreenModel.activeCategoryIndex = mangaCategoryIndex
             }
         }
-        LaunchedEffect(novelCategories.size, novelCategoryIndex) {
+        LaunchedEffect(novelState.categories.size, novelCategoryIndex) {
             val activeNovelScreenModel = novelScreenModel ?: return@LaunchedEffect
             if (shouldSyncAuroraLibraryCategoryIndex(
-                    categoryCount = novelCategories.size,
+                    categoryCount = novelState.categories.size,
                     currentIndex = activeNovelScreenModel.activeCategoryIndex,
                     targetIndex = novelCategoryIndex,
                 )
@@ -675,7 +650,7 @@ data object AnimeLibraryTab : Tab {
 
                 val pagerState = rememberPagerState(
                     initialPage = novelCategoryIndex,
-                    pageCount = { novelCategories.size },
+                    pageCount = { novelState.categories.size },
                 )
                 val isProgrammaticScroll = remember { mutableStateOf(false) }
                 LaunchedEffect(pagerState.currentPage) {
@@ -694,16 +669,9 @@ data object AnimeLibraryTab : Tab {
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
                     verticalAlignment = Alignment.Top,
-                    userScrollEnabled = swipeSwitchesCategories && novelCategories.size > 1,
+                    userScrollEnabled = swipeSwitchesCategories && novelState.categories.size > 1,
                 ) { page ->
-                    val items = remember(novelState.items, novelCategories, page) {
-                        val categoryId = novelCategories.getOrNull(page)?.id
-                        if (categoryId == null) {
-                            novelState.items
-                        } else {
-                            novelState.items.filter { it.category == categoryId }
-                        }
-                    }
+                    val items = novelState.getLibraryItemsByPage(page)
                     NovelLibraryAuroraContent(
                         items = items,
                         selection = novelState.selection,
@@ -843,7 +811,7 @@ data object AnimeLibraryTab : Tab {
         val auroraCategories = when (auroraCurrentSection) {
             Section.Anime -> state.categories
             Section.Manga -> mangaState.categories
-            Section.Novel -> novelCategories
+            Section.Novel -> novelState.categories
             null -> emptyList()
         }
         val auroraCategoryIndex = when (auroraCurrentSection) {
@@ -857,7 +825,7 @@ data object AnimeLibraryTab : Tab {
             )
             Section.Novel -> coerceAuroraLibraryCategoryIndex(
                 requestedIndex = novelScreenModel?.activeCategoryIndex ?: 0,
-                categoryCount = novelCategories.size,
+                categoryCount = novelState.categories.size,
             )
             null -> 0
         }
@@ -876,7 +844,7 @@ data object AnimeLibraryTab : Tab {
             )
             Section.Novel -> shouldShowAuroraLibraryCategoryTabsRow(
                 section = Section.Novel,
-                categoryCount = novelCategories.size,
+                categoryCount = novelState.categories.size,
                 showCategoryTabs = showCategoryTabs,
                 searchQuery = novelState.searchQuery,
             )
@@ -899,7 +867,7 @@ data object AnimeLibraryTab : Tab {
                 Section.Novel -> {
                     novelScreenModel?.activeCategoryIndex = coerceAuroraLibraryCategoryIndex(
                         requestedIndex = index,
-                        categoryCount = novelCategories.size,
+                        categoryCount = novelState.categories.size,
                     )
                 }
                 null -> Unit
@@ -1186,7 +1154,7 @@ data object AnimeLibraryTab : Tab {
                                                 if (showCategoryNumberOfItems ||
                                                     !novelState.searchQuery.isNullOrEmpty()
                                                 ) {
-                                                    novelsByCategory[category.id]?.size ?: 0
+                                                    novelState.library[category]?.size ?: 0
                                                 } else {
                                                     null
                                                 }
@@ -2238,15 +2206,4 @@ internal fun shouldSyncAuroraLibraryCategoryIndex(
 ): Boolean {
     if (categoryCount <= 0) return false
     return currentIndex != targetIndex
-}
-
-private fun NovelCategory.toCategory(): Category {
-    return Category(
-        id = id,
-        name = name,
-        order = order,
-        flags = flags,
-        hidden = hidden,
-        hiddenFromHomeHub = false,
-    )
 }

@@ -74,6 +74,7 @@ class DownloadEngineFacade(
             ) { array ->
                 @Suppress("UNCHECKED_CAST")
                 val animeQueue = array[0] as List<AnimeDownload>
+
                 @Suppress("UNCHECKED_CAST")
                 val mangaQueue = array[1] as List<MangaDownload>
                 val novelState = array[2] as NovelDownloadQueueState

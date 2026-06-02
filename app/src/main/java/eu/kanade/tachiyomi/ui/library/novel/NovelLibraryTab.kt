@@ -200,7 +200,7 @@ data object NovelLibraryTab : Tab {
         ) { contentPadding ->
             when {
                 state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
-                state.isLibraryEmpty -> {
+                state.searchQuery.isNullOrEmpty() && !state.hasActiveFilters && state.isLibraryEmpty -> {
                     EmptyScreen(
                         stringRes = MR.strings.information_empty_library,
                         modifier = Modifier.padding(contentPadding),
@@ -214,7 +214,10 @@ data object NovelLibraryTab : Tab {
                         contentPadding = contentPadding,
                         currentPage = { screenModel.activeCategoryIndex },
                         hasActiveFilters = state.hasActiveFilters,
-                        showPageTabs = state.showCategoryTabs,
+                        showPageTabs = shouldShowNovelPageTabs(
+                            showCategoryTabs = state.showCategoryTabs,
+                            searchQuery = state.searchQuery,
+                        ),
                         onChangeCurrentPage = { screenModel.activeCategoryIndex = it },
                         onNovelClicked = { item ->
                             if (item is NovelLibraryItem.Series) {
@@ -304,3 +307,8 @@ data object NovelLibraryTab : Tab {
     private val queryEvent = Channel<String>()
     suspend fun search(query: String) = queryEvent.send(query)
 }
+
+internal fun shouldShowNovelPageTabs(
+    showCategoryTabs: Boolean,
+    searchQuery: String?,
+): Boolean = showCategoryTabs || !searchQuery.isNullOrEmpty()
