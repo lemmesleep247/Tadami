@@ -36,6 +36,7 @@ fun MangaLibraryContent(
     hasActiveFilters: Boolean,
     showPageTabs: Boolean,
     onChangeCurrentPage: (Int) -> Unit,
+    onCategoryLongSelected: ((Int) -> Unit)? = null,
     onMangaClicked: (Long) -> Unit,
     onSeriesClicked: (Long) -> Unit,
     onContinueReadingClicked: ((LibraryManga) -> Unit)?,
@@ -72,6 +73,7 @@ fun MangaLibraryContent(
                 categories = categories,
                 pagerState = pagerState,
                 getNumberOfItemsForCategory = getNumberOfMangaForCategory,
+                onTabItemLongClick = onCategoryLongSelected,
             ) { scope.launch { pagerState.animateScrollToPage(it) } }
         }
 

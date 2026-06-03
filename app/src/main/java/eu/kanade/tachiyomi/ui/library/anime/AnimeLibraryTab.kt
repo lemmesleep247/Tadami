@@ -19,7 +19,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -873,6 +873,35 @@ data object AnimeLibraryTab : Tab {
                 null -> Unit
             }
         }
+        val onAuroraCategoryLongSelected: (Int) -> Unit = { index ->
+            when (auroraCurrentSection) {
+                Section.Anime -> {
+                    screenModel.selectAll(
+                        coerceAuroraLibraryCategoryIndex(
+                            requestedIndex = index,
+                            categoryCount = state.categories.size,
+                        ),
+                    )
+                }
+                Section.Manga -> {
+                    mangaScreenModel.selectAll(
+                        coerceAuroraLibraryCategoryIndex(
+                            requestedIndex = index,
+                            categoryCount = mangaState.categories.size,
+                        ),
+                    )
+                }
+                Section.Novel -> {
+                    novelScreenModel?.selectAll(
+                        coerceAuroraLibraryCategoryIndex(
+                            requestedIndex = index,
+                            categoryCount = novelState.categories.size,
+                        ),
+                    )
+                }
+                null -> Unit
+            }
+        }
         val onAuroraFilterClick: () -> Unit = {
             when (auroraCurrentSection) {
                 Section.Anime -> screenModel.showSettingsDialog()
@@ -1146,6 +1175,7 @@ data object AnimeLibraryTab : Tab {
                                     selectedCategoryIndex = auroraCategoryIndex,
                                     showCategories = showAuroraCategoryTabs,
                                     onCategorySelected = onAuroraCategorySelected,
+                                    onCategoryLongSelected = onAuroraCategoryLongSelected,
                                     getCountForCategory = { category ->
                                         when (auroraCurrentSection) {
                                             Section.Anime -> state.getAnimeCountForCategory(category)
@@ -1176,6 +1206,7 @@ data object AnimeLibraryTab : Tab {
                             hasActiveFilters = state.hasActiveFilters,
                             showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty(),
                             onChangeCurrentPage = { screenModel.activeCategoryIndex = it },
+                            onCategoryLongSelected = screenModel::selectAll,
                             onAnimeClicked = { navigator.push(AnimeScreen(it)) },
                             onContinueWatchingClicked = { it: LibraryAnime ->
                                 scope.launchIO {
@@ -1618,6 +1649,7 @@ private fun AuroraLibraryPinnedHeader(
     selectedCategoryIndex: Int,
     showCategories: Boolean,
     onCategorySelected: (Int) -> Unit,
+    onCategoryLongSelected: ((Int) -> Unit)? = null,
     getCountForCategory: (Category) -> Int?,
 ) {
     val colors = AuroraTheme.colors
@@ -1834,6 +1866,7 @@ private fun AuroraLibraryPinnedHeader(
                 categories = categories,
                 selectedIndex = selectedCategoryIndex,
                 onCategorySelected = onCategorySelected,
+                onCategoryLongSelected = onCategoryLongSelected,
                 getCountForCategory = getCountForCategory,
             )
         }
@@ -1865,6 +1898,7 @@ private fun AuroraLibraryCategoryTabs(
     categories: List<Category>,
     selectedIndex: Int,
     onCategorySelected: (Int) -> Unit,
+    onCategoryLongSelected: ((Int) -> Unit)? = null,
     getCountForCategory: (Category) -> Int?,
 ) {
     val colors = AuroraTheme.colors
@@ -2001,10 +2035,20 @@ private fun AuroraLibraryCategoryTabs(
                                     Modifier
                                 },
                             )
-                            .clickable {
-                                appHaptics.tap()
-                                onCategorySelected(index)
-                            }
+                            .combinedClickable(
+                                onClick = {
+                                    appHaptics.tap()
+                                    onCategorySelected(index)
+                                },
+                                onLongClick = if (onCategoryLongSelected != null) {
+                                    {
+                                        appHaptics.tap()
+                                        onCategoryLongSelected(index)
+                                    }
+                                } else {
+                                    null
+                                },
+                            )
                             .padding(horizontal = 14.dp, vertical = 9.dp)
                             .onGloballyPositioned { coordinates ->
                                 tabWidths[index] = coordinates.size.width

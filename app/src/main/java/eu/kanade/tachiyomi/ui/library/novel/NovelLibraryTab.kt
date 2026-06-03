@@ -219,6 +219,7 @@ data object NovelLibraryTab : Tab {
                             searchQuery = state.searchQuery,
                         ),
                         onChangeCurrentPage = { screenModel.activeCategoryIndex = it },
+                        onCategoryLongSelected = screenModel::selectAll,
                         onNovelClicked = { item ->
                             if (item is NovelLibraryItem.Series) {
                                 navigator.push(NovelSeriesScreen(item.librarySeries.id))

@@ -61,6 +61,7 @@ fun NovelLibraryContent(
     hasActiveFilters: Boolean,
     showPageTabs: Boolean,
     onChangeCurrentPage: (Int) -> Unit,
+    onCategoryLongSelected: ((Int) -> Unit)? = null,
     onNovelClicked: (NovelLibraryItem) -> Unit,
     onToggleSelection: (NovelLibraryItem) -> Unit,
     onToggleRangeSelection: (NovelLibraryItem) -> Unit,
@@ -98,6 +99,7 @@ fun NovelLibraryContent(
                 categories = categories,
                 pagerState = pagerState,
                 getNumberOfItemsForCategory = getNumberOfNovelForCategory,
+                onTabItemLongClick = onCategoryLongSelected,
             ) { scope.launch { pagerState.animateScrollToPage(it) } }
         }
 

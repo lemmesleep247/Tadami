@@ -255,6 +255,7 @@ data object MangaLibraryTab : Tab {
                         hasActiveFilters = state.hasActiveFilters,
                         showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty(),
                         onChangeCurrentPage = { screenModel.activeCategoryIndex = it },
+                        onCategoryLongSelected = screenModel::selectAll,
                         onMangaClicked = { navigator.push(MangaScreen(it)) },
                         onSeriesClicked = { navigator.push(MangaSeriesScreen(it)) },
                         onContinueReadingClicked = { it: LibraryManga ->
