@@ -6,7 +6,6 @@ import io.mockk.mockk
 import org.junit.jupiter.api.Test
 import tachiyomi.data.achievement.rules.CompletionCountRule
 import tachiyomi.data.achievement.rules.QuantityRule
-import tachiyomi.domain.achievement.model.AchievementCategory
 import tachiyomi.domain.entries.anime.repository.AnimeRepository
 import tachiyomi.domain.entries.manga.repository.MangaRepository
 import tachiyomi.domain.entries.novel.repository.NovelRepository
@@ -73,4 +72,3 @@ class CompletionAchievementRuleRegistryTest {
         rule!!.achievementId shouldBe "read_10_chapters"
     }
 }
-

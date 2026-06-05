@@ -17,9 +17,15 @@ class CompletionCountRule(
         context: RuleContext,
     ): RuleResult {
         val isMatch = when (event) {
-            is AchievementEvent.MangaCompleted -> category == AchievementCategory.MANGA || category == AchievementCategory.BOTH
-            is AchievementEvent.AnimeCompleted -> category == AchievementCategory.ANIME || category == AchievementCategory.BOTH
-            is AchievementEvent.NovelCompleted -> category == AchievementCategory.NOVEL || category == AchievementCategory.BOTH
+            is AchievementEvent.MangaCompleted ->
+                category == AchievementCategory.MANGA ||
+                    category == AchievementCategory.BOTH
+            is AchievementEvent.AnimeCompleted ->
+                category == AchievementCategory.ANIME ||
+                    category == AchievementCategory.BOTH
+            is AchievementEvent.NovelCompleted ->
+                category == AchievementCategory.NOVEL ||
+                    category == AchievementCategory.BOTH
             else -> false
         }
         if (!isMatch) return RuleResult.NoChange
