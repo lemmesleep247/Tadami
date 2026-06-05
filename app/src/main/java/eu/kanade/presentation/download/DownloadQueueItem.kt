@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,14 +36,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.ImageLoader
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.components.AuroraCoverPlaceholderVariant
 import eu.kanade.presentation.components.auroraMenuRimLightBrush
@@ -215,25 +221,15 @@ fun DownloadQueueItem(
 
                 // Progress bar follows the live queue state.
                 if (showProgressBar) {
-                    LinearProgressIndicator(
-                        progress = {
-                            progressBarValue.coerceAtLeast(
-                                if (item.status ==
-                                    DownloadQueueUiModel.QueueStatus.QUEUED
-                                ) {
-                                    0.01f
-                                } else {
-                                    0f
-                                },
-                            )
-                        },
+                    NarutoProgressBar(
+                        progress = progressBarValue.coerceAtLeast(
+                            if (item.status == DownloadQueueUiModel.QueueStatus.QUEUED) 0.01f else 0f,
+                        ),
+                        status = item.status,
+                        statusColor = statusColor,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 6.dp)
-                            .height(5.dp) // Sleek thin bar
-                            .clip(RoundedCornerShape(999.dp)),
-                        color = statusColor,
-                        trackColor = statusColor.copy(alpha = 0.12f),
+                            .padding(top = 6.dp),
                     )
                 }
             }
@@ -278,6 +274,79 @@ fun DownloadQueueItem(
                     Spacer(modifier = Modifier.size(40.dp))
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun NarutoProgressBar(
+    progress: Float,
+    status: DownloadQueueUiModel.QueueStatus,
+    statusColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+
+    // Configure ImageLoader with GifDecoder / AnimatedImageDecoder for Coil 3
+    val animatedImageLoader = remember(context) {
+        ImageLoader.Builder(context)
+            .components {
+                if (android.os.Build.VERSION.SDK_INT >= 28) {
+                    add(coil3.gif.AnimatedImageDecoder.Factory())
+                } else {
+                    add(coil3.gif.GifDecoder.Factory())
+                }
+            }
+            .build()
+    }
+
+    val showRunner = status == DownloadQueueUiModel.QueueStatus.DOWNLOADING ||
+        status == DownloadQueueUiModel.QueueStatus.QUEUED
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(28.dp),
+        contentAlignment = Alignment.BottomStart,
+    ) {
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .align(Alignment.BottomCenter)
+                .clip(RoundedCornerShape(999.dp)),
+            color = statusColor,
+            trackColor = statusColor.copy(alpha = 0.12f),
+        )
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showRunner,
+            enter = androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.fadeOut(),
+            modifier = Modifier.align(Alignment.TopStart),
+        ) {
+            val runnerSize = 24.dp
+            val maxTranslationX = maxWidth - runnerSize
+            val translationX = remember(progress, maxTranslationX) {
+                derivedStateOf {
+                    with(density) { (progress * maxTranslationX.toPx()) }
+                }
+            }
+
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(com.tadami.aurora.R.drawable.naruto_run)
+                    .build(),
+                imageLoader = animatedImageLoader,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(runnerSize)
+                    .graphicsLayer {
+                        this.translationX = translationX.value
+                    },
+            )
         }
     }
 }
