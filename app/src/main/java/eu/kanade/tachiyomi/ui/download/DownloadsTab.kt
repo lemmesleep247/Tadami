@@ -156,7 +156,6 @@ data object DownloadsTab : Tab {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val context = LocalContext.current
-        val isRussian = context.resources.configuration.locales.get(0).language == "ru"
         val scope = rememberCoroutineScope()
         val uiPreferences = Injekt.get<UiPreferences>()
         val theme by uiPreferences.appTheme().preferenceCollectAsState()
@@ -227,13 +226,7 @@ data object DownloadsTab : Tab {
                             titleContent = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = if (isRussian) {
-                                            "Очередь"
-                                        } else {
-                                            stringResource(
-                                                MR.strings.label_download_queue,
-                                            )
-                                        },
+                                        text = stringResource(MR.strings.label_download_queue),
                                         style = MaterialTheme.typography.titleLarge.copy(
                                             fontSize = 18.sp,
                                             fontWeight = FontWeight.SemiBold,
