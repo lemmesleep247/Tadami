@@ -1,5 +1,6 @@
 package eu.kanade.presentation.achievement.components
 
+import android.content.Context
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -10,8 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,6 +25,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tadami.aurora.R
@@ -52,7 +52,7 @@ fun AchievementIcon(
     useHexagonShape: Boolean = true,
 ) {
     val context = LocalContext.current
-    val iconResId = getIconResourceId(icon, context.packageName)
+    val iconResId = getIconResourceId(icon, context)
     val colors = AuroraTheme.colors
 
     // Note: Pulsing animation removed for compatibility - can be added back with proper infinite transition setup
@@ -159,14 +159,13 @@ fun AchievementIcon(
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            // Use Star icon centered in the hexagon
             Icon(
-                imageVector = Icons.Default.Star,
+                painter = painterResource(id = iconResId),
                 contentDescription = null,
                 modifier = Modifier
-                    .size(size * 0.5f)
-                    .alpha(if (isUnlocked) 1f else 0.5f),
-                tint = if (isUnlocked) colors.accent else colors.textSecondary.copy(alpha = 0.5f),
+                    .fillMaxSize()
+                    .alpha(if (isUnlocked) 1f else 0.4f),
+                tint = if (isUnlocked) Color.Unspecified else Color.Gray,
             )
         }
 
@@ -258,17 +257,17 @@ private fun createHexagonPath(width: Float, verticalOffset: Float = 0f): Path {
  */
 private fun getIconResourceId(
     iconName: String?,
-    packageName: String,
+    context: Context,
 ): Int {
     if (iconName.isNullOrEmpty()) {
         return R.drawable.ic_badge_default
     }
 
     return try {
-        val resourceId = android.content.res.Resources.getSystem().getIdentifier(
+        val resourceId = context.resources.getIdentifier(
             iconName,
             "drawable",
-            packageName,
+            context.packageName,
         )
         if (resourceId != 0) {
             resourceId
