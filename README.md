@@ -14,8 +14,8 @@
 Tadami is a community fork of Aniyomi with a stronger focus on UI quality, Aurora-style surfaces, and a better reading experience across anime, manga, and novels.
 
 Current source version:
-- `versionName`: `0.43`
-- `versionCode`: `160`
+- `versionName`: `0.50`
+- `versionCode`: `168`
 
 ## What Is Different In This Fork
 
@@ -70,7 +70,7 @@ Requires Android 8.0+ (API 26+).
 
 Prerequisites:
 - JDK 17
-- Android SDK (compile SDK 35)
+- Android SDK (compile SDK 36)
 - Android Studio (recommended)
 
 Build commands:
