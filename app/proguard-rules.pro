@@ -57,6 +57,14 @@
 -dontwarn org.jspecify.annotations.NullMarked
 -dontwarn java.lang.Module
 
+# Google OAuth models are populated from JSON via @Key reflection.
+# In release builds, R8 was removing constructors/fields used by the
+# Google Drive auth flow, which makes sign-in fail before the browser opens.
+-keep class com.google.api.client.auth.oauth2.TokenResponse { *; }
+-keep class com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse { *; }
+-keep class com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets { *; }
+-keep class com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets$Details { *; }
+
 ##---------------Begin: proguard configuration for RxJava 1.x  ----------
 -dontwarn sun.misc.**
 
