@@ -35,7 +35,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
@@ -76,6 +76,9 @@ import eu.kanade.presentation.theme.AuroraColors
 import eu.kanade.presentation.theme.AuroraTheme
 import eu.kanade.presentation.theme.aurora.adaptive.AuroraDeviceClass
 import eu.kanade.presentation.util.Tab
+import eu.kanade.tachiyomi.ui.home.components.AnimatedNicknameOverlay
+import eu.kanade.tachiyomi.ui.home.components.NicknameBadgeDecorator
+import eu.kanade.tachiyomi.ui.home.components.isTreasury
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.launch
 import tachiyomi.domain.achievement.model.DayActivity
@@ -83,7 +86,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.LocalAppHaptics
-import tachiyomi.presentation.core.util.collectAsState
+import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
 import uy.kohesive.injekt.injectLazy
 import java.time.LocalDate
 import kotlin.math.roundToInt
@@ -682,9 +685,9 @@ object HomeHubTab : Tab {
             userProfilePreferences.migrateGreetingDefaultsV026IfNeeded()
         }
 
-        val showAnimeSection by uiPreferences.showAnimeSection().collectAsState()
-        val showMangaSection by uiPreferences.showMangaSection().collectAsState()
-        val showNovelSection by uiPreferences.showNovelSection().collectAsState()
+        val showAnimeSection by uiPreferences.showAnimeSection().collectAsStateWithLifecycle()
+        val showMangaSection by uiPreferences.showMangaSection().collectAsStateWithLifecycle()
+        val showNovelSection by uiPreferences.showNovelSection().collectAsStateWithLifecycle()
 
         val sections = remember(showAnimeSection, showMangaSection, showNovelSection) {
             buildList {
@@ -720,39 +723,43 @@ object HomeHubTab : Tab {
         var novelSearchQuery by rememberSaveable { mutableStateOf<String?>(null) }
         val scope = rememberCoroutineScope()
         val activityDataFlow = remember(activityDataRepository) { activityDataRepository.getActivityData(days = 365) }
-        val activityData by activityDataFlow.collectAsState(initial = emptyList())
+        val activityData by activityDataFlow.collectAsStateWithLifecycle(initialValue = emptyList())
         val currentStreak = calculateHomeOpenStreak(activityData)
-        val isNameEdited by userProfilePreferences.nameEdited().collectAsState()
-        val showHomeGreeting by userProfilePreferences.showHomeGreeting().collectAsState()
-        val showHomeStreak by userProfilePreferences.showHomeStreak().collectAsState()
-        val homeStreakCounterStyleKey by userProfilePreferences.homeStreakCounterStyle().collectAsState()
+        val isNameEdited by userProfilePreferences.nameEdited().collectAsStateWithLifecycle()
+        val showHomeGreeting by userProfilePreferences.showHomeGreeting().collectAsStateWithLifecycle()
+        val showHomeStreak by userProfilePreferences.showHomeStreak().collectAsStateWithLifecycle()
+        val homeStreakCounterStyleKey by userProfilePreferences.homeStreakCounterStyle().collectAsStateWithLifecycle()
         val homeStreakCounterStyle = remember(homeStreakCounterStyleKey) {
             HomeStreakCounterStyle.fromKey(homeStreakCounterStyleKey)
         }
-        val homeHeroCtaModeKey by userProfilePreferences.homeHeroCtaMode().collectAsState()
+        val homeHeroCtaModeKey by userProfilePreferences.homeHeroCtaMode().collectAsStateWithLifecycle()
         val homeHeroCtaMode = remember(homeHeroCtaModeKey) {
             HomeHeroCtaMode.fromKey(homeHeroCtaModeKey)
         }
-        val homeHubRecentCardModeKey by userProfilePreferences.homeHubRecentCardMode().collectAsState()
+        val homeHubRecentCardModeKey by userProfilePreferences.homeHubRecentCardMode().collectAsStateWithLifecycle()
         val homeHubRecentCardMode = remember(homeHubRecentCardModeKey) {
             HomeHubRecentCardMode.fromKey(homeHubRecentCardModeKey)
         }
-        val homeHeaderGreetingAlignRight by userProfilePreferences.homeHeaderGreetingAlignRight().collectAsState()
-        val homeHeaderNicknameAlignRight by userProfilePreferences.homeHeaderNicknameAlignRight().collectAsState()
-        val homeHeaderLayoutJson by userProfilePreferences.homeHeaderLayoutJson().collectAsState()
+        val homeHeaderGreetingAlignRight by userProfilePreferences
+            .homeHeaderGreetingAlignRight()
+            .collectAsStateWithLifecycle()
+        val homeHeaderNicknameAlignRight by userProfilePreferences
+            .homeHeaderNicknameAlignRight()
+            .collectAsStateWithLifecycle()
+        val homeHeaderLayoutJson by userProfilePreferences.homeHeaderLayoutJson().collectAsStateWithLifecycle()
         val homeHeaderLayout = remember(homeHeaderLayoutJson) {
             userProfilePreferences.getHomeHeaderLayoutOrDefault()
         }
-        val nicknameFontKey by userProfilePreferences.nicknameFont().collectAsState()
-        val nicknameFontSize by userProfilePreferences.nicknameFontSize().collectAsState()
-        val nicknameColorKey by userProfilePreferences.nicknameColor().collectAsState()
-        val nicknameCustomColorHex by userProfilePreferences.nicknameCustomColorHex().collectAsState()
-        val nicknameOutline by userProfilePreferences.nicknameOutline().collectAsState()
-        val nicknameOutlineWidth by userProfilePreferences.nicknameOutlineWidth().collectAsState()
-        val nicknameGlow by userProfilePreferences.nicknameGlow().collectAsState()
-        val nicknameEffectKey by userProfilePreferences.nicknameEffect().collectAsState()
-        val avatarFrameStyleKey by userProfilePreferences.avatarFrameStyle().collectAsState()
-        val homeBadgeStyleKey by userProfilePreferences.homeBadgeStyle().collectAsState()
+        val nicknameFontKey by userProfilePreferences.nicknameFont().collectAsStateWithLifecycle()
+        val nicknameFontSize by userProfilePreferences.nicknameFontSize().collectAsStateWithLifecycle()
+        val nicknameColorKey by userProfilePreferences.nicknameColor().collectAsStateWithLifecycle()
+        val nicknameCustomColorHex by userProfilePreferences.nicknameCustomColorHex().collectAsStateWithLifecycle()
+        val nicknameOutline by userProfilePreferences.nicknameOutline().collectAsStateWithLifecycle()
+        val nicknameOutlineWidth by userProfilePreferences.nicknameOutlineWidth().collectAsStateWithLifecycle()
+        val nicknameGlow by userProfilePreferences.nicknameGlow().collectAsStateWithLifecycle()
+        val nicknameEffectKey by userProfilePreferences.nicknameEffect().collectAsStateWithLifecycle()
+        val avatarFrameStyleKey by userProfilePreferences.avatarFrameStyle().collectAsStateWithLifecycle()
+        val homeBadgeStyleKey by userProfilePreferences.homeBadgeStyle().collectAsStateWithLifecycle()
         val nicknameStyle = NicknameStyle(
             font = NicknameFontPreset.fromKey(nicknameFontKey),
             fontSize = nicknameFontSize.coerceIn(14, 36),
@@ -763,13 +770,13 @@ object HomeHubTab : Tab {
             effect = NicknameEffectPreset.fromKey(nicknameEffectKey),
             customColorHex = nicknameCustomColorHex,
         )
-        val greetingFontKey by userProfilePreferences.greetingFont().collectAsState()
-        val greetingColorKey by userProfilePreferences.greetingColor().collectAsState()
-        val greetingCustomColorHex by userProfilePreferences.greetingCustomColorHex().collectAsState()
-        val greetingFontSize by userProfilePreferences.greetingFontSize().collectAsState()
-        val greetingAlpha by userProfilePreferences.greetingAlpha().collectAsState()
-        val greetingDecorationKey by userProfilePreferences.greetingDecoration().collectAsState()
-        val greetingItalic by userProfilePreferences.greetingItalic().collectAsState()
+        val greetingFontKey by userProfilePreferences.greetingFont().collectAsStateWithLifecycle()
+        val greetingColorKey by userProfilePreferences.greetingColor().collectAsStateWithLifecycle()
+        val greetingCustomColorHex by userProfilePreferences.greetingCustomColorHex().collectAsStateWithLifecycle()
+        val greetingFontSize by userProfilePreferences.greetingFontSize().collectAsStateWithLifecycle()
+        val greetingAlpha by userProfilePreferences.greetingAlpha().collectAsStateWithLifecycle()
+        val greetingDecorationKey by userProfilePreferences.greetingDecoration().collectAsStateWithLifecycle()
+        val greetingItalic by userProfilePreferences.greetingItalic().collectAsStateWithLifecycle()
         val greetingStyle = GreetingStyle(
             font = NicknameFontPreset.fromKey(greetingFontKey),
             color = NicknameColorPreset.fromKey(greetingColorKey),
@@ -783,9 +790,9 @@ object HomeHubTab : Tab {
         val animeScreenModel = HomeHubTab.rememberScreenModel { HomeHubScreenModel() }
         val mangaScreenModel = HomeHubTab.rememberScreenModel { MangaHomeHubScreenModel() }
         val novelScreenModel = HomeHubTab.rememberScreenModel { NovelHomeHubScreenModel() }
-        val animeState by animeScreenModel.state.collectAsState()
-        val mangaState by mangaScreenModel.state.collectAsState()
-        val novelState by novelScreenModel.state.collectAsState()
+        val animeState by animeScreenModel.state.collectAsStateWithLifecycle()
+        val mangaState by mangaScreenModel.state.collectAsStateWithLifecycle()
+        val novelState by novelScreenModel.state.collectAsStateWithLifecycle()
 
         val profileSection = resolveHomeHubProfileSection(sections, selectedSection)
         val (headerUserName, headerUserAvatar, headerGreeting) = when (profileSection) {
@@ -1043,124 +1050,6 @@ object HomeHubTab : Tab {
     }
 }
 
-internal fun HomeHubScreenModel.State.toUiState(): HomeHubUiState {
-    return HomeHubUiState(
-        hero = hero?.let {
-            HomeHubHero(
-                entryId = it.animeId,
-                title = it.title,
-                progressNumber = it.episodeNumber,
-                coverData = it.coverData,
-            )
-        },
-        history = history.map {
-            HomeHubHistory(
-                entryId = it.animeId,
-                title = it.title,
-                progressNumber = it.episodeNumber,
-                coverData = it.coverData,
-                section = HomeHubSection.Anime,
-            )
-        },
-        recommendations = recommendations.map {
-            HomeHubRecommendation(
-                entryId = it.animeId,
-                title = it.title,
-                coverData = it.coverData,
-                section = HomeHubSection.Anime,
-                progressNumerator = it.seenCount,
-                progressDenominator = it.totalCount,
-            )
-        },
-        userName = userName,
-        userAvatar = userAvatar,
-        greeting = greeting,
-        greetingReady = greetingReady,
-        isLoading = isLoading,
-        showWelcome = showWelcome,
-        showFilteredEmpty = showFilteredEmpty,
-    )
-}
-
-internal fun MangaHomeHubScreenModel.State.toUiState(): HomeHubUiState {
-    return HomeHubUiState(
-        hero = hero?.let {
-            HomeHubHero(
-                entryId = it.mangaId,
-                title = it.title,
-                progressNumber = it.chapterNumber,
-                coverData = it.coverData,
-            )
-        },
-        history = history.map {
-            HomeHubHistory(
-                entryId = it.mangaId,
-                title = it.title,
-                progressNumber = it.chapterNumber,
-                coverData = it.coverData,
-                section = HomeHubSection.Manga,
-            )
-        },
-        recommendations = recommendations.map {
-            val readCount = it.totalCount - it.unreadCount
-            HomeHubRecommendation(
-                entryId = it.mangaId,
-                title = it.title,
-                coverData = it.coverData,
-                section = HomeHubSection.Manga,
-                progressNumerator = readCount,
-                progressDenominator = it.totalCount,
-            )
-        },
-        userName = userName,
-        userAvatar = userAvatar,
-        greeting = greeting,
-        greetingReady = greetingReady,
-        isLoading = isLoading,
-        showWelcome = showWelcome,
-        showFilteredEmpty = showFilteredEmpty,
-    )
-}
-
-internal fun NovelHomeHubScreenModel.State.toUiState(): HomeHubUiState {
-    return HomeHubUiState(
-        hero = hero?.let {
-            HomeHubHero(
-                entryId = it.novelId,
-                title = it.title,
-                progressNumber = it.chapterNumber,
-                coverData = mapNovelHomeHubCoverData(it.coverData),
-            )
-        },
-        history = history.map {
-            HomeHubHistory(
-                entryId = it.novelId,
-                title = it.title,
-                progressNumber = it.chapterNumber,
-                coverData = mapNovelHomeHubCoverData(it.coverData),
-                section = HomeHubSection.Novel,
-            )
-        },
-        recommendations = recommendations.map {
-            HomeHubRecommendation(
-                entryId = it.novelId,
-                title = it.title,
-                coverData = mapNovelHomeHubCoverData(it.coverData),
-                section = HomeHubSection.Novel,
-                progressNumerator = it.readCount,
-                progressDenominator = it.totalCount,
-            )
-        },
-        userName = userName,
-        userAvatar = userAvatar,
-        greeting = greeting,
-        greetingReady = greetingReady,
-        isLoading = isLoading,
-        showWelcome = showWelcome,
-        showFilteredEmpty = showFilteredEmpty,
-    )
-}
-
 internal fun mapNovelHomeHubCoverData(coverData: tachiyomi.domain.entries.novel.model.NovelCover): Any? {
     return coverData
 }
@@ -1233,9 +1122,9 @@ private fun applyNicknameEffect(text: String, effect: NicknameEffectPreset): Str
         NicknameEffectPreset.Cloud -> "☁ $text ☁"
         NicknameEffectPreset.Ribbon -> "୨୧ $text ୨୧"
         NicknameEffectPreset.Sakura -> "❀ $text ❀"
-        NicknameEffectPreset.AuroraCrown -> "⌈✦⌋ $text ⌈✦⌋"
-        NicknameEffectPreset.GlitchRune -> "⟦▓⟧ $text ⟦▓⟧"
-        NicknameEffectPreset.Cipher -> "⟨∆⟩ $text ⟨∆⟩"
+        NicknameEffectPreset.AuroraCrown -> text
+        NicknameEffectPreset.GlitchRune -> text
+        NicknameEffectPreset.Cipher -> text
     }
 }
 
@@ -1295,6 +1184,9 @@ private fun nicknameEffectPickerPresets(): List<NicknameEffectPreset> {
         NicknameEffectPreset.Cloud,
         NicknameEffectPreset.Ribbon,
         NicknameEffectPreset.Sakura,
+        NicknameEffectPreset.AuroraCrown,
+        NicknameEffectPreset.GlitchRune,
+        NicknameEffectPreset.Cipher,
     )
 }
 
@@ -1315,70 +1207,97 @@ internal fun StyledNicknameText(
     text: String,
     nicknameStyle: NicknameStyle,
     modifier: Modifier = Modifier,
+    badgeStyleKey: String = "none",
 ) {
-    val colors = AuroraTheme.colors
-    val displayText = applyNicknameEffect(text, nicknameStyle.effect)
-    val textColor = resolveNicknameColor(nicknameStyle.color, nicknameStyle.customColorHex, colors)
-    val outlineColor = if (textColor.luminance() > 0.5f) {
-        Color.Black.copy(alpha = 0.85f)
-    } else {
-        Color.White.copy(alpha = 0.8f)
-    }
-    val outlineOffset = nicknameStyle.outlineWidth.coerceIn(1, 8).dp
-    val fontFamily = nicknameStyle.font.fontRes?.let { FontFamily(Font(it)) }
-    val baseStyle = MaterialTheme.typography.headlineSmall.copy(
-        fontFamily = fontFamily,
-        fontWeight = FontWeight.Black,
-        fontSize = nicknameStyle.fontSize.coerceIn(14, 36).sp,
-        lineHeight = (nicknameStyle.fontSize.coerceIn(14, 36) + 2).sp,
-    )
-    val shadow = if (nicknameStyle.glow) {
-        Shadow(
-            color = if (colors.isDark) {
-                textColor.copy(alpha = 0.85f)
+    NicknameBadgeDecorator(
+        badgeStyleKey = badgeStyleKey,
+        modifier = modifier,
+    ) {
+        if (nicknameStyle.effect.isTreasury()) {
+            AnimatedNicknameOverlay(
+                text = text,
+                nicknameStyle = nicknameStyle,
+            )
+        } else {
+            val colors = AuroraTheme.colors
+            val displayText = applyNicknameEffect(text, nicknameStyle.effect)
+            val textColor = resolveNicknameColor(nicknameStyle.color, nicknameStyle.customColorHex, colors)
+            val outlineColor = if (textColor.luminance() > 0.5f) {
+                Color.Black.copy(alpha = 0.85f)
             } else {
-                if (textColor.luminance() > 0.6f) {
-                    colors.accent.copy(alpha = 0.45f)
-                } else {
-                    textColor.copy(alpha = 0.55f)
-                }
-            },
-            blurRadius = if (colors.isDark) 20f else 12f,
-        )
-    } else {
-        null
-    }
+                Color.White.copy(alpha = 0.8f)
+            }
+            val outlineOffset = nicknameStyle.outlineWidth.coerceIn(1, 8).dp
+            val fontFamily = nicknameStyle.font.fontRes?.let { FontFamily(Font(it)) }
+            val baseStyle = MaterialTheme.typography.headlineSmall.copy(
+                fontFamily = fontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = nicknameStyle.fontSize.coerceIn(14, 36).sp,
+                lineHeight = (nicknameStyle.fontSize.coerceIn(14, 36) + 2).sp,
+            )
+            val shadow = if (nicknameStyle.glow) {
+                Shadow(
+                    color = if (colors.isDark) {
+                        textColor.copy(alpha = 0.85f)
+                    } else {
+                        if (textColor.luminance() > 0.6f) {
+                            colors.accent.copy(alpha = 0.45f)
+                        } else {
+                            textColor.copy(alpha = 0.55f)
+                        }
+                    },
+                    blurRadius = if (colors.isDark) 20f else 12f,
+                )
+            } else {
+                null
+            }
 
-    Box(modifier = modifier) {
-        if (nicknameStyle.outline) {
-            listOf(
-                -outlineOffset to 0.dp,
-                outlineOffset to 0.dp,
-                0.dp to -outlineOffset,
-                0.dp to outlineOffset,
-                -outlineOffset to -outlineOffset,
-                -outlineOffset to outlineOffset,
-                outlineOffset to -outlineOffset,
-                outlineOffset to outlineOffset,
-            ).forEach { (x, y) ->
+            Box {
+                if (nicknameStyle.outline) {
+                    listOf(
+                        -outlineOffset to 0.dp,
+                        outlineOffset to 0.dp,
+                        0.dp to -outlineOffset,
+                        0.dp to outlineOffset,
+                        -outlineOffset to -outlineOffset,
+                        -outlineOffset to outlineOffset,
+                        outlineOffset to -outlineOffset,
+                        outlineOffset to outlineOffset,
+                    ).forEach { (x, y) ->
+                        Text(
+                            text = displayText,
+                            modifier = Modifier.offset(x = x, y = y),
+                            style = baseStyle.copy(color = outlineColor),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                val textStyle = if (badgeStyleKey == "crown") {
+                    baseStyle.copy(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFFFFEFA7), // Bright golden sheen
+                                Color(0xFFD4AF37), // Metallic gold
+                                Color(0xFF8A640F), // Bronze-gold shadow
+                            ),
+                        ),
+                        shadow = shadow,
+                    )
+                } else {
+                    baseStyle.copy(
+                        color = textColor,
+                        shadow = shadow,
+                    )
+                }
                 Text(
                     text = displayText,
-                    modifier = Modifier.offset(x = x, y = y),
-                    style = baseStyle.copy(color = outlineColor),
+                    style = textStyle,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
-        Text(
-            text = displayText,
-            style = baseStyle.copy(
-                color = textColor,
-                shadow = shadow,
-            ),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
@@ -1474,10 +1393,12 @@ private fun NameDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(min = 80.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(AuroraTheme.colors.glass)
                         .border(1.dp, AuroraTheme.colors.divider, RoundedCornerShape(12.dp))
                         .padding(horizontal = 12.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
                     StyledNicknameText(
                         text = text.trim().ifEmpty { currentName },

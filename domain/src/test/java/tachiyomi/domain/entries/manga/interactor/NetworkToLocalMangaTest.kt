@@ -138,5 +138,14 @@ class NetworkToLocalMangaTest {
         override suspend fun updateAllManga(
             mangaUpdates: List<tachiyomi.domain.entries.manga.model.MangaUpdate>,
         ): Boolean = error("not used")
+        override suspend fun updateMangaMetadata(
+            mangaId: Long,
+            customTitle: String?,
+            customArtist: String?,
+            customAuthor: String?,
+            customDescription: String?,
+            customGenre: List<String>?,
+            customStatus: Long?,
+        ): Boolean = error("not used")
     }
 }

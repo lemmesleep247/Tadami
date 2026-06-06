@@ -1,7 +1,6 @@
 package eu.kanade.presentation.entries.novel.components.aurora
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.domain.entries.novel.model.normalizeNovelDescription
+import eu.kanade.presentation.entries.components.aurora.auroraSpringClick
 import eu.kanade.presentation.entries.manga.components.aurora.GlassmorphismCard
 import eu.kanade.presentation.entries.translation.AuroraEntryTranslationState
 import eu.kanade.presentation.theme.AuroraTheme
@@ -52,13 +52,13 @@ fun NovelInfoCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = AuroraTheme.colors
-    val normalizedDescription = remember(novel.description, translation?.description) {
-        translation?.description ?: normalizeNovelDescription(novel.description)
+    val normalizedDescription = remember(novel.displayDescription, translation?.description) {
+        translation?.description ?: normalizeNovelDescription(novel.displayDescription)
     }
     var hasDescriptionOverflow by remember(normalizedDescription) { mutableStateOf(false) }
-    val normalizedGenres = remember(novel.genre) {
+    val normalizedGenres = remember(novel.displayGenre) {
         val seen = LinkedHashSet<String>()
-        novel.genre.orEmpty()
+        novel.displayGenre.orEmpty()
             .flatMap { value ->
                 value
                     .split(Regex("[,;/|\\n\\r\\t•·]+"))
@@ -109,7 +109,7 @@ fun NovelInfoCard(
                             .weight(1f)
                             .then(
                                 if (descriptionToggleEnabled) {
-                                    Modifier.clickable(onClick = onToggleDescription)
+                                    Modifier.auroraSpringClick(onClick = onToggleDescription)
                                 } else {
                                     Modifier
                                 },
@@ -141,7 +141,7 @@ fun NovelInfoCard(
                             tint = colors.accent,
                             modifier = Modifier
                                 .padding(start = 8.dp)
-                                .clickable(onClick = onToggleDescription),
+                                .auroraSpringClick(onClick = onToggleDescription),
                         )
                     }
                 }
@@ -168,7 +168,7 @@ fun NovelInfoCard(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(colors.accent.copy(alpha = 0.15f))
-                                        .clickable { onTagSearch(genre) }
+                                        .auroraSpringClick { onTagSearch(genre) }
                                         .padding(horizontal = 8.dp, vertical = 4.dp),
                                 ) {
                                     Text(
@@ -192,7 +192,7 @@ fun NovelInfoCard(
                                 tint = colors.accent,
                                 modifier = Modifier
                                     .padding(start = 8.dp)
-                                    .clickable(onClick = onToggleGenres),
+                                    .auroraSpringClick(onClick = onToggleGenres),
                             )
                         }
                     }

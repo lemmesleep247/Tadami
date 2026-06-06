@@ -8,9 +8,9 @@ import tachiyomi.data.AnimeUpdateStrategyColumnAdapter
 import tachiyomi.data.FetchTypeColumnAdapter
 import tachiyomi.data.StringListColumnAdapter
 import tachiyomi.data.achievement.handler.AchievementEventBus
-import tachiyomi.data.achievement.model.AchievementEvent
 import tachiyomi.data.handlers.anime.AnimeDatabaseHandler
 import tachiyomi.domain.achievement.model.AchievementCategory
+import tachiyomi.domain.achievement.model.AchievementEvent
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.anime.model.AnimeUpdate
 import tachiyomi.domain.entries.anime.repository.AnimeRepository
@@ -201,6 +201,34 @@ class AnimeRepositoryImpl(
 
     override suspend fun getChildrenByParentId(parentId: Long): List<Anime> {
         return handler.awaitList { db -> db.animesQueries.getChildrenByParentId(parentId, AnimeMapper::mapAnime) }
+    }
+
+    override suspend fun updateAnimeMetadata(
+        animeId: Long,
+        customTitle: String?,
+        customArtist: String?,
+        customAuthor: String?,
+        customDescription: String?,
+        customGenre: List<String>?,
+        customStatus: Long?,
+    ): Boolean {
+        return try {
+            handler.await { db ->
+                db.animesQueries.updateMetadata(
+                    customTitle = customTitle,
+                    customArtist = customArtist,
+                    customAuthor = customAuthor,
+                    customDescription = customDescription,
+                    customGenre = customGenre,
+                    customStatus = customStatus,
+                    animeId = animeId,
+                )
+            }
+            true
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e)
+            false
+        }
     }
 
     private suspend fun partialUpdateAnime(vararg animeUpdates: AnimeUpdate) {

@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.entries.components.aurora.AuroraNotePreviewCard
 import eu.kanade.presentation.entries.components.aurora.AuroraTitleHeroActionButton
+import eu.kanade.presentation.entries.components.aurora.auroraCoverHeroCardStyle
 import eu.kanade.presentation.entries.components.aurora.resolveAuroraHeroChipBorderColor
 import eu.kanade.presentation.entries.components.aurora.resolveAuroraHeroChipContainerColor
 import eu.kanade.presentation.entries.components.aurora.resolveAuroraHeroChipTextColor
@@ -105,8 +106,8 @@ fun AnimeHeroContent(
     val colors = AuroraTheme.colors
     val coverTitleFontFamily = LocalCoverTitleFontFamily.current
     val primaryActionLayoutSpec = remember { resolveAnimeHeroPrimaryActionLayoutSpec() }
-    val originalTitle = remember(anime.description) {
-        parseOriginalTitle(anime.description)
+    val originalTitle = remember(anime.displayDescription) {
+        parseOriginalTitle(anime.displayDescription)
     }
     val heroPanelShape = RoundedCornerShape(24.dp)
     val titleColor = resolveAuroraHeroTitleColor(colors)
@@ -124,7 +125,7 @@ fun AnimeHeroContent(
                 .then(
                     if (colors.isDark) {
                         Modifier
-                    } else {
+                    } else if (colors.isEInk) {
                         Modifier
                             .clip(heroPanelShape)
                             .background(resolveAuroraHeroPanelContainerColor(colors))
@@ -134,12 +135,20 @@ fun AnimeHeroContent(
                                 shape = heroPanelShape,
                             )
                             .padding(horizontal = 12.dp, vertical = 14.dp)
+                    } else {
+                        Modifier
+                            .auroraCoverHeroCardStyle(
+                                colors = colors,
+                                shape = heroPanelShape,
+                                cornerRadius = 24.dp,
+                            )
+                            .padding(horizontal = 12.dp, vertical = 14.dp)
                     },
                 ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             val displayTitle = buildAnnotatedString {
-                append(translation?.title ?: anime.title)
+                append(translation?.title ?: anime.displayTitle)
 
                 if (showOriginalTitle && translation?.titleTranslated != true && originalTitle != null) {
                     withStyle(
@@ -169,12 +178,12 @@ fun AnimeHeroContent(
                 ),
             )
 
-            if (!anime.genre.isNullOrEmpty()) {
+            if (!anime.displayGenre.isNullOrEmpty()) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    anime.genre!!.take(3).forEach { genre ->
+                    anime.displayGenre!!.take(3).forEach { genre ->
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))

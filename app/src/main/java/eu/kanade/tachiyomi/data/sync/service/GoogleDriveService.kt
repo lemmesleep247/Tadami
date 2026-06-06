@@ -204,7 +204,17 @@ class GoogleDriveService(private val context: Context) {
 
                 setupGoogleDriveService(accessToken)
 
-                logcat { "Authorization successful" }
+                // Fetch and save user email address
+                val email = try {
+                    driveService?.about()?.get()?.setFields(
+                        "user(emailAddress)",
+                    )?.execute()?.user?.emailAddress.orEmpty()
+                } catch (e: Exception) {
+                    ""
+                }
+                syncPreferences.googleDriveEmail().set(email)
+
+                logcat { "Authorization successful, user email: $email" }
 
                 activity.runOnUiThread {
                     onSuccess()

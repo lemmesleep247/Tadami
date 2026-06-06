@@ -24,7 +24,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -43,7 +43,6 @@ import eu.kanade.presentation.browse.novel.components.BrowseNovelSourceToolbar
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.entries.novel.DuplicateNovelDialog
 import eu.kanade.presentation.util.Screen
-import eu.kanade.tachiyomi.extension.novel.runtime.hasVisiblePluginSettingsByDiscovery
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.novelsource.model.NovelFilter
@@ -74,7 +73,8 @@ data class BrowseNovelSourceScreen(
     @Composable
     override fun Content() {
         val screenModel = rememberScreenModel { BrowseNovelSourceScreenModel(sourceId, listingQuery, savedSearchId) }
-        val state by screenModel.state.collectAsState()
+        val state by screenModel.state.collectAsStateWithLifecycle()
+        val favoriteNovelUrls by screenModel.favoriteNovelUrls.collectAsStateWithLifecycle()
         val navigator = LocalNavigator.currentOrThrow
         val snackbarHostState = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
@@ -120,7 +120,7 @@ data class BrowseNovelSourceScreen(
                         },
                         onSettingsClick = novelSourcePreferencesScreenOrNull(
                             sourceId = sourceId,
-                            source = screenModel.source,
+                            isSourceConfigurable = state.isSourceConfigurable,
                         )?.let { screen ->
                             { navigator.push(screen) }
                         },
@@ -203,6 +203,7 @@ data class BrowseNovelSourceScreen(
             BrowseNovelSourceContent(
                 source = screenModel.source,
                 novels = screenModel.novelPagerFlowFlow.collectAsLazyPagingItems(),
+                favoriteNovelUrls = favoriteNovelUrls,
                 displayMode = screenModel.displayMode,
                 snackbarHostState = snackbarHostState,
                 contentPadding = paddingValues,
@@ -210,8 +211,9 @@ data class BrowseNovelSourceScreen(
                 onNovelLongClick = { novel ->
                     scope.launchIO {
                         val duplicateNovel = screenModel.getDuplicateLibraryNovel(novel)
+                        val isFavorite = novel.url in favoriteNovelUrls
                         when {
-                            novel.favorite -> screenModel.setDialog(
+                            isFavorite -> screenModel.setDialog(
                                 BrowseNovelSourceScreenModel.Dialog.RemoveNovel(novel),
                             )
                             duplicateNovel != null -> screenModel.setDialog(
@@ -405,8 +407,8 @@ internal fun resolveNovelSourceWebUrl(source: NovelSource?): String? {
 
 internal fun novelSourcePreferencesScreenOrNull(
     sourceId: Long,
-    source: NovelSource,
+    isSourceConfigurable: Boolean,
 ): NovelSourcePreferencesScreen? {
-    if (!source.hasVisiblePluginSettingsByDiscovery()) return null
+    if (!isSourceConfigurable) return null
     return NovelSourcePreferencesScreen(sourceId)
 }

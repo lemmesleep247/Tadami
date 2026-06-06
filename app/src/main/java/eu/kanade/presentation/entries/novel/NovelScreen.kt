@@ -120,6 +120,7 @@ fun NovelScreen(
     onToggleFavorite: () -> Unit,
     onEditCategoryClicked: (() -> Unit)? = null,
     onEditNotesClicked: (() -> Unit)? = null,
+    onClickEditInfo: (() -> Unit)? = null,
     onRefresh: () -> Unit,
     onSearch: (query: String, global: Boolean) -> Unit,
     onPosterLongClicked: (() -> Unit)? = null,
@@ -163,6 +164,8 @@ fun NovelScreen(
     onMultiDownloadClicked: () -> Unit,
     onMultiDeleteClicked: () -> Unit,
     onSaveScrollPosition: (Int, Int) -> Unit = { _, _ -> },
+    onRetrySuggestions: () -> Unit = {},
+    onOpenSuggestions: () -> Unit = {},
 ) {
     val uiPreferences = Injekt.get<UiPreferences>()
     val theme by uiPreferences.appTheme().collectAsState()
@@ -193,6 +196,7 @@ fun NovelScreen(
             onToggleFavorite = onToggleFavorite,
             onEditCategoryClicked = onEditCategoryClicked,
             onEditNotesClicked = onEditNotesClicked,
+            onClickEditInfo = onClickEditInfo,
             onRefresh = onRefresh,
             onSearch = onSearch,
             onPosterLongClicked = onPosterLongClicked,
@@ -241,6 +245,8 @@ fun NovelScreen(
             isAutoJumpToNextEnabled = autoJumpToNextEnabled,
             autoJumpToNextLabel = autoJumpToNextLabel,
             onToggleAutoJumpToNext = onToggleAutoJumpToNext,
+            onRetrySuggestions = onRetrySuggestions,
+            onOpenSuggestions = onOpenSuggestions,
         )
         return
     }
@@ -361,7 +367,7 @@ fun NovelScreen(
                 label = "Top Bar Background",
             )
             EntryToolbar(
-                title = state.novel.title,
+                title = state.novel.displayTitle,
                 hasFilters = state.filterActive,
                 navigateUp = {
                     if (isAnySelected) onAllChapterSelected(false) else onBack()
@@ -389,6 +395,7 @@ fun NovelScreen(
                 onInvertSelection = onInvertSelection,
                 titleAlphaProvider = { titleAlpha },
                 backgroundAlphaProvider = { backgroundAlpha },
+                onClickEditInfo = onClickEditInfo,
                 isManga = true,
             )
         },
@@ -542,12 +549,12 @@ fun NovelScreen(
                                     verticalArrangement = Arrangement.spacedBy(6.dp),
                                 ) {
                                     Text(
-                                        text = state.novel.title,
+                                        text = state.novel.displayTitle,
                                         style = MaterialTheme.typography.titleLarge,
                                         maxLines = 3,
                                         overflow = TextOverflow.Ellipsis,
                                     )
-                                    state.novel.author?.takeIf { it.isNotBlank() }?.let {
+                                    state.novel.displayAuthor?.takeIf { it.isNotBlank() }?.let {
                                         Text(
                                             text = it,
                                             style = MaterialTheme.typography.bodyMedium,
@@ -567,7 +574,7 @@ fun NovelScreen(
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
-                                    novelStatusText(state.novel.status)?.let {
+                                    novelStatusText(state.novel.displayStatus)?.let {
                                         Text(
                                             text = it,
                                             style = MaterialTheme.typography.bodySmall,
@@ -577,7 +584,7 @@ fun NovelScreen(
                                 }
                             }
 
-                            state.novel.description?.takeIf { it.isNotBlank() }?.let {
+                            state.novel.displayDescription?.takeIf { it.isNotBlank() }?.let {
                                 Text(
                                     text = it,
                                     style = MaterialTheme.typography.bodySmall,

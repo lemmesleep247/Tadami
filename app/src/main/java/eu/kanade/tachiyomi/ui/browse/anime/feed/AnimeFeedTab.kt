@@ -22,13 +22,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -45,6 +46,7 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tachiyomi.domain.source.anime.interactor.GetRemoteAnime
+import tachiyomi.domain.source.model.FeedListingType
 import tachiyomi.domain.source.model.SavedSearch
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
@@ -54,8 +56,9 @@ import java.util.TreeMap
 @Composable
 fun Screen.animeFeedTab(): TabContent {
     val navigator = LocalNavigator.currentOrThrow
-    val screenModel = rememberScreenModel { AnimeFeedScreenModel() }
-    val state by screenModel.state.collectAsState()
+    val context = LocalContext.current.applicationContext
+    val screenModel = rememberScreenModel { AnimeFeedScreenModel(context) }
+    val state by screenModel.state.collectAsStateWithLifecycle()
     val reorderRotation by animateFloatAsState(
         targetValue = if (state.isReordering) 90f else 0f,
         animationSpec = tween(durationMillis = 200),
@@ -94,10 +97,16 @@ fun Screen.animeFeedTab(): TabContent {
                     state = state,
                     contentPadding = contentPadding,
                     onClickSource = { source, item ->
-                        if (item.feed.savedSearch != null) {
-                            navigator.push(BrowseAnimeSourceScreen(source.id, null, item.feed.savedSearch))
-                        } else {
-                            navigator.push(BrowseAnimeSourceScreen(source.id, GetRemoteAnime.QUERY_LATEST))
+                        when (item.feed.listingType) {
+                            FeedListingType.SAVED_SEARCH -> {
+                                navigator.push(BrowseAnimeSourceScreen(source.id, null, item.feed.savedSearch))
+                            }
+                            FeedListingType.POPULAR -> {
+                                navigator.push(BrowseAnimeSourceScreen(source.id, GetRemoteAnime.QUERY_POPULAR))
+                            }
+                            FeedListingType.LATEST -> {
+                                navigator.push(BrowseAnimeSourceScreen(source.id, GetRemoteAnime.QUERY_LATEST))
+                            }
                         }
                     },
                     onClickAnime = { anime ->
@@ -122,7 +131,9 @@ fun Screen.animeFeedTab(): TabContent {
                             source = dialog.source,
                             savedSearches = dialog.savedSearches,
                             onDismiss = screenModel::dismissDialog,
-                            onAdd = { savedSearch -> screenModel.addFeed(dialog.source, savedSearch) },
+                            onAdd = { listingType, savedSearch ->
+                                screenModel.addFeed(dialog.source, listingType, savedSearch)
+                            },
                         )
                     }
                     is AnimeFeedScreenModel.Dialog.DeleteSource -> {
@@ -215,33 +226,27 @@ private fun FeedAddSearchDialog(
     source: AnimeCatalogueSource,
     savedSearches: List<SavedSearch>,
     onDismiss: () -> Unit,
-    onAdd: (SavedSearch?) -> Unit,
+    onAdd: (FeedListingType, SavedSearch?) -> Unit,
 ) {
-    var selected by remember { mutableStateOf(-1) }
     val latestLabel = stringResource(AYMR.strings.feed_latest)
     val popularLabel = stringResource(AYMR.strings.feed_popular)
 
-    val options = remember(savedSearches, source.supportsLatest) {
-        buildList {
-            if (source.supportsLatest) add(null as SavedSearch?)
-            add(null as SavedSearch?)
-            savedSearches.forEach { add(it) }
-        }
+    val options = remember(savedSearches, source.supportsLatest, latestLabel, popularLabel) {
+        buildAnimeFeedSelectionOptions(
+            sourceSupportsLatest = source.supportsLatest,
+            savedSearches = savedSearches,
+            latestLabel = latestLabel,
+            popularLabel = popularLabel,
+        )
     }
-    val labels = remember(options, latestLabel, popularLabel) {
-        buildList {
-            if (source.supportsLatest) add(latestLabel)
-            add(popularLabel)
-            savedSearches.forEach { add(it.name) }
-        }
-    }
+    var selected by remember { mutableStateOf(-1) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(source.name) },
         text = {
             LazyColumn {
-                items(labels.size) { index ->
+                items(options.size) { index ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -251,7 +256,7 @@ private fun FeedAddSearchDialog(
                     ) {
                         RadioButton(selected = selected == index, onClick = { selected = index })
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(labels[index], style = MaterialTheme.typography.bodyLarge)
+                        Text(options[index].label, style = MaterialTheme.typography.bodyLarge)
                     }
                 }
             }
@@ -260,8 +265,8 @@ private fun FeedAddSearchDialog(
             TextButton(
                 onClick = {
                     if (selected >= 0) {
-                        val savedSearch = options[selected]
-                        onAdd(savedSearch)
+                        val option = options[selected]
+                        onAdd(option.listingType, option.savedSearch)
                     }
                 },
                 enabled = selected >= 0,

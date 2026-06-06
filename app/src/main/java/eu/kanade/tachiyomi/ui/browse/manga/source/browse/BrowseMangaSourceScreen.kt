@@ -25,7 +25,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +37,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -94,7 +94,8 @@ data class BrowseMangaSourceScreen(
         }
 
         val screenModel = rememberScreenModel { BrowseMangaSourceScreenModel(sourceId, listingQuery, savedSearchId) }
-        val state by screenModel.state.collectAsState()
+        val state by screenModel.state.collectAsStateWithLifecycle()
+        val favoriteMangaUrls by screenModel.favoriteMangaUrls.collectAsStateWithLifecycle()
 
         val navigator = LocalNavigator.currentOrThrow
         val navigateUp: () -> Unit = {
@@ -144,8 +145,8 @@ data class BrowseMangaSourceScreen(
                         .onSizeChanged { topBarHeight = it.height },
                 ) {
                     BrowseMangaSourceToolbar(
-                        searchQuery = screenModel.state.value.toolbarQuery,
-                        onSearchQueryChange = { screenModel.search(it) },
+                        searchQuery = state.toolbarQuery,
+                        onSearchQueryChange = screenModel::setToolbarQuery,
                         source = screenModel.source,
                         displayMode = screenModel.displayMode,
                         onDisplayModeChange = { screenModel.displayMode = it },
@@ -237,6 +238,7 @@ data class BrowseMangaSourceScreen(
             BrowseSourceContent(
                 source = screenModel.source,
                 mangaList = screenModel.mangaPagerFlowFlow.collectAsLazyPagingItems(),
+                favoriteMangaUrls = favoriteMangaUrls,
                 columns = screenModel.getColumnsPreference(LocalConfiguration.current.orientation),
                 entries = screenModel.getColumnsPreferenceForCurrentOrientation(LocalConfiguration.current.orientation),
                 topBarHeight = topBarHeight,

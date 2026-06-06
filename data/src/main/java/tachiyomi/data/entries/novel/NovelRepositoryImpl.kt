@@ -6,9 +6,9 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.MangaUpdateStrategyColumnAdapter
 import tachiyomi.data.StringListColumnAdapter
 import tachiyomi.data.achievement.handler.AchievementEventBus
-import tachiyomi.data.achievement.model.AchievementEvent
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
 import tachiyomi.domain.achievement.model.AchievementCategory
+import tachiyomi.domain.achievement.model.AchievementEvent
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.NovelUpdate
 import tachiyomi.domain.entries.novel.repository.NovelRepository
@@ -119,6 +119,32 @@ class NovelRepositoryImpl(
     override suspend fun resetNovelViewerFlags(): Boolean {
         return try {
             handler.await { db -> db.novelsQueries.resetViewerFlags() }
+            true
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e)
+            false
+        }
+    }
+
+    override suspend fun updateNovelMetadata(
+        novelId: Long,
+        customTitle: String?,
+        customAuthor: String?,
+        customDescription: String?,
+        customGenre: List<String>?,
+        customStatus: Long?,
+    ): Boolean {
+        return try {
+            handler.await { db ->
+                db.novelsQueries.updateMetadata(
+                    customTitle = customTitle,
+                    customAuthor = customAuthor,
+                    customDescription = customDescription,
+                    customGenre = customGenre,
+                    customStatus = customStatus,
+                    novelId = novelId,
+                )
+            }
             true
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e)

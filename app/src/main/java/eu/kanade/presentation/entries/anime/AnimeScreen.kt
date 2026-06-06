@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -69,9 +70,12 @@ import eu.kanade.presentation.entries.anime.components.AnimeActionRow
 import eu.kanade.presentation.entries.anime.components.AnimeEpisodeListItem
 import eu.kanade.presentation.entries.anime.components.AnimeInfoBox
 import eu.kanade.presentation.entries.anime.components.AnimeSeasonListItem
+import eu.kanade.presentation.entries.anime.components.AnimeSeasonSwitcher
 import eu.kanade.presentation.entries.anime.components.EpisodeDownloadAction
 import eu.kanade.presentation.entries.anime.components.ExpandableAnimeDescription
 import eu.kanade.presentation.entries.anime.components.NextEpisodeAiringListItem
+import eu.kanade.presentation.entries.anime.components.isLikelyEpisodeDescription
+import eu.kanade.presentation.entries.anime.components.resolveAnimeSeasonSwitcherItems
 import eu.kanade.presentation.entries.components.EntryBottomActionMenu
 import eu.kanade.presentation.entries.components.EntryToolbar
 import eu.kanade.presentation.entries.components.ItemHeader
@@ -105,6 +109,7 @@ import tachiyomi.presentation.core.components.TwoPanelBox
 import tachiyomi.presentation.core.components.material.ExtendedFloatingActionButton
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.Scaffold
+import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
 import tachiyomi.presentation.core.util.shouldExpandFAB
@@ -200,6 +205,10 @@ fun AnimeScreen(
 
     // Metadata retry (Anilist/Shikimori)
     onRetryMetadata: () -> Unit,
+
+    onClickEditInfo: (() -> Unit)? = null,
+    onRetrySuggestions: () -> Unit = {},
+    onOpenSuggestions: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val uiPreferences = Injekt.get<eu.kanade.domain.ui.UiPreferences>()
@@ -271,6 +280,9 @@ fun AnimeScreen(
             isAutoJumpToNextEnabled = autoJumpToNextEnabled,
             autoJumpToNextLabel = autoJumpToNextLabel,
             onToggleAutoJumpToNext = onToggleAutoJumpToNext,
+            onClickEditInfo = onClickEditInfo,
+            onRetrySuggestions = onRetrySuggestions,
+            onOpenSuggestions = onOpenSuggestions,
         )
         return
     }
@@ -327,6 +339,7 @@ fun AnimeScreen(
             isAutoJumpToNextEnabled = autoJumpToNextEnabled,
             autoJumpToNextLabel = autoJumpToNextLabel,
             onToggleAutoJumpToNext = onToggleAutoJumpToNext,
+            onClickEditInfo = onClickEditInfo,
         )
     } else {
         AnimeScreenLargeImpl(
@@ -374,6 +387,7 @@ fun AnimeScreen(
             isAutoJumpToNextEnabled = autoJumpToNextEnabled,
             autoJumpToNextLabel = autoJumpToNextLabel,
             onToggleAutoJumpToNext = onToggleAutoJumpToNext,
+            onClickEditInfo = onClickEditInfo,
         )
     }
 }
@@ -416,6 +430,7 @@ private fun AnimeScreenSmallImpl(
     onMigrateClicked: (() -> Unit)?,
     changeAnimeSkipIntro: (() -> Unit)?,
     onSettingsClicked: (() -> Unit)?,
+    onClickEditInfo: (() -> Unit)?,
     isAutoJumpToNextEnabled: Boolean,
     autoJumpToNextLabel: String,
     onToggleAutoJumpToNext: () -> Unit,
@@ -447,13 +462,13 @@ private fun AnimeScreenSmallImpl(
     val uiPreferences = remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }
     val metadataSource by uiPreferences.metadataSource().collectAsState()
     val showOriginalTitle by uiPreferences.showOriginalTitle().collectAsState()
-    val originalTitle = remember(state.anime.description) {
-        parseOriginalTitle(state.anime.description)
+    val originalTitle = remember(state.anime.displayDescription) {
+        parseOriginalTitle(state.anime.displayDescription)
     }
     val displayTitle = if (showOriginalTitle && originalTitle != null) {
-        "${state.anime.title} ($originalTitle)"
+        "${state.anime.displayTitle} ($originalTitle)"
     } else {
-        state.anime.title
+        state.anime.displayTitle
     }
 
     val resolvedCoverUrl = remember(
@@ -500,6 +515,12 @@ private fun AnimeScreenSmallImpl(
     }
 
     val seasons = remember(state) { state.processedSeasons }
+    val seasonSwitcherItems = remember(seasons) {
+        resolveAnimeSeasonSwitcherItems(
+            currentAnimeId = state.anime.id,
+            seasons = seasons.map { it.seasonAnime },
+        )
+    }
     val episodes = remember(state) { state.processedEpisodes }
     val listItem = remember(state) { state.episodeListItems }
     val hasFilters = remember(state) {
@@ -568,6 +589,7 @@ private fun AnimeScreenSmallImpl(
                     titleAlphaProvider = { titleAlpha },
                     backgroundAlphaProvider = { backgroundAlpha },
                     isManga = false,
+                    onClickEditInfo = onClickEditInfo,
                     modifier = Modifier.onSizeChanged { toolbarHeight = it.height },
                 )
             },
@@ -710,8 +732,8 @@ private fun AnimeScreenSmallImpl(
                     ) {
                         ExpandableAnimeDescription(
                             defaultExpandState = state.isFromSource,
-                            description = state.anime.description,
-                            tagsProvider = { state.anime.genre },
+                            description = state.anime.displayDescription,
+                            tagsProvider = { state.anime.displayGenre },
                             onTagSearch = onTagSearch,
                             onCopyTagToClipboard = onCopyTagToClipboard,
                             modifier = Modifier.ignorePadding(offsetGridPaddingPx),
@@ -745,6 +767,21 @@ private fun AnimeScreenSmallImpl(
 
                     when (state.anime.fetchType) {
                         FetchType.Seasons -> {
+                            if (seasonSwitcherItems.size > 1) {
+                                item(
+                                    key = "season_switcher",
+                                    contentType = "season_switcher",
+                                    span = { GridItemSpan(maxLineSpan) },
+                                ) {
+                                    AnimeSeasonSwitcher(
+                                        items = seasonSwitcherItems,
+                                        onSeasonClicked = onSeasonClicked,
+                                        modifier = Modifier
+                                            .ignorePadding(offsetGridPaddingPx)
+                                            .padding(horizontal = MaterialTheme.padding.medium, vertical = 4.dp),
+                                    )
+                                }
+                            }
                             sharedSeasons(
                                 anime = state.anime,
                                 seasons = seasons,
@@ -772,7 +809,7 @@ private fun AnimeScreenSmallImpl(
                                     }
                                     if (timer > 0L &&
                                         showNextEpisodeAirTime &&
-                                        state.anime.status.toInt() != SAnime.COMPLETED
+                                        state.anime.displayStatus.toInt() != SAnime.COMPLETED
                                     ) {
                                         NextEpisodeAiringListItem(
                                             title = stringResource(
@@ -856,6 +893,7 @@ fun AnimeScreenLargeImpl(
     onMigrateClicked: (() -> Unit)?,
     changeAnimeSkipIntro: (() -> Unit)?,
     onSettingsClicked: (() -> Unit)?,
+    onClickEditInfo: (() -> Unit)?,
     isAutoJumpToNextEnabled: Boolean,
     autoJumpToNextLabel: String,
     onToggleAutoJumpToNext: () -> Unit,
@@ -886,13 +924,13 @@ fun AnimeScreenLargeImpl(
     val uiPreferences = remember { Injekt.get<eu.kanade.domain.ui.UiPreferences>() }
     val metadataSource by uiPreferences.metadataSource().collectAsState()
     val showOriginalTitle by uiPreferences.showOriginalTitle().collectAsState()
-    val originalTitle = remember(state.anime.description) {
-        parseOriginalTitle(state.anime.description)
+    val originalTitle = remember(state.anime.displayDescription) {
+        parseOriginalTitle(state.anime.displayDescription)
     }
     val displayTitle = if (showOriginalTitle && originalTitle != null) {
-        "${state.anime.title} ($originalTitle)"
+        "${state.anime.displayTitle} ($originalTitle)"
     } else {
-        state.anime.title
+        state.anime.displayTitle
     }
 
     val resolvedCoverUrl = remember(
@@ -912,6 +950,12 @@ fun AnimeScreenLargeImpl(
     val density = LocalDensity.current
 
     val seasons = remember(state) { state.processedSeasons }
+    val seasonSwitcherItems = remember(seasons) {
+        resolveAnimeSeasonSwitcherItems(
+            currentAnimeId = state.anime.id,
+            seasons = seasons.map { it.seasonAnime },
+        )
+    }
     val episodes = remember(state) { state.processedEpisodes }
     val listItem = remember(state) { state.episodeListItems }
 
@@ -989,6 +1033,7 @@ fun AnimeScreenLargeImpl(
                     titleAlphaProvider = { 1f },
                     backgroundAlphaProvider = { 1f },
                     isManga = false,
+                    onClickEditInfo = onClickEditInfo,
                 )
             },
             bottomBar = {
@@ -1090,8 +1135,8 @@ fun AnimeScreenLargeImpl(
                             )
                             ExpandableAnimeDescription(
                                 defaultExpandState = true,
-                                description = state.anime.description,
-                                tagsProvider = { state.anime.genre },
+                                description = state.anime.displayDescription,
+                                tagsProvider = { state.anime.displayGenre },
                                 onTagSearch = onTagSearch,
                                 onCopyTagToClipboard = onCopyTagToClipboard,
                             )
@@ -1136,6 +1181,24 @@ fun AnimeScreenLargeImpl(
 
                             when (state.anime.fetchType) {
                                 FetchType.Seasons -> {
+                                    if (seasonSwitcherItems.size > 1) {
+                                        item(
+                                            key = "season_switcher",
+                                            contentType = "season_switcher",
+                                            span = { GridItemSpan(maxLineSpan) },
+                                        ) {
+                                            AnimeSeasonSwitcher(
+                                                items = seasonSwitcherItems,
+                                                onSeasonClicked = onSeasonClicked,
+                                                modifier = Modifier
+                                                    .ignorePadding(offsetGridPaddingPx)
+                                                    .padding(
+                                                        horizontal = MaterialTheme.padding.medium,
+                                                        vertical = 4.dp,
+                                                    ),
+                                            )
+                                        }
+                                    }
                                     sharedSeasons(
                                         anime = state.anime,
                                         seasons = seasons,
@@ -1162,7 +1225,7 @@ fun AnimeScreenLargeImpl(
                                             }
                                             if (timer > 0L &&
                                                 showNextEpisodeAirTime &&
-                                                state.anime.status.toInt() != SAnime.COMPLETED
+                                                state.anime.displayStatus.toInt() != SAnime.COMPLETED
                                             ) {
                                                 NextEpisodeAiringListItem(
                                                     title = stringResource(
@@ -1336,8 +1399,11 @@ private fun LazyGridScope.sharedEpisodeItems(
                                 formatTime(episodeItem.episode.totalSeconds),
                             )
                         },
-                    scanlator = episodeItem.episode.scanlator.takeIf { !it.isNullOrBlank() },
-                    summary = episodeItem.episode.summary.takeIf { !it.isNullOrBlank() && showSummaries },
+                    scanlator = episodeItem.episode.scanlator
+                        .takeIf { !it.isNullOrBlank() && !it.isLikelyEpisodeDescription() },
+                    summary = episodeItem.episode.summary.takeIf { !it.isNullOrBlank() && showSummaries }
+                        ?: episodeItem.episode.scanlator
+                            .takeIf { !it.isNullOrBlank() && showSummaries && it.isLikelyEpisodeDescription() },
                     previewUrl = episodeItem.episode.previewUrl.takeIf { !it.isNullOrBlank() && showPreviews },
                     seen = episodeItem.episode.seen,
                     bookmark = episodeItem.episode.bookmark,

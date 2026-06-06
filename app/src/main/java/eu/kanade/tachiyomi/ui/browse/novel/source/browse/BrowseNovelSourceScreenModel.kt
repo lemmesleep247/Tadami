@@ -15,6 +15,7 @@ import eu.kanade.domain.entries.novel.interactor.UpdateNovel
 import eu.kanade.domain.entries.novel.model.toDomainNovel
 import eu.kanade.domain.entries.novel.model.toSNovel
 import eu.kanade.presentation.util.ioCoroutineScope
+import eu.kanade.tachiyomi.extension.novel.runtime.hasVisiblePluginSettingsByDiscovery
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
 import eu.kanade.tachiyomi.novelsource.model.SNovel
@@ -26,7 +27,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -83,6 +83,7 @@ class BrowseNovelSourceScreenModel(
 
     var displayMode by sourcePreferences.sourceDisplayMode().asState(screenModelScope)
     private val novelDetailsInFlight = ConcurrentHashMap.newKeySet<Long>()
+    private val novelDetailsDispatcher = kotlinx.coroutines.Dispatchers.IO.limitedParallelism(3)
 
     val source = sourceManager.getOrStub(sourceId)
 
@@ -138,6 +139,13 @@ class BrowseNovelSourceScreenModel(
         sourcePreferences.lastUsedNovelSource().set(source.id)
 
         loadSavedSearches()
+
+        screenModelScope.launch {
+            val isConfigurable = withContext(ioCoroutineScope.coroutineContext) {
+                source.hasVisiblePluginSettingsByDiscovery()
+            }
+            mutableState.update { it.copy(isSourceConfigurable = isConfigurable) }
+        }
 
         if (savedSearchId != null && source is NovelCatalogueSource) {
             screenModelScope.launch {
@@ -232,6 +240,13 @@ class BrowseNovelSourceScreenModel(
 
     private val hideInLibraryItems = sourcePreferences.hideInNovelLibraryItems().get()
 
+    private val autoFavoriteLocalNovels = sourcePreferences.importEpubAddToLibrary().get()
+
+    val favoriteNovelUrls = resolveGetNovelFavorites()?.subscribe(sourceId)
+        ?.map { list -> list.map { it.url }.toSet() }
+        ?.stateIn(screenModelScope, SharingStarted.Lazily, emptySet())
+        ?: MutableStateFlow(emptySet())
+
     val novelPagerFlowFlow = state
         .map { state ->
             val listing = state.listing
@@ -254,15 +269,15 @@ class BrowseNovelSourceScreenModel(
                 .map { pagingData ->
                     pagingData
                         .map { networkNovel ->
-                            val localNovel = networkToLocalNovel.await(networkNovel.toDomainNovel(sourceId))
+                            val autoFavorite = autoFavoriteLocalNovels && sourceId == 0L
+                            val localNovel = networkToLocalNovel.await(
+                                networkNovel.toDomainNovel(sourceId),
+                                autoFavorite = autoFavorite,
+                            )
                             maybeFetchMissingNovelDetails(localNovel)
-                            resolveGetNovel()
-                                ?.subscribe(localNovel.url, localNovel.source)
-                                ?.filterNotNull()
-                                ?.stateIn(ioCoroutineScope)
-                                ?: MutableStateFlow(localNovel)
+                            localNovel
                         }
-                        .filter { !hideInLibraryItems || !it.value.favorite }
+                        .filter { !hideInLibraryItems || !it.favorite }
                 }
                 .cachedIn(ioCoroutineScope)
         }
@@ -275,7 +290,7 @@ class BrowseNovelSourceScreenModel(
         if (source !is NovelCatalogueSource) return
         if (!novelDetailsInFlight.add(novel.id)) return
 
-        screenModelScope.launch(ioCoroutineScope.coroutineContext) {
+        screenModelScope.launch(novelDetailsDispatcher) {
             try {
                 val networkNovel = source.getNovelDetails(novel.toSNovel())
                 val updatePayload = NovelUpdate(
@@ -597,6 +612,7 @@ class BrowseNovelSourceScreenModel(
         val dialog: Dialog? = null,
         val filterVersion: Int = 0,
         val savedSearches: ImmutableList<Pair<SavedSearch, Boolean>> = persistentListOf(),
+        val isSourceConfigurable: Boolean = false,
     ) {
         val isUserQuery get() = listing is Listing.Search && !listing.query.isNullOrEmpty()
         val filterable get() = savedSearches.isNotEmpty()

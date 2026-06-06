@@ -17,7 +17,7 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.achievement.handler.AchievementEventBus
-import tachiyomi.data.achievement.model.AchievementEvent
+import tachiyomi.domain.achievement.model.AchievementEvent
 import tachiyomi.domain.items.novelchapter.model.NovelChapterUpdate
 import tachiyomi.domain.items.novelchapter.repository.NovelChapterRepository
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -47,6 +47,7 @@ class NovelUpdatesScreenModel(
                     mutableState.value = State(
                         isLoading = false,
                         items = updates
+                            .filter { !it.read }
                             .map { update ->
                                 NovelUpdatesItem(
                                     update = update,

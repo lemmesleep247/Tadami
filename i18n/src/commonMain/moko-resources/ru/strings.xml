@@ -88,7 +88,7 @@
     <string name="information_no_recent">Нет новых обновлений</string>
     <string name="information_no_recent_manga">Ничего не прочитано в последнее время</string>
     <string name="label_backup">Резервная копия</string>
-    <string name="label_download_queue">Очередь загрузки</string>
+    <string name="label_download_queue">Загрузки</string>
     <string name="label_library">Библиотека</string>
     <string name="label_recent_manga">История</string>
     <string name="label_recent_updates">Новое</string>
@@ -121,7 +121,7 @@
     <string name="pref_category_advanced">Дополнительно</string>
     <string name="pref_category_downloads">Загрузки</string>
     <string name="pref_category_general">Основные</string>
-    <string name="pref_category_reader">Читалка</string>
+    <string name="pref_category_reader">Читалка манги</string>
     <string name="pref_category_tracking">Отслеживание</string>
     <string name="pref_clear_chapter_cache">Очистить кэш глав</string>
     <string name="pref_clear_cookies">Очистить cookies</string>
@@ -223,8 +223,16 @@
     <string name="manga">Серии библиотеки</string>
     <string name="no_more_results">Больше нет результатов</string>
     <string name="pref_backup_interval">Частота автоматических резервных копий</string>
+    <string name="pref_backup_slots">Сохранять авторезервных копий</string>
+    <string name="backup_slots_4">4 копии (по умолчанию)</string>
+    <string name="backup_slots_10">10 копий</string>
+    <string name="backup_slots_20">20 копий</string>
+    <string name="backup_slots_50">50 копий</string>
+    <string name="backup_slots_all">Сохранять все копии</string>
     <string name="pref_create_backup">Создать резервную копию</string>
     <string name="pref_create_backup_summ">Можно использовать для восстановления текущей библиотеки</string>
+    <string name="pref_backup_sister_app_compat">Совместимость с Tachiyomi/Mihon</string>
+    <string name="pref_backup_sister_app_compat_summary">Сохраняет файл резервной копии в упрощенном плоском формате, совместимом с Mihon, Komikku и TachiyomiSY.</string>
     <string name="pref_crop_borders">Обрезать поля</string>
     <string name="pref_restore_backup">Восстановить из резервной копии</string>
     <string name="pref_restore_backup_summ">Восстановить библиотеку из резервной копии</string>
@@ -394,6 +402,7 @@
     <string name="creating_backup_error">Не удалось создать резервную копию</string>
     <string name="backup_in_progress">Резервная копия уже выполняется</string>
     <string name="pref_cloud_backup_folder">Папка облачного бэкапа</string>
+    <string name="pref_cloud_backup_folder_subtitle">Синхронизация автоматических бэкапов с облачным хранилищем</string>
     <string name="cloud_backup_folder_not_set">Папка облачного бэкапа не выбрана</string>
     <string name="cloud_backup_info">Сохранять авто-бэкапы в облачную папку. Использует Android Storage Access Framework — совместимо с Google Диском, Dropbox, OneDrive и другими SAF-приложениями.</string>
     <string name="restore_duration">%1$02d мин, %2$02d сек</string>
@@ -430,6 +439,7 @@
     <string name="loader_not_implemented_error">Источник не найден</string>
     <string name="action_disable">Отключить</string>
     <string name="requires_app_restart">Для вступления в силу требуется перезапуск приложения</string>
+    <string name="pref_network_cache_size">Размер сетевого кэша</string>
     <string name="label_network">Сеть</string>
     <string name="tapping_inverted_both">Обе оси</string>
     <string name="tapping_inverted_vertical">Вертикально</string>
@@ -585,7 +595,7 @@
     <string name="action_display_language_badge">Язык</string>
     <string name="label_warning">Предупреждение</string>
     <string name="notification_size_warning">Большое количество обновлений может привести к замедлению работы источников и увеличению расхода батареи. Нажмите для подробностей.</string>
-    <string name="backup_info">Настоятельно рекомендуется хранить резервные копии в других местах или сервисах. Резервные копии могут содержать конфиденциальную информацию, как, например, пароли. Будьте осторожны при их отправке.</string>
+    <string name="backup_info">Резервные копии содержат конфиденциальные данные, включая пароли. Не храните их в ненадёжных местах и не передавайте бездумно — выбирайте место хранения внимательно.</string>
     <string name="connected_to_wifi">Только по Wi-Fi</string>
     <string name="update_72hour">Каждые 3 дня</string>
     <string name="download_queue_size_warning">Предупреждение: Большое количество загрузок может привести к замедлению работы источников и/или блокировке Mihon. Нажмите для подробностей.</string>
@@ -842,6 +852,7 @@
     <string name="onboarding_permission_install_apps_description">Позволит устанавливать расширения источников.</string>
     <string name="onboarding_permission_notifications_description">Получать уведомления об обновлениях библиотеки и т.д.</string>
     <string name="onboarding_permission_action_grant">Предоставить</string>
+    <string name="onboarding_permission_action_granted">Предоставлено</string>
     <string name="available_disk_space_info">Доступно: %1$s / Всего: %2$s</string>
     <string name="ext_permission_install_apps_warning">Нужны разрешения для установки расширений. Нажмите сюда, чтобы их предоставить.</string>
     <string name="private_settings">Включать конфиденциальные настройки (например, токены для входа в службы отслеживания)</string>
@@ -946,6 +957,10 @@
     <string name="navigator_height_large">Большой</string>
     <string name="pref_use_theme_color">Использовать цвет темы</string>
     <string name="pref_navigator_show_tick_marks">Показывать маркеры страниц</string>
+    <string name="pref_bottom_bar_position">Размещение панели навигации</string>
+    <string name="bottom_bar_position_bottom">Снизу</string>
+    <string name="bottom_bar_position_left">Слева</string>
+    <string name="bottom_bar_position_right">Справа</string>
 
     <!-- Reader bottom bar section -->
     <string name="pref_bottom_bar">Панель инструментов</string>
@@ -956,6 +971,7 @@
     <string name="pref_bottom_bar_show_settings">Настройки</string>
 
     <string name="pref_library_display_mode_per_media">Раздельный режим отображения для аниме, манги и ранобэ</string>
+    <string name="pref_library_group_apply_to_all">Использовать для всех типов контента</string>
     <string name="pref_aurora_library_card_style">Стиль карточек Aurora</string>
     <string name="pref_aurora_library_card_style_standard">Стандартный</string>
     <string name="pref_aurora_library_card_style_glow_contour">Свечение</string>
@@ -1142,4 +1158,79 @@
     <string name="omnibuilder_action_back">Назад</string>
     <string name="omnibuilder_mode_select">Режим выбора</string>
     <string name="omnibuilder_mode_interact">Режим сайта</string>
+    <!-- Edit Metadata Feature -->
+    <string name="action_edit_info">Изменить метаданные</string>
+    <string name="action_edit_metadata">Изменить метаданные</string>
+    <string name="action_reset_metadata">Сбросить изменения</string>
+    <string name="action_reset_metadata_confirmation">Вы уверены, что хотите сбросить все изменения к оригинальным значениям из источника?</string>
+    <string name="action_add_genre">Добавить жанр</string>
+    <string name="genre_input_placeholder">Добавить жанр...</string>
+    <string name="label_custom_title">Пользовательское название</string>
+    <string name="label_custom_author">Пользовательский автор</string>
+    <string name="label_custom_artist">Пользовательский художник</string>
+    <string name="label_custom_description">Пользовательское описание</string>
+    <string name="label_custom_status">Пользовательский статус</string>
+    <string name="label_custom_genres">Пользовательские жанры</string>
+    <string name="status_default">По умолчанию (из источника)</string>
+    <string name="status_ongoing">Выходит</string>
+    <string name="status_completed">Завершено</string>
+    <string name="status_licensed">Лицензировано</string>
+    <string name="status_publishing_finished">Издание завершено</string>
+    <string name="status_cancelled">Отменено</string>
+    <string name="status_on_hiatus">Приостановлено</string>
+    <string name="status_unknown">Неизвестно</string>
+    <string name="metadata_saved_successfully">Метаданные успешно сохранены</string>
+    <string name="suggestions_similar_titles">Похожие произведения</string>
+    <string name="action_open_suggestions">Открыть рекомендации</string>
+    <string name="pref_entry_suggestions">Рекомендации</string>
+    <string name="pref_entry_suggestions_summary">Показывать похожие или рекомендованные тайтлы на экране информации</string>
+    <string name="pref_entry_suggestions_inline">Показывать строку рекомендаций</string>
+    <string name="pref_entry_suggestions_inline_summary">Отображать рекомендации в виде горизонтальной прокручиваемой строки</string>
+    <string name="pref_entry_suggestions_overflow">Показывать в меню действий</string>
+    <string name="pref_entry_suggestions_overflow_summary">Доступ к рекомендациям через выпадающее меню действий</string>
+    <string name="suggestions_empty_state">Рекомендации для этого тайтла не найдены.\nПопробуйте обновить или проверьте, есть ли тайтл на AniList или MangaUpdates.</string>
+    <string name="suggestions_disabled_state">Рекомендации отключены.\nВключите их в Настройках → Обзор → Рекомендации.</string>
+    <string name="suggestions_provider_failure">Не удалось загрузить рекомендации от одного или нескольких провайдеров. Нажмите «Повторить».</string>
+    <string name="suggestions_no_safe_results">Безопасные рекомендации не найдены.\nТайтл может быть недоступен под каким-либо известным псевдонимом у настроенных провайдеров.</string>
+    <string name="suggestions_empty_state_novel">Похожие новеллы не найдены</string>
+    <string name="suggestions_no_match_novel">Не удалось сопоставить эту новеллу с источником рекомендаций</string>
+    <string name="suggestions_empty_related_novel">На этом источнике не найдено похожих тайтлов</string>
+    <string name="suggestions_empty_search_novel">На этом источнике не найдено совпадений при поиске</string>
+    <string name="suggestions_fallback_exhausted_novel">Для этой новеллы нет доступных рекомендаций</string>
+    <string name="action_show_more">Показать больше</string>
+    <string name="pref_category_epub_import">Импорт EPUB</string>
+    <string name="pref_epub_import_add_to_library">Добавлять импортированные EPUB в библиотеку</string>
+    <string name="pref_epub_import_add_to_library_summary">Импортированные EPUB-новеллы сразу появятся в библиотеке. Если отключено, их можно добавить вручную из локального источника.</string>
+
+    <!-- Library Grouping -->
+    <string name="action_group">Группа</string>
+    <string name="action_group_by">Группировать по</string>
+    <string name="action_group_ungrouped">Без группы</string>
+    <string name="action_group_by_source">По источнику</string>
+    <string name="action_group_by_status">По статусу</string>
+    <string name="action_group_by_track_status">По статусу трекера</string>
+
+    <string name="pref_group_library_update_type">Обновление динамических групп</string>
+    <string name="pref_group_library_update_type_summary">Управляет тем, какие динамические/виртуальные группы обновляются при ручном обновлении</string>
+    <string name="pref_group_library_update_type_global">Общие настройки (по умолчанию)</string>
+    <string name="pref_group_library_update_type_all_but_ungrouped">Все группы, кроме \"Без группы\"</string>
+    <string name="pref_group_library_update_type_all">Все динамические группы</string>
+
+    <!-- Support Project -->
+    <string name="support_project">Поддержать проект</string>
+    <string name="support_project_summary">Добровольный донат для поддержки разработки</string>
+    <string name="support_info">Донаты являются полностью добровольными и не разблокируют никаких платных функций, контента или преимуществ. Приложение остаётся полностью бесплатным и доступным для всех.</string>
+    <string name="copied_to_clipboard">Скопировано в буфер обмена: %s</string>
+    <string name="open_link">Открыть ссылку</string>
+    <string name="copy_address">Копировать адрес</string>
+
+    <!-- Donation Options -->
+    <string name="donation_option_cloudtips_title">Поддержать из РФ / СНГ</string>
+    <string name="donation_option_cloudtips_desc">CloudTips: перевод через СБП, T-Pay или банковскую карту. Быстрый и простой добровольный перевод.</string>
+    <string name="donation_option_boosty_title">Boosty</string>
+    <string name="donation_option_boosty_desc">Популярная платформа для поддержки создателей. Подходит для разовых донатов из РФ/СНГ и других стран.</string>
+    <string name="donation_option_crypto_usdt_tron_title">USDT Tron (TRC20)</string>
+    <string name="donation_option_crypto_usdt_tron_desc">Прямой перевод стейблкоина USDT в сети Tron (TRC20).</string>
+    <string name="donation_option_crypto_usdt_ton_title">USDT (TON)</string>
+    <string name="donation_option_crypto_usdt_ton_desc">Перевод стейблкоина USDT в сети TON.</string>
 </resources>

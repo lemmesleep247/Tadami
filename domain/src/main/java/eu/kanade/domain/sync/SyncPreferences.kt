@@ -33,6 +33,27 @@ class SyncPreferences(
     )
 
     /**
+     * The email associated with the logged in Google Drive account.
+     */
+    fun googleDriveEmail(): Preference<String> = preferenceStore.getString(
+        key = Preference.appStateKey("google_drive_email"),
+        defaultValue = "",
+    )
+
+    /**
+     * The selected items to backup in cloud sync.
+     */
+    fun cloudSyncOptions(): Preference<Set<String>> = preferenceStore.getStringSet(
+        key = Preference.appStateKey("cloud_sync_options"),
+        defaultValue = setOf(
+            "libraryEntries", "backupManga", "backupAnime", "backupNovel",
+            "categories", "chapters", "tracking", "history", "readEntries",
+            "appSettings", "extensionRepoSettings", "customButton", "sourceSettings",
+            "achievements", "stats",
+        ),
+    )
+
+    /**
      * The last sync timestamp.
      */
     fun lastSyncTimestamp(): Preference<Long> = preferenceStore.getLong(
@@ -105,5 +126,6 @@ class SyncPreferences(
     fun clearGoogleDriveTokens() {
         googleDriveAccessToken().set("")
         googleDriveRefreshToken().set("")
+        googleDriveEmail().set("")
     }
 }

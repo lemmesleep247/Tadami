@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import tachiyomi.domain.source.novel.model.StubNovelSource
 import tachiyomi.domain.source.novel.repository.NovelStubSourceRepository
 import tachiyomi.domain.source.novel.service.NovelSourceManager
@@ -62,9 +61,6 @@ class AndroidNovelSourceManager(
                         Injekt.get(),
                     )
                     mutableMap[localNovelSource.id] = localNovelSource
-                    // Add built-in imported EPUB source
-                    val importedEpubSource = ImportedEpubNovelSource()
-                    mutableMap[importedEpubSource.id] = importedEpubSource
                     // Add built-in OmniResolver source
                     runCatching {
                         omniSourceFactory()
@@ -92,9 +88,14 @@ class AndroidNovelSourceManager(
     }
 
     override fun getOrStub(sourceKey: Long): NovelSource {
-        return sourcesMapFlow.value[sourceKey] ?: stubSourcesMap.getOrPut(sourceKey) {
-            runBlocking { createStubSource(sourceKey) }
-        }
+        return sourcesMapFlow.value[sourceKey]
+            ?: stubSourcesMap[sourceKey]
+            ?: run {
+                val stub = StubNovelSource(id = sourceKey, lang = "", name = "")
+                registerStubSourceAsync(sourceKey)
+                stubSourcesMap[sourceKey] = stub
+                stub
+            }
     }
 
     override fun getOnlineSources() = sourcesMapFlow.value.values.filterIsInstance<NovelHttpSource>()
@@ -105,7 +106,6 @@ class AndroidNovelSourceManager(
         val onlineSourceIds = getOnlineSources().map { it.id }
         return stubSourcesMap.values.filterNot {
             it.id in onlineSourceIds ||
-                it.id == IMPORTED_EPUB_NOVEL_SOURCE_ID ||
                 it.id == LocalNovelSource.ID
         }
     }
@@ -118,14 +118,17 @@ class AndroidNovelSourceManager(
         }
     }
 
-    private suspend fun createStubSource(id: Long): StubNovelSource {
-        sourceRepository.getStubNovelSource(id)?.let {
-            return it
+    private fun registerStubSourceAsync(id: Long) {
+        scope.launch {
+            val dbSource = sourceRepository.getStubNovelSource(id)
+            if (dbSource != null) {
+                stubSourcesMap[id] = dbSource
+                return@launch
+            }
+            extensionManager.getSourceData(id)?.let { extensionStub ->
+                registerStubSource(extensionStub)
+                stubSourcesMap[id] = extensionStub
+            }
         }
-        extensionManager.getSourceData(id)?.let {
-            registerStubSource(it)
-            return it
-        }
-        return StubNovelSource(id = id, lang = "", name = "")
     }
 }

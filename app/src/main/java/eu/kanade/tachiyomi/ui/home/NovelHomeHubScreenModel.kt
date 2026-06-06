@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.ui.home
 
-import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
-import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.UserProfilePreferences
 import eu.kanade.tachiyomi.ui.novel.resolveNovelResumeChapter
@@ -21,101 +19,94 @@ import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.i18n.aniyomi.AYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.io.File
 
-class NovelHomeHubScreenModel(
+internal class NovelHomeHubScreenModel(
+    context: android.content.Context = Injekt.get<android.app.Application>(),
     private val historyRepository: NovelHistoryRepository = Injekt.get(),
     private val getLibraryNovel: GetLibraryNovel = Injekt.get(),
     private val getNovelWithChapters: GetNovelWithChapters = Injekt.get(),
     private val getNovelCategories: GetNovelCategories = Injekt.get(),
-    private val userProfilePreferences: UserProfilePreferences = Injekt.get(),
+    userProfilePreferences: UserProfilePreferences = Injekt.get(),
     private val sourcePreferences: SourcePreferences = Injekt.get(),
     private val sourceManager: NovelSourceManager = Injekt.get(),
-) : StateScreenModel<NovelHomeHubScreenModel.State>(State()) {
+) : BaseHomeHubScreenModel(
+    context = context,
+    initialState = HomeHubUiState(
+        userName = userProfilePreferences.name().get(),
+        userAvatar = userProfilePreferences.avatarUrl().get(),
+        greeting = AYMR.strings.aurora_welcome_back,
+        greetingReady = false,
+        isLoading = true,
+        showWelcome = true,
+    ),
+    userProfilePreferences = userProfilePreferences,
+) {
 
-    private val fastCache = NovelHomeHubFastCache(Injekt.get<android.app.Application>())
+    override val avatarFileName: String = "user_avatar_novel.jpg"
+
+    private val fastCache = HomeHubFastCache(context, HomeHubSection.Novel)
 
     @Volatile
     private var liveUpdatesStarted = false
 
-    data class State(
-        val hero: HeroData? = null,
-        val history: List<HistoryData> = emptyList(),
-        val recommendations: List<RecommendationData> = emptyList(),
-        val heroChapterId: Long? = null,
-        val userName: String = "",
-        val userAvatar: String = "",
-        val greeting: StringResource = AYMR.strings.aurora_welcome_back,
-        val greetingReady: Boolean = false,
-        val isInitialized: Boolean = false,
-        val isLoading: Boolean = true,
-    ) {
-        val isEmpty: Boolean
-            get() = hero == null && history.isEmpty() && recommendations.isEmpty()
+    private var lastResolvedHeroChapterId: Long? = null
+    private var originalHeroChapterId: Long? = null
 
-        val showWelcome: Boolean
-            get() = !isInitialized && isEmpty && !isLoading
-
-        val showFilteredEmpty: Boolean
-            get() = isInitialized && isEmpty && !isLoading
+    override fun updateCacheUserName(name: String) {
+        fastCache.updateUserName(name)
     }
 
-    data class HeroData(
-        val novelId: Long,
-        val title: String,
-        val chapterNumber: Double,
-        val coverData: NovelCover,
-        val chapterId: Long,
-    )
-
-    data class HistoryData(
-        val novelId: Long,
-        val title: String,
-        val chapterNumber: Double,
-        val coverData: NovelCover,
-    )
-
-    data class RecommendationData(
-        val novelId: Long,
-        val title: String,
-        val coverData: NovelCover,
-        val totalCount: Long,
-        val readCount: Long,
-    )
+    override fun updateCacheUserAvatar(path: String) {
+        fastCache.updateUserAvatar(path)
+    }
 
     init {
-        mutableState.update {
-            it.copy(
-                userName = userProfilePreferences.name().get(),
-                userAvatar = userProfilePreferences.avatarUrl().get(),
-            )
-        }
-
         val cached = fastCache.load()
         if (!cached.isEmpty || cached.isInitialized) {
+            originalHeroChapterId = cached.hero?.subId
             mutableState.update {
                 it.copy(
-                    hero = cached.hero?.toHeroData(),
-                    history = cached.history.map { h -> h.toHistoryData() },
-                    recommendations = cached.recommendations.map { r -> r.toRecommendationData() },
+                    hero = cached.hero?.let { h ->
+                        HomeHubHero(
+                            entryId = h.entryId,
+                            title = h.title,
+                            progressNumber = h.progressNumber,
+                            coverData = NovelCover(h.entryId, -1, true, h.coverUrl, h.coverLastModified),
+                        )
+                    },
+                    history = cached.history.map { h ->
+                        HomeHubHistory(
+                            entryId = h.entryId,
+                            title = h.title,
+                            progressNumber = h.progressNumber,
+                            coverData = NovelCover(h.entryId, -1, true, h.coverUrl, h.coverLastModified),
+                            section = HomeHubSection.Novel,
+                        )
+                    },
+                    recommendations = cached.recommendations.map { r ->
+                        HomeHubRecommendation(
+                            entryId = r.entryId,
+                            title = r.title,
+                            coverData = NovelCover(r.entryId, -1, true, r.coverUrl, r.coverLastModified),
+                            section = HomeHubSection.Novel,
+                            progressNumerator = r.progressNumerator,
+                            progressDenominator = r.totalCount,
+                        )
+                    },
                     userName = cached.userName,
                     userAvatar = cached.userAvatar,
-                    isInitialized = cached.isInitialized,
                     isLoading = false,
+                    showWelcome = !cached.isInitialized && cached.isEmpty,
+                    showFilteredEmpty = cached.isInitialized && cached.isEmpty,
                 )
             }
         }
 
-        screenModelScope.launchIO {
-            val greetingSelection = HomeGreetingSession.resolveGreeting(
-                userProfilePreferences = userProfilePreferences,
-            )
-            mutableState.update { it.copy(greeting = greetingSelection.greeting, greetingReady = true) }
-        }
+        initializeGreeting()
 
         cached.hero?.let { hero ->
             screenModelScope.launchIO {
-                loadHeroChapterId(hero.novelId, hero.chapterId)
+                loadHeroChapterId(hero.entryId, hero.subId)
             }
         }
     }
@@ -156,40 +147,83 @@ class NovelHomeHubScreenModel(
                     hiddenCategoryIds = hiddenCategoryIds,
                 ).distinctBy { it.novel.id }
 
-                val libraryNovelIds = filteredNovel.map { it.novel.id }.toSet()
-
-                val hero = filteredHistory.firstOrNull { it.novelId in libraryNovelIds }
+                val hero = filteredHistory.firstOrNull()
                 val history = filteredHistory
                     .filter { hero == null || it.novelId != hero.novelId }
                     .take(6)
 
                 val hasData = hero != null || history.isNotEmpty() || filteredNovel.isNotEmpty()
-                if (hasData && !state.value.isInitialized) {
-                    fastCache.markInitialized()
-                }
-                val previousHero = mutableState.value.hero
+                val isInitialized = hasData ||
+                    (
+                        state.value.showFilteredEmpty ||
+                            (state.value.showWelcome.not() && state.value.isLoading.not())
+                        )
 
                 val novelRecommendations = filteredNovel
                     .sortedByDescending { it.novel.dateAdded }
                     .take(10)
 
+                val previousHero = state.value.hero
+                val previousHeroChapterId = originalHeroChapterId
+
+                originalHeroChapterId = hero?.chapterId
+
+                val isEmpty = hero == null && history.isEmpty() && novelRecommendations.isEmpty()
+                val showWelcome = !isInitialized && isEmpty
+                val showFilteredEmpty = isInitialized && isEmpty
+
                 mutableState.update {
                     it.copy(
-                        hero = hero?.toHeroData(),
-                        history = history.map { h -> h.toHistoryData() },
-                        recommendations = novelRecommendations.map { n -> n.toRecommendationData() },
+                        hero = hero?.let { h ->
+                            HomeHubHero(
+                                entryId = h.novelId,
+                                title = h.title,
+                                progressNumber = h.chapterNumber,
+                                coverData = h.coverData,
+                            )
+                        },
+                        history = history.map { h ->
+                            HomeHubHistory(
+                                entryId = h.novelId,
+                                title = h.title,
+                                progressNumber = h.chapterNumber,
+                                coverData = h.coverData,
+                                section = HomeHubSection.Novel,
+                            )
+                        },
+                        recommendations = novelRecommendations.map { n ->
+                            HomeHubRecommendation(
+                                entryId = n.novel.id,
+                                title = n.novel.title,
+                                coverData = NovelCover(
+                                    novelId = n.novel.id,
+                                    sourceId = n.novel.source,
+                                    isNovelFavorite = n.novel.favorite,
+                                    url = n.novel.thumbnailUrl,
+                                    lastModified = n.novel.coverLastModified,
+                                ),
+                                section = HomeHubSection.Novel,
+                                progressNumerator = n.readCount,
+                                progressDenominator = n.totalChapters,
+                            )
+                        },
                         userName = data.name,
                         userAvatar = data.avatar,
-                        isInitialized = hasData || it.isInitialized,
                         isLoading = false,
+                        showWelcome = showWelcome,
+                        showFilteredEmpty = showFilteredEmpty,
                     )
+                }
+
+                if (hasData && !fastCache.load().isInitialized) {
+                    fastCache.markInitialized()
                 }
 
                 if (
                     hero != null &&
                     shouldReloadNovelHomeHeroChapterId(
-                        previousHeroNovelId = previousHero?.novelId,
-                        previousHeroChapterId = previousHero?.chapterId,
+                        previousHeroNovelId = previousHero?.entryId,
+                        previousHeroChapterId = previousHeroChapterId,
                         currentHeroNovelId = hero.novelId,
                         currentHeroChapterId = hero.chapterId,
                     )
@@ -204,52 +238,50 @@ class NovelHomeHubScreenModel(
 
     private suspend fun loadHeroChapterId(novelId: Long, fromChapterId: Long) {
         val chapters = getNovelWithChapters.awaitChapters(novelId, applyScanlatorFilter = true)
-        mutableState.update {
-            it.copy(heroChapterId = resolveNovelHomeHeroChapterId(chapters, fromChapterId))
-        }
+        lastResolvedHeroChapterId = resolveNovelHomeHeroChapterId(chapters, fromChapterId)
     }
 
     fun getHeroChapterId(): Long? {
-        return state.value.heroChapterId ?: state.value.hero?.chapterId
-    }
-
-    fun updateUserName(name: String) {
-        val previousName = userProfilePreferences.name().get()
-        userProfilePreferences.name().set(name)
-        if (name != previousName) {
-            userProfilePreferences.nameEdited().set(true)
-        }
-        fastCache.updateUserName(name)
-        mutableState.update { it.copy(userName = name) }
-    }
-
-    fun updateUserAvatar(uriString: String) {
-        val context = Injekt.get<android.app.Application>()
-        try {
-            val uri = android.net.Uri.parse(uriString)
-            val inputStream = context.contentResolver.openInputStream(uri) ?: return
-            val file = File(context.filesDir, "user_avatar_novel.jpg")
-            file.outputStream().use { output ->
-                inputStream.use { input -> input.copyTo(output) }
-            }
-            val path = file.absolutePath
-            userProfilePreferences.avatarUrl().set(path)
-            fastCache.updateUserAvatar(path)
-            mutableState.update { it.copy(userAvatar = path) }
-        } catch (_: Exception) {
-        }
+        return lastResolvedHeroChapterId ?: originalHeroChapterId
     }
 
     fun saveCache() {
         val currentState = state.value
         fastCache.save(
-            CachedNovelHomeState(
-                hero = currentState.hero?.toCached(),
-                history = currentState.history.map { it.toCached() },
-                recommendations = currentState.recommendations.map { it.toCached() },
+            CachedHomeState(
+                hero = currentState.hero?.let { hero ->
+                    CachedHeroItem(
+                        entryId = hero.entryId,
+                        title = hero.title,
+                        progressNumber = hero.progressNumber,
+                        coverUrl = (hero.coverData as? NovelCover)?.url,
+                        coverLastModified = (hero.coverData as? NovelCover)?.lastModified ?: 0L,
+                        subId = originalHeroChapterId ?: 0L,
+                    )
+                },
+                history = currentState.history.map { h ->
+                    CachedHistoryItem(
+                        entryId = h.entryId,
+                        title = h.title,
+                        progressNumber = h.progressNumber,
+                        coverUrl = (h.coverData as? NovelCover)?.url,
+                        coverLastModified = (h.coverData as? NovelCover)?.lastModified ?: 0L,
+                    )
+                },
+                recommendations = currentState.recommendations.map { r ->
+                    CachedRecommendationItem(
+                        entryId = r.entryId,
+                        title = r.title,
+                        coverUrl = (r.coverData as? NovelCover)?.url,
+                        coverLastModified = (r.coverData as? NovelCover)?.lastModified ?: 0L,
+                        totalCount = r.progressDenominator,
+                        progressCount = r.progressNumerator,
+                    )
+                },
                 userName = currentState.userName,
                 userAvatar = currentState.userAvatar,
-                isInitialized = currentState.isInitialized,
+                isInitialized =
+                currentState.showFilteredEmpty || (currentState.showWelcome.not() && currentState.isLoading.not()),
             ),
         )
     }
@@ -268,84 +300,6 @@ class NovelHomeHubScreenModel(
         val categories: List<tachiyomi.domain.category.novel.model.NovelCategory>,
         val historyList: List<NovelHistoryWithRelations>,
         val novelList: List<LibraryNovel>,
-    )
-
-    private fun NovelHistoryWithRelations.toHeroData() = HeroData(
-        novelId = novelId,
-        title = title,
-        chapterNumber = chapterNumber,
-        coverData = coverData,
-        chapterId = chapterId,
-    )
-
-    private fun NovelHistoryWithRelations.toHistoryData() = HistoryData(
-        novelId = novelId,
-        title = title,
-        chapterNumber = chapterNumber,
-        coverData = coverData,
-    )
-
-    private fun LibraryNovel.toRecommendationData() = RecommendationData(
-        novelId = novel.id,
-        title = novel.title,
-        coverData = NovelCover(
-            novelId = novel.id,
-            sourceId = novel.source,
-            isNovelFavorite = novel.favorite,
-            url = novel.thumbnailUrl,
-            lastModified = novel.coverLastModified,
-        ),
-        totalCount = totalChapters,
-        readCount = readCount,
-    )
-
-    private fun HeroData.toCached() = CachedNovelHeroItem(
-        novelId = novelId,
-        title = title,
-        chapterNumber = chapterNumber,
-        coverUrl = coverData.url,
-        coverLastModified = coverData.lastModified,
-        chapterId = chapterId,
-    )
-
-    private fun HistoryData.toCached() = CachedNovelHistoryItem(
-        novelId = novelId,
-        title = title,
-        chapterNumber = chapterNumber,
-        coverUrl = coverData.url,
-        coverLastModified = coverData.lastModified,
-    )
-
-    private fun RecommendationData.toCached() = CachedNovelRecommendationItem(
-        novelId = novelId,
-        title = title,
-        coverUrl = coverData.url,
-        coverLastModified = coverData.lastModified,
-        totalCount = totalCount,
-        readCount = readCount,
-    )
-
-    private fun CachedNovelHeroItem.toHeroData() = HeroData(
-        novelId = novelId,
-        title = title,
-        chapterNumber = chapterNumber,
-        coverData = NovelCover(novelId, -1, true, coverUrl, coverLastModified),
-        chapterId = chapterId,
-    )
-
-    private fun CachedNovelHistoryItem.toHistoryData() = HistoryData(
-        novelId = novelId,
-        title = title,
-        chapterNumber = chapterNumber,
-        coverData = NovelCover(novelId, -1, true, coverUrl, coverLastModified),
-    )
-
-    private fun CachedNovelRecommendationItem.toRecommendationData() = RecommendationData(
-        novelId = novelId,
-        title = title,
-        coverData = NovelCover(novelId, -1, true, coverUrl, coverLastModified),
-        totalCount = totalCount,
-        readCount = readCount,
     )
 
     companion object {

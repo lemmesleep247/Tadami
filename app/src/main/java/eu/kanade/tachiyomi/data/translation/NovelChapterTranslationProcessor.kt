@@ -39,6 +39,7 @@ import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 class NovelChapterTranslationProcessor(
     private val application: Application = Injekt.get(),
@@ -46,7 +47,10 @@ class NovelChapterTranslationProcessor(
         val networkHelper = Injekt.get<NetworkHelper>()
         val json = Injekt.get<Json>()
         GeminiTranslationService(
-            client = networkHelper.client,
+            client = networkHelper.client.newBuilder()
+                .callTimeout(300, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(180, java.util.concurrent.TimeUnit.SECONDS)
+                .build(),
             json = json,
             promptResolver = GeminiPromptResolver(application),
         )
@@ -128,8 +132,26 @@ class NovelChapterTranslationProcessor(
 
         onLog?.invoke(settings.translationRequestConfigLog())
 
+        val targetLang = settings.geminiTargetLang
         val translated = mutableMapOf<Int, String>()
         val indexedBlocks = segments.mapIndexed { index, text -> index to text }
+        val nonCachedSegments = mutableListOf<Pair<Int, String>>()
+
+        indexedBlocks.forEach { (index, text) ->
+            val cachedTranslation = segmentTranslationCache[text to targetLang]
+            if (!cachedTranslation.isNullOrBlank()) {
+                translated[index] = cachedTranslation
+            } else {
+                nonCachedSegments.add(index to text)
+            }
+        }
+
+        if (nonCachedSegments.isEmpty()) {
+            onLog?.invoke("All segments successfully loaded from in-memory cache!")
+            onProgress?.invoke(100)
+            return translated.toMap()
+        }
+
         val updateMutex = Mutex()
 
         suspend fun runChunkedTranslation(
@@ -176,9 +198,12 @@ class NovelChapterTranslationProcessor(
                             updateMutex.withLock {
                                 if (result != null) {
                                     result.forEachIndexed { localIndex, text ->
-                                        val originalIndex = chunk.getOrNull(localIndex)?.first ?: return@forEachIndexed
+                                        val pair = chunk.getOrNull(localIndex) ?: return@forEachIndexed
+                                        val originalIndex = pair.first
+                                        val originalText = pair.second
                                         if (!text.isNullOrBlank()) {
                                             translated[originalIndex] = text
+                                            segmentTranslationCache[originalText to targetLang] = text
                                         }
                                     }
                                 }
@@ -198,7 +223,7 @@ class NovelChapterTranslationProcessor(
             if (settings.shouldUseSinglePrivateChapterRequestMode()) {
                 onLog?.invoke("Private Gemini mode: requesting the whole chapter at once")
                 val singleResult = requestTranslationBatch(
-                    segments = indexedBlocks.map { it.second },
+                    segments = nonCachedSegments.map { it.second },
                     settings = settings,
                     onLog = onLog,
                 )
@@ -206,7 +231,11 @@ class NovelChapterTranslationProcessor(
                 if (singleSuccess) {
                     singleResult.orEmpty().forEachIndexed { index, text ->
                         if (!text.isNullOrBlank()) {
-                            translated[index] = text
+                            val pair = nonCachedSegments.getOrNull(index) ?: return@forEachIndexed
+                            val originalIndex = pair.first
+                            val originalText = pair.second
+                            translated[originalIndex] = text
+                            segmentTranslationCache[originalText to targetLang] = text
                         }
                     }
                     onProgress?.invoke(100)
@@ -215,7 +244,7 @@ class NovelChapterTranslationProcessor(
                         "Single chapter request failed, falling back to chunked mode " +
                             "(batch=$PRIVATE_FALLBACK_CHUNK_SIZE, concurrency=$PRIVATE_FALLBACK_CONCURRENCY)",
                     )
-                    val fallbackChunks = indexedBlocks.chunked(PRIVATE_FALLBACK_CHUNK_SIZE)
+                    val fallbackChunks = nonCachedSegments.chunked(PRIVATE_FALLBACK_CHUNK_SIZE)
                     runChunkedTranslation(
                         chunks = fallbackChunks,
                         chunkSize = PRIVATE_FALLBACK_CHUNK_SIZE,
@@ -225,7 +254,7 @@ class NovelChapterTranslationProcessor(
                 }
             } else {
                 val chunkSize = settings.effectiveTranslationBatchSize()
-                val chunks = indexedBlocks.chunked(chunkSize)
+                val chunks = nonCachedSegments.chunked(chunkSize)
                 runChunkedTranslation(
                     chunks = chunks,
                     chunkSize = chunkSize,
@@ -346,6 +375,14 @@ class NovelChapterTranslationProcessor(
             }
         }
         return if (recovered.any { !it.isNullOrBlank() }) recovered else result
+    }
+
+    companion object {
+        private val segmentTranslationCache = ConcurrentHashMap<Pair<String, String>, String>()
+
+        fun clearCache() {
+            segmentTranslationCache.clear()
+        }
     }
 }
 

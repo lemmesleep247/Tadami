@@ -97,14 +97,11 @@ import eu.kanade.tachiyomi.ui.reader.novel.tts.SharedNovelTtsSessionStore
 import eu.kanade.tachiyomi.ui.reader.novel.tts.resolveNovelTtsVoiceSelection
 import eu.kanade.tachiyomi.util.system.isNightMode
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -118,6 +115,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -135,7 +133,8 @@ import org.jsoup.nodes.TextNode
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.achievement.handler.AchievementEventBus
-import tachiyomi.data.achievement.model.AchievementEvent
+import tachiyomi.domain.achievement.model.AchievementEvent
+import tachiyomi.domain.achievement.repository.ActivityDataRepository
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.history.novel.model.NovelHistoryUpdate
@@ -184,13 +183,18 @@ class NovelReaderScreenModel(
         novelReaderPreferences = novelReaderPreferences,
     ),
     private val eventBus: AchievementEventBus? = runCatching { Injekt.get<AchievementEventBus>() }.getOrNull(),
+    private val activityDataRepository: ActivityDataRepository = Injekt.get(),
     private val isSystemDark: () -> Boolean = { Injekt.get<Application>().isNightMode() },
     private val geminiTranslationService: GeminiTranslationService = run {
         val app = Injekt.get<Application>()
         val networkHelper = Injekt.get<eu.kanade.tachiyomi.network.NetworkHelper>()
         val json = Injekt.get<Json>()
+        val geminiClient = networkHelper.client.newBuilder()
+            .callTimeout(300, TimeUnit.SECONDS)
+            .readTimeout(180, TimeUnit.SECONDS)
+            .build()
         GeminiTranslationService(
-            client = networkHelper.client,
+            client = geminiClient,
             json = json,
             promptResolver = GeminiPromptResolver(app),
         )
@@ -364,16 +368,15 @@ class NovelReaderScreenModel(
     )
     private var settingsJob: Job? = null
     private var ttsWordProgressJob: Job? = null
-    private var rawHtml: String? = null
+    private var contentModel: NovelReaderContentModel? = null
     private var currentNovel: Novel? = null
     private var currentChapter: NovelChapter? = null
-    private var chapterOrderList: List<NovelChapter> = emptyList()
+    private var chapterOrderList: MutableList<NovelChapter> = mutableListOf()
+    private var fullChapterOrderList: List<NovelChapter> = emptyList()
     private var customCss: String? = null
     private var customJs: String? = null
     private var pluginSite: String? = null
     private var chapterWebUrl: String? = null
-    private var parsedContentBlocks: List<ContentBlock>? = null
-    private var parsedRichContentResult: NovelRichContentParseResult? = null
     private var lastSavedProgress: Long? = null
     private var lastSavedRead: Boolean? = null
     private var initialProgressIndex: Int = 0
@@ -390,7 +393,7 @@ class NovelReaderScreenModel(
     private var pendingAutoStartGeminiTranslation: Boolean = autoStartGeminiTranslation
     private var geminiTranslationJob: Job? = null
     private var queueProgressJob: Job? = null
-    private var geminiTranslatedByIndex: Map<Int, String> = emptyMap()
+    private val translationHolder = NovelReaderTranslationHolder { currentParsedTextBlocks() }
     private var isGeminiTranslating: Boolean = false
     private var geminiTranslationProgress: Int = 0
     private var isGeminiTranslationVisible: Boolean = false
@@ -399,7 +402,6 @@ class NovelReaderScreenModel(
 
     // Google Translation
     private var googleTranslationJob: Job? = null
-    private var googleTranslatedByIndex: Map<Int, String> = emptyMap()
     private var isGoogleTranslating: Boolean = false
     private var googleTranslationProgress: Int = 0
     private var isGoogleTranslationVisible: Boolean = false
@@ -447,8 +449,6 @@ class NovelReaderScreenModel(
     private val progressPersistenceMutex = Mutex()
     private var pendingProgressPersistence: PendingProgressPersistence? = null
     private var progressPersistenceJob: Job? = null
-    private val disposalCleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var disposalCleanupJob: Job? = null
 
     @Volatile
     private var progressPersistenceScheduled = false
@@ -510,8 +510,13 @@ class NovelReaderScreenModel(
         clearChapterTransientState()
         currentNovel = novel
         currentChapter = chapter
-        chapterOrderList = snapshot.chapterOrderList
-        rawHtml = withContext(Dispatchers.Default) {
+        fullChapterOrderList = snapshot.chapterOrderList
+        chapterOrderList = NovelReaderChapterWindow.resolveWindow(
+            chapters = fullChapterOrderList,
+            currentChapterId = chapter.id,
+            windowRadius = 50,
+        ).toMutableList()
+        val normalizedChapterHtml = withContext(Dispatchers.Default) {
             val normalizedChapterHtml = prependChapterHeadingIfMissing(
                 rawHtml = snapshot.rawHtml.normalizeStructuredChapterPayload(),
                 chapterName = chapter.name,
@@ -530,15 +535,15 @@ class NovelReaderScreenModel(
         customJs = snapshot.customJs
         pluginSite = snapshot.pluginSite
         chapterWebUrl = snapshot.chapterWebUrl
-        val initialSettings = novelReaderPreferences.resolveSettings(novel.source)
-        mutableState.value = State.Loading(initialSettings)
-        if (rawHtml == null) return setError("Chapter content is empty")
-        parseAndCacheContentBlocks(
-            rawHtml = rawHtml.orEmpty(),
+        contentModel = NovelReaderContentModel(
+            canonicalHtml = normalizedChapterHtml,
             chapterWebUrl = chapterWebUrl,
             novelUrl = novel.url,
             pluginSite = pluginSite,
         )
+        val initialSettings = novelReaderPreferences.resolveSettings(novel.source)
+        mutableState.value = State.Loading(initialSettings)
+        if (contentModel == null) return setError("Chapter content is empty")
         chapterReadStartTimeMs = System.currentTimeMillis()
         restoreGeminiTranslationFromCache(
             chapterId = chapter.id,
@@ -581,6 +586,22 @@ class NovelReaderScreenModel(
             NovelTranslationProvider.OLLAMA_CLOUD -> refreshOllamaCloudModels()
         }
     }
+    fun loadFullChapterOrderList() {
+        if (fullChapterOrderList.isNotEmpty()) {
+            val successState = mutableState.value as? State.Success ?: return
+            if (successState.fullChapterOrderList.isEmpty()) {
+                mutableState.value = successState.copy(fullChapterOrderList = fullChapterOrderList)
+            }
+            return
+        }
+        screenModelScope.launch {
+            val novel = currentNovel ?: return@launch
+            fullChapterOrderList = loadChapterOrderList(novel.id)
+            val successState = mutableState.value as? State.Success ?: return@launch
+            mutableState.value = successState.copy(fullChapterOrderList = fullChapterOrderList)
+        }
+    }
+
     private fun setError(message: String?) {
         mutableState.value = State.Error(message)
     }
@@ -663,17 +684,18 @@ class NovelReaderScreenModel(
         if (!settings.geminiEnabled || !(requestedAutoStart || englishSourceAutoStart)) return
         if (!settings.hasConfiguredTranslationProvider()) return
         if (currentParsedTextBlocks().isEmpty()) return
-        if (isGeminiTranslating || hasGeminiTranslationCache || geminiTranslatedByIndex.isNotEmpty()) return
+        if (isGeminiTranslating || hasGeminiTranslationCache || !translationHolder.isEmpty("gemini")) return
         hasTriggeredGeminiAutoStart = true
         pendingAutoStartGeminiTranslation = false
         addAiTranslationLog("?? Auto-start translation for English source")
         startGeminiTranslation()
     }
     private fun findNextChapter(currentChapter: NovelChapter): NovelChapter? {
-        return chapterOrderList
+        val list = if (fullChapterOrderList.isNotEmpty()) fullChapterOrderList else chapterOrderList
+        return list
             .indexOfFirst { it.id == currentChapter.id }
             .takeIf { it >= 0 }
-            ?.let { chapterOrderList.getOrNull(it + 1) }
+            ?.let { list.getOrNull(it + 1) }
     }
     private fun setSeriesInterstitialState(value: SeriesInterstitialState?) {
         seriesInterstitialState = value
@@ -782,7 +804,12 @@ class NovelReaderScreenModel(
                 retainMissingChapters = true,
                 sourceOrderOffset = (pageResult.page - 1L) * JAOMIX_PAGE_SOURCE_ORDER_STRIDE,
             )
-            chapterOrderList = loadChapterOrderList(novel.id)
+            fullChapterOrderList = loadChapterOrderList(novel.id)
+            chapterOrderList = NovelReaderChapterWindow.resolveWindow(
+                chapters = fullChapterOrderList,
+                currentChapterId = chapter.id,
+                windowRadius = 50,
+            ).toMutableList()
             withContext(Dispatchers.Main.immediate) {
                 updateContent(settings)
             }
@@ -806,7 +833,8 @@ class NovelReaderScreenModel(
         if (!settings.selectedTextTranslationEnabled) {
             clearSelectedTextTranslationSelection(refreshUi = false)
         }
-        val html = rawHtml ?: return
+        val model = contentModel ?: return
+        val html = model.canonicalHtml
         val novel = currentNovel ?: return
         val chapter = currentChapter ?: return
         if (!settings.geminiEnabled && isGeminiTranslating) {
@@ -836,17 +864,28 @@ class NovelReaderScreenModel(
             decodedNativeProgress != null || decodedPageReaderProgress != null -> 0
             else -> chapter.lastPageRead.coerceIn(0L, 100L).toInt()
         }
-        val chapterNavigation = chapterOrderList.let { chapters ->
-            val index = chapters.indexOfFirst { it.id == chapter.id }
-            val previousChapter = chapters.getOrNull(index - 1)
-            val nextChapter = chapters.getOrNull(index + 1)
-            ChapterNavigation(
-                previousChapterId = previousChapter?.id,
-                previousChapterName = previousChapter?.name,
-                nextChapterId = nextChapter?.id,
-                nextChapterName = nextChapter?.name,
-            )
-        }
+        val previousResult = NovelReaderChapterWindow.navigate(
+            currentChapterId = chapter.id,
+            allChapters = if (fullChapterOrderList.isNotEmpty()) fullChapterOrderList else chapterOrderList,
+            direction = -1,
+            windowRadius = 50,
+        )
+        val previousChapter = previousResult.newCurrentChapter.takeIf { it.id != chapter.id }
+
+        val nextResult = NovelReaderChapterWindow.navigate(
+            currentChapterId = chapter.id,
+            allChapters = if (fullChapterOrderList.isNotEmpty()) fullChapterOrderList else chapterOrderList,
+            direction = 1,
+            windowRadius = 50,
+        )
+        val nextChapter = nextResult.newCurrentChapter.takeIf { it.id != chapter.id }
+
+        val chapterNavigation = ChapterNavigation(
+            previousChapterId = previousChapter?.id,
+            previousChapterName = previousChapter?.name,
+            nextChapterId = nextChapter?.id,
+            nextChapterName = nextChapter?.name,
+        )
         maybeEnsureJaomixAdjacentPage(
             chapter = chapter,
             previousChapterId = chapterNavigation.previousChapterId,
@@ -855,8 +894,7 @@ class NovelReaderScreenModel(
         )
         val pluginCss = customCss
         val pluginJs = customJs
-        val baseContent = normalizeHtml(
-            rawHtml = html,
+        val baseContent = model.getNormalizedHtml(
             settings = settings,
             customCss = pluginCss,
             customJs = pluginJs,
@@ -865,7 +903,7 @@ class NovelReaderScreenModel(
         val baseTextBlocks = baseContentBlocks
             .filterIsInstance<ContentBlock.Text>()
             .map { it.text }
-        val richContentResult = parsedRichContentResult
+        val richContentResult = model.parsedRichContentResult
             ?: parseNovelRichContent(baseContent)
                 .let { parsed ->
                     parsed.copy(
@@ -877,7 +915,7 @@ class NovelReaderScreenModel(
                         ),
                     )
                 }
-                .also { parsedRichContentResult = it }
+                .also { model.parsedRichContentResult = it }
         val displayContentBlocks = when {
             geminiVisibleInUi -> applyGeminiTranslationToContentBlocks(baseContentBlocks)
             googleVisibleInUi -> applyGoogleTranslationToContentBlocks(baseContentBlocks)
@@ -885,7 +923,10 @@ class NovelReaderScreenModel(
         }
         if (googleVisibleInUi) {
             addGoogleLog(
-                "Apply UI: baseBlocks=${baseContentBlocks.size}, textBlocks=${baseTextBlocks.size}, translatedSegments=${googleTranslatedByIndex.size}, visible=$googleVisibleInUi",
+                "Apply UI: baseBlocks=${baseContentBlocks.size}, " +
+                    "textBlocks=${baseTextBlocks.size}, " +
+                    "translatedSegments=${translationHolder.map("google").size}, " +
+                    "visible=$googleVisibleInUi",
             )
         }
         val displayRichBlocks = if (geminiVisibleInUi) {
@@ -896,21 +937,21 @@ class NovelReaderScreenModel(
             richContentResult.blocks
         }
         val displayContent = when {
-            geminiVisibleInUi && geminiTranslatedByIndex.isNotEmpty() -> normalizeHtml(
+            geminiVisibleInUi && !translationHolder.isEmpty("gemini") -> normalizeHtml(
                 rawHtml = buildTranslatedRawHtmlForDisplay(
                     templateHtml = html,
                     fallbackBlocks = displayContentBlocks,
-                    translatedByIndex = geminiTranslatedByIndex,
+                    translatedByIndex = translationHolder.map("gemini"),
                 ),
                 settings = settings,
                 customCss = pluginCss,
                 customJs = pluginJs,
             )
-            googleVisibleInUi && googleTranslatedByIndex.isNotEmpty() -> normalizeHtml(
+            googleVisibleInUi && !translationHolder.isEmpty("google") -> normalizeHtml(
                 rawHtml = buildTranslatedRawHtmlForDisplay(
                     templateHtml = html,
                     fallbackBlocks = displayContentBlocks,
-                    translatedByIndex = googleTranslatedByIndex,
+                    translatedByIndex = translationHolder.map("google"),
                 ),
                 settings = settings,
                 customCss = pluginCss,
@@ -929,10 +970,13 @@ class NovelReaderScreenModel(
             richContentBlocks = displayRichBlocks,
             richContentUnsupportedFeaturesDetected = richContentResult.unsupportedFeaturesDetected,
             chapterOrderList = chapterOrderList,
-            lastSavedIndex = lastSavedIndex,
-            lastSavedScrollOffsetPx = lastSavedScrollOffsetPx,
-            lastSavedWebProgressPercent = lastSavedWebProgressPercent,
-            lastSavedPageReaderProgress = decodedPageReaderProgress,
+            fullChapterOrderList = if (fullChapterOrderList.isNotEmpty()) fullChapterOrderList else emptyList(),
+            progress = State.ReaderProgressState(
+                lastSavedIndex = lastSavedIndex,
+                lastSavedScrollOffsetPx = lastSavedScrollOffsetPx,
+                lastSavedWebProgressPercent = lastSavedWebProgressPercent,
+                lastSavedPageReaderProgress = decodedPageReaderProgress,
+            ),
             previousChapterId = chapterNavigation.previousChapterId,
             previousChapterName = chapterNavigation.previousChapterName,
             nextChapterId = chapterNavigation.nextChapterId,
@@ -941,17 +985,21 @@ class NovelReaderScreenModel(
             chapterWebUrl = chapterWebUrl,
             selectedTextTranslationSelection = selectedTextTranslationSelection,
             selectedTextTranslationUiState = selectedTextTranslationUiState,
-            isGeminiTranslating = isGeminiTranslating,
-            geminiTranslationProgress = geminiTranslationProgress,
-            isGeminiTranslationVisible = geminiVisibleInUi,
-            hasGeminiTranslationCache = geminiCacheAvailableInUi,
-            geminiLogs = geminiLogs,
-            isGoogleTranslating = isGoogleTranslating,
-            googleTranslationProgress = googleTranslationProgress,
-            isGoogleTranslationVisible = googleVisibleInUi,
-            hasGoogleTranslationCache = googleCacheAvailableInUi,
-            googleLogs = googleLogs,
-            translationPhase = translationPhase,
+            geminiTranslation = State.ReaderGeminiState(
+                isGeminiTranslating = isGeminiTranslating,
+                geminiTranslationProgress = geminiTranslationProgress,
+                isGeminiTranslationVisible = geminiVisibleInUi,
+                hasGeminiTranslationCache = geminiCacheAvailableInUi,
+                geminiLogs = geminiLogs,
+            ),
+            googleTranslation = State.ReaderGoogleState(
+                isGoogleTranslating = isGoogleTranslating,
+                googleTranslationProgress = googleTranslationProgress,
+                isGoogleTranslationVisible = googleVisibleInUi,
+                hasGoogleTranslationCache = googleCacheAvailableInUi,
+                googleLogs = googleLogs,
+                translationPhase = translationPhase,
+            ),
             ttsUiState = ttsUiState.copy(
                 enabled = settings.ttsEnabled,
                 selectedEnginePackage = settings.ttsEnginePackage,
@@ -960,31 +1008,33 @@ class NovelReaderScreenModel(
                 speechRate = settings.ttsSpeechRate,
                 pitch = settings.ttsPitch,
             ),
-            openRouterModelIds = openRouterModelIds,
-            isOpenRouterModelsLoading = isOpenRouterModelsLoading,
-            isTestingOpenRouterConnection = isTestingOpenRouterConnection,
-            openRouterApiTestStatus = openRouterApiTestStatus,
-            openRouterApiTestMessage = openRouterApiTestMessage,
-            deepSeekModelIds = deepSeekModelIds,
-            isDeepSeekModelsLoading = isDeepSeekModelsLoading,
-            isTestingDeepSeekConnection = isTestingDeepSeekConnection,
-            deepSeekApiTestStatus = deepSeekApiTestStatus,
-            deepSeekApiTestMessage = deepSeekApiTestMessage,
-            mistralModelIds = mistralModelIds,
-            isMistralModelsLoading = isMistralModelsLoading,
-            isTestingMistralConnection = isTestingMistralConnection,
-            mistralApiTestStatus = mistralApiTestStatus,
-            mistralApiTestMessage = mistralApiTestMessage,
-            nvidiaModelIds = nvidiaModelIds,
-            isNvidiaModelsLoading = isNvidiaModelsLoading,
-            isTestingNvidiaConnection = isTestingNvidiaConnection,
-            nvidiaApiTestStatus = nvidiaApiTestStatus,
-            nvidiaApiTestMessage = nvidiaApiTestMessage,
-            ollamaCloudModelIds = ollamaCloudModelIds,
-            isOllamaCloudModelsLoading = isOllamaCloudModelsLoading,
-            isTestingOllamaCloudConnection = isTestingOllamaCloudConnection,
-            ollamaCloudApiTestStatus = ollamaCloudApiTestStatus,
-            ollamaCloudApiTestMessage = ollamaCloudApiTestMessage,
+            aiProviders = State.ReaderAiProvidersState(
+                openRouterModelIds = openRouterModelIds,
+                isOpenRouterModelsLoading = isOpenRouterModelsLoading,
+                isTestingOpenRouterConnection = isTestingOpenRouterConnection,
+                openRouterApiTestStatus = openRouterApiTestStatus,
+                openRouterApiTestMessage = openRouterApiTestMessage,
+                deepSeekModelIds = deepSeekModelIds,
+                isDeepSeekModelsLoading = isDeepSeekModelsLoading,
+                isTestingDeepSeekConnection = isTestingDeepSeekConnection,
+                deepSeekApiTestStatus = deepSeekApiTestStatus,
+                deepSeekApiTestMessage = deepSeekApiTestMessage,
+                mistralModelIds = mistralModelIds,
+                isMistralModelsLoading = isMistralModelsLoading,
+                isTestingMistralConnection = isTestingMistralConnection,
+                mistralApiTestStatus = mistralApiTestStatus,
+                mistralApiTestMessage = mistralApiTestMessage,
+                nvidiaModelIds = nvidiaModelIds,
+                isNvidiaModelsLoading = isNvidiaModelsLoading,
+                isTestingNvidiaConnection = isTestingNvidiaConnection,
+                nvidiaApiTestStatus = nvidiaApiTestStatus,
+                nvidiaApiTestMessage = nvidiaApiTestMessage,
+                ollamaCloudModelIds = ollamaCloudModelIds,
+                isOllamaCloudModelsLoading = isOllamaCloudModelsLoading,
+                isTestingOllamaCloudConnection = isTestingOllamaCloudConnection,
+                ollamaCloudApiTestStatus = ollamaCloudApiTestStatus,
+                ollamaCloudApiTestMessage = ollamaCloudApiTestMessage,
+            ),
         )
     }
     private suspend fun refreshTtsEngines() {
@@ -1215,10 +1265,10 @@ class NovelReaderScreenModel(
         if (!shouldPreferTranslatedTts(settings)) return null
         if (chapterId != currentChapter?.id) return null
         val translatedBlocks = when {
-            settings.geminiEnabled && geminiTranslatedByIndex.isNotEmpty() -> {
+            settings.geminiEnabled && !translationHolder.isEmpty("gemini") -> {
                 applyGeminiTranslationToContentBlocks(originalContentBlocks, forceTranslation = true)
             }
-            settings.googleTranslationEnabled && googleTranslatedByIndex.isNotEmpty() -> {
+            settings.googleTranslationEnabled && !translationHolder.isEmpty("google") -> {
                 applyGoogleTranslationToContentBlocks(originalContentBlocks)
             }
             else -> return null
@@ -1302,26 +1352,7 @@ class NovelReaderScreenModel(
             mutableState.value = state.copy(ttsUiState = ttsUiState)
         }
     }
-    private suspend fun parseAndCacheContentBlocks(
-        rawHtml: String,
-        chapterWebUrl: String?,
-        novelUrl: String,
-        pluginSite: String?,
-    ) {
-        val blocks = withContext(Dispatchers.Default) {
-            val extractedBlocks = extractContentBlocks(
-                rawHtml = rawHtml,
-                chapterWebUrl = chapterWebUrl,
-                novelUrl = novelUrl,
-                pluginSite = pluginSite,
-            ).ifEmpty {
-                extractTextBlocks(rawHtml).map(ContentBlock::Text)
-            }
-            extractedBlocks
-        }
-        parsedContentBlocks = blocks
-        parsedRichContentResult = null
-    }
+
     private suspend fun resolveChapterWebUrl(
         source: eu.kanade.tachiyomi.novelsource.NovelSource,
         chapterUrl: String,
@@ -1650,7 +1681,11 @@ class NovelReaderScreenModel(
         )
     }
     suspend fun awaitDisposalCleanup() {
-        disposalCleanupJob?.join()
+        withTimeoutOrNull(2_000) {
+            screenModelScope.coroutineContext[kotlinx.coroutines.Job]?.children?.forEach {
+                it.join()
+            }
+        }
     }
     private suspend fun flushPendingProgressPersistence() {
         while (true) {
@@ -1680,6 +1715,11 @@ class NovelReaderScreenModel(
                 if (nextUpdate.emitNovelCompleted) {
                     eventBus?.tryEmit(AchievementEvent.NovelCompleted(nextUpdate.novelId))
                 }
+                activityDataRepository.recordReading(
+                    id = nextUpdate.chapterId,
+                    chaptersCount = 1,
+                    durationMs = nextUpdate.sessionReadDurationMs.coerceAtLeast(0L),
+                )
                 if (Injekt.get<eu.kanade.domain.track.service.TrackPreferences>().autoUpdateTrack().get()) {
                     val context = Injekt.get<Application>()
                     Injekt.get<TrackNovelChapter>().await(
@@ -1850,12 +1890,16 @@ class NovelReaderScreenModel(
             bookmark = bookmark,
         )
         currentChapter = updatedChapter
-        chapterOrderList = updateNovelReaderChapterProgressList(
-            chapters = chapterOrderList,
-            chapterId = chapter.id,
-            read = read,
-            progress = progress,
-        )
+        val chapterIndex = chapterOrderList.indexOfFirst { it.id == chapter.id }
+        if (chapterIndex >= 0) {
+            val existingChapter = chapterOrderList[chapterIndex]
+            if (existingChapter.read != read || existingChapter.lastPageRead != progress) {
+                chapterOrderList[chapterIndex] = existingChapter.copy(
+                    read = read,
+                    lastPageRead = progress,
+                )
+            }
+        }
         val currentState = mutableState.value
         if (currentState is State.Success) {
             val decodedNativeProgress = decodeNativeScrollProgress(progress)
@@ -1875,10 +1919,12 @@ class NovelReaderScreenModel(
             }
             mutableState.value = currentState.copy(
                 chapter = updatedChapter,
-                lastSavedIndex = lastSavedIndex,
-                lastSavedScrollOffsetPx = lastSavedScrollOffsetPx,
-                lastSavedWebProgressPercent = lastSavedWebProgressPercent,
-                lastSavedPageReaderProgress = decodedPageReaderProgress,
+                progress = currentState.progress.copy(
+                    lastSavedIndex = lastSavedIndex,
+                    lastSavedScrollOffsetPx = lastSavedScrollOffsetPx,
+                    lastSavedWebProgressPercent = lastSavedWebProgressPercent,
+                    lastSavedPageReaderProgress = decodedPageReaderProgress,
+                ),
             )
         }
     }
@@ -1903,6 +1949,8 @@ class NovelReaderScreenModel(
         }
     }
     override fun onDispose() {
+        // Fire-and-forget cancellation — no blocking cancelAndJoin calls.
+        // Each job is independently cancelled; cleanup happens in clearChapterTransientState().
         settingsJob?.cancel()
         nextChapterPrefetchJob?.cancel()
         nextChapterGeminiPrefetchJob?.cancel()
@@ -1913,37 +1961,21 @@ class NovelReaderScreenModel(
         selectedTextTranslationJob?.cancel()
         progressPersistenceJob?.cancel()
         ttsWordProgressJob?.cancel()
-        if (disposalCleanupJob == null) {
-            disposalCleanupJob = disposalCleanupScope.launch(NonCancellable) {
-                settingsJob?.cancelAndJoin()
-                nextChapterPrefetchJob?.cancelAndJoin()
-                nextChapterGeminiPrefetchJob?.cancelAndJoin()
-                adjacentJaomixPageJob?.cancelAndJoin()
-                geminiTranslationJob?.cancelAndJoin()
-                queueProgressJob?.cancelAndJoin()
-                googleTranslationJob?.cancelAndJoin()
-                selectedTextTranslationJob?.cancelAndJoin()
-                progressPersistenceJob?.cancelAndJoin()
-                ttsWordProgressJob?.cancelAndJoin()
-                clearChapterTransientState()
-                ttsAudioFocusManager.abandonPlaybackFocus()
-                ttsEngine.shutdown()
-            }
-        }
+        clearChapterTransientState()
+        ttsAudioFocusManager.abandonPlaybackFocus()
+        ttsEngine.shutdown()
         super.onDispose()
     }
 
     private fun clearChapterTransientState() {
         currentNovel = null
         currentChapter = null
-        chapterOrderList = emptyList()
-        rawHtml = null
+        chapterOrderList = mutableListOf()
+        contentModel = null
         customCss = null
         customJs = null
         pluginSite = null
         chapterWebUrl = null
-        parsedContentBlocks = null
-        parsedRichContentResult = null
         lastSavedProgress = null
         lastSavedRead = null
         initialProgressIndex = 0
@@ -1966,8 +1998,8 @@ class NovelReaderScreenModel(
         clearSelectedTextTranslationSelection(refreshUi = false)
         selectedTextTranslationSessionCache.clear()
         attemptedJaomixPages.clear()
-        geminiTranslatedByIndex = emptyMap()
-        googleTranslatedByIndex = emptyMap()
+        translationHolder.clear("gemini")
+        translationHolder.clear("google")
         isGeminiTranslating = false
         isGoogleTranslating = false
         geminiTranslationProgress = 0
@@ -2726,11 +2758,13 @@ class NovelReaderScreenModel(
     private fun refreshGeminiUiState() {
         val state = mutableState.value as? State.Success ?: return
         mutableState.value = state.copy(
-            isGeminiTranslating = isGeminiTranslating,
-            geminiTranslationProgress = geminiTranslationProgress,
-            isGeminiTranslationVisible = isGeminiTranslationVisible,
-            hasGeminiTranslationCache = hasGeminiTranslationCache,
-            geminiLogs = geminiLogs,
+            geminiTranslation = state.geminiTranslation.copy(
+                isGeminiTranslating = isGeminiTranslating,
+                geminiTranslationProgress = geminiTranslationProgress,
+                isGeminiTranslationVisible = isGeminiTranslationVisible,
+                hasGeminiTranslationCache = hasGeminiTranslationCache,
+                geminiLogs = geminiLogs,
+            ),
         )
     }
     fun startGeminiTranslation() {
@@ -2748,7 +2782,7 @@ class NovelReaderScreenModel(
             addAiTranslationLog("? Translation provider is not configured")
             return
         }
-        geminiTranslatedByIndex = emptyMap()
+        translationHolder.clear("gemini")
         isGeminiTranslationVisible = false
         hasGeminiTranslationCache = false
         isGeminiTranslating = true
@@ -2799,7 +2833,7 @@ class NovelReaderScreenModel(
         updateContent(settings)
     }
     fun toggleGeminiTranslationVisibility() {
-        if (geminiTranslatedByIndex.isEmpty()) return
+        if (translationHolder.isEmpty("gemini")) return
         isGeminiTranslationVisible = !isGeminiTranslationVisible
         addAiTranslationLog("??? Visibility: ${if (isGeminiTranslationVisible) "ON" else "OFF"}")
         val settings = (mutableState.value as? State.Success)?.readerSettings ?: return
@@ -2812,7 +2846,7 @@ class NovelReaderScreenModel(
         }
         geminiTranslationJob?.cancel()
         geminiTranslationJob = null
-        geminiTranslatedByIndex = emptyMap()
+        translationHolder.clear("gemini")
         isGeminiTranslating = false
         isGeminiTranslationVisible = false
         geminiTranslationProgress = 0
@@ -2856,7 +2890,7 @@ class NovelReaderScreenModel(
             targetLang = settings.googleTranslationTargetLang,
         )
 
-        googleTranslatedByIndex = emptyMap()
+        translationHolder.clear("google")
         isGoogleTranslationVisible = false
         hasGoogleTranslationCache = false
         isGoogleTranslating = true
@@ -2892,7 +2926,7 @@ class NovelReaderScreenModel(
                         it.isNotBlank()
                     }}/$baseTextBlocks.size, rateLimited=false",
                 )
-                googleTranslatedByIndex = results
+                translationHolder.put("google", results)
                 val chapter = currentChapter
                 if (chapter != null) {
                     googleSessionCache.put(
@@ -2939,7 +2973,7 @@ class NovelReaderScreenModel(
     }
 
     fun toggleGoogleTranslationVisibility() {
-        if (googleTranslatedByIndex.isEmpty()) return
+        if (translationHolder.isEmpty("google")) return
         isGoogleTranslationVisible = !isGoogleTranslationVisible
         val settings = (mutableState.value as? State.Success)?.readerSettings ?: return
         updateContent(settings)
@@ -2949,7 +2983,7 @@ class NovelReaderScreenModel(
         val chapter = currentChapter ?: return
         googleTranslationJob?.cancel()
         googleTranslationJob = null
-        googleTranslatedByIndex = emptyMap()
+        translationHolder.clear("google")
         isGoogleTranslating = false
         isGoogleTranslationVisible = false
         googleTranslationProgress = 0
@@ -2976,7 +3010,7 @@ class NovelReaderScreenModel(
             targetLang = settings.googleTranslationTargetLang,
         )
         if (cached != null && cached.isNotEmpty()) {
-            googleTranslatedByIndex = cached
+            translationHolder.put("google", cached)
             hasGoogleTranslationCache = true
             isGoogleTranslationVisible = true
             addGoogleLog(
@@ -2997,14 +3031,14 @@ class NovelReaderScreenModel(
     }
 
     private fun applyGoogleTranslationToContentBlocks(blocks: List<ContentBlock>): List<ContentBlock> {
-        if (googleTranslatedByIndex.isEmpty()) return blocks
+        if (translationHolder.isEmpty("google")) return blocks
         var textIndex = 0
         var replacedCount = 0
         val updated = blocks.map { block ->
             when (block) {
                 is ContentBlock.Image -> block
                 is ContentBlock.Text -> {
-                    val translated = googleTranslatedByIndex[textIndex]
+                    val translated = translationHolder.map("google")[textIndex]
                     textIndex += 1
                     if (translated.isNullOrBlank()) {
                         block
@@ -3053,7 +3087,7 @@ class NovelReaderScreenModel(
             hasGeminiTranslationCache = false
             return
         }
-        geminiTranslatedByIndex = cached.translatedByIndex
+        translationHolder.put("gemini", cached.translatedByIndex)
         hasGeminiTranslationCache = true
         geminiTranslationProgress = 100
         isGeminiTranslationVisible = true
@@ -3063,13 +3097,13 @@ class NovelReaderScreenModel(
         blocks: List<ContentBlock>,
         forceTranslation: Boolean = false,
     ): List<ContentBlock> {
-        if ((!forceTranslation && !isGeminiTranslationVisible) || geminiTranslatedByIndex.isEmpty()) return blocks
+        if ((!forceTranslation && !isGeminiTranslationVisible) || translationHolder.isEmpty("gemini")) return blocks
         var textIndex = 0
         return blocks.map { block ->
             when (block) {
                 is ContentBlock.Image -> block
                 is ContentBlock.Text -> {
-                    val translated = geminiTranslatedByIndex[textIndex]
+                    val translated = translationHolder.map("gemini")[textIndex]
                     textIndex += 1
                     if (translated.isNullOrBlank()) {
                         block
@@ -3084,12 +3118,12 @@ class NovelReaderScreenModel(
         blocks: List<NovelRichContentBlock>,
         forceTranslation: Boolean = false,
     ): List<NovelRichContentBlock> {
-        if ((!forceTranslation && !isGeminiTranslationVisible) || geminiTranslatedByIndex.isEmpty()) return blocks
+        if ((!forceTranslation && !isGeminiTranslationVisible) || translationHolder.isEmpty("gemini")) return blocks
         var textIndex = 0
         return blocks.map { block ->
             when (block) {
                 is NovelRichContentBlock.BlockQuote -> {
-                    val replacement = geminiTranslatedByIndex[textIndex]
+                    val replacement = translationHolder.map("gemini")[textIndex]
                     textIndex += 1
                     if (replacement.isNullOrBlank()) {
                         block
@@ -3103,7 +3137,7 @@ class NovelReaderScreenModel(
                     }
                 }
                 is NovelRichContentBlock.Heading -> {
-                    val replacement = geminiTranslatedByIndex[textIndex]
+                    val replacement = translationHolder.map("gemini")[textIndex]
                     textIndex += 1
                     if (replacement.isNullOrBlank()) {
                         block
@@ -3119,7 +3153,7 @@ class NovelReaderScreenModel(
                 is NovelRichContentBlock.Image -> block
                 is NovelRichContentBlock.HorizontalRule -> block
                 is NovelRichContentBlock.Paragraph -> {
-                    val replacement = geminiTranslatedByIndex[textIndex]
+                    val replacement = translationHolder.map("gemini")[textIndex]
                     textIndex += 1
                     if (replacement.isNullOrBlank()) {
                         block
@@ -3140,13 +3174,13 @@ class NovelReaderScreenModel(
         blocks: List<NovelRichContentBlock>,
         forceTranslation: Boolean = false,
     ): List<NovelRichContentBlock> {
-        if ((!forceTranslation && !isGoogleTranslationVisible) || googleTranslatedByIndex.isEmpty()) return blocks
+        if ((!forceTranslation && !isGoogleTranslationVisible) || translationHolder.isEmpty("google")) return blocks
         var textIndex = 0
         var replacedCount = 0
         val updated = blocks.map { block ->
             when (block) {
                 is NovelRichContentBlock.BlockQuote -> {
-                    val replacement = googleTranslatedByIndex[textIndex]
+                    val replacement = translationHolder.map("google")[textIndex]
                     textIndex += 1
                     if (replacement.isNullOrBlank()) {
                         block
@@ -3161,7 +3195,7 @@ class NovelReaderScreenModel(
                     }
                 }
                 is NovelRichContentBlock.Heading -> {
-                    val replacement = googleTranslatedByIndex[textIndex]
+                    val replacement = translationHolder.map("google")[textIndex]
                     textIndex += 1
                     if (replacement.isNullOrBlank()) {
                         block
@@ -3178,7 +3212,7 @@ class NovelReaderScreenModel(
                 is NovelRichContentBlock.Image -> block
                 is NovelRichContentBlock.HorizontalRule -> block
                 is NovelRichContentBlock.Paragraph -> {
-                    val replacement = googleTranslatedByIndex[textIndex]
+                    val replacement = translationHolder.map("google")[textIndex]
                     textIndex += 1
                     if (replacement.isNullOrBlank()) {
                         block
@@ -3437,29 +3471,11 @@ class NovelReaderScreenModel(
     }
 
     private fun currentParsedTextBlocks(): List<String> {
-        parsedContentBlocks?.let { blocks ->
-            return blocks
-                .asSequence()
-                .filterIsInstance<ContentBlock.Text>()
-                .map { it.text }
-                .toList()
-        }
-        val html = rawHtml ?: return emptyList()
-        return extractTextBlocks(html)
+        return contentModel?.textBlocks ?: emptyList()
     }
 
     private fun currentParsedContentBlocks(): List<ContentBlock> {
-        parsedContentBlocks?.let { return it }
-        val html = rawHtml ?: return emptyList()
-        val novel = currentNovel ?: return emptyList()
-        return extractContentBlocks(
-            rawHtml = html,
-            chapterWebUrl = chapterWebUrl,
-            novelUrl = novel.url,
-            pluginSite = pluginSite,
-        ).ifEmpty {
-            extractTextBlocks(html).map(ContentBlock::Text)
-        }
+        return contentModel?.contentBlocks ?: emptyList()
     }
     private fun NovelReaderSettings.translationPromptFamily(): NovelTranslationPromptFamily {
         return when (translationProvider) {
@@ -3786,740 +3802,6 @@ class NovelReaderScreenModel(
         if (!requiresPrivateBridgeUnlock()) return true
         return geminiPrivateUnlocked || GeminiPrivateBridge.isUnlocked()
     }
-    private fun extractTextBlocks(rawHtml: String): List<String> {
-        val document = Jsoup.parse(rawHtml)
-        val paragraphLikeNodes = document.select("p, li, blockquote, h1, h2, h3, h4, h5, h6, pre")
-            .filterNot { node ->
-                node.tagName().equals("p", ignoreCase = true) &&
-                    node.parent()?.tagName()?.equals("li", ignoreCase = true) == true
-            }
-            .map { element -> element.text().sanitizeTextBlock() }
-            .filter { it.isNotBlank() }
-        if (paragraphLikeNodes.isNotEmpty()) {
-            return paragraphLikeNodes
-        }
-        val text = document.body().wholeText()
-            .sanitizeTextBlock()
-        if (text.isBlank()) return emptyList()
-        return text.split(Regex("\n{2,}"))
-            .flatMap { block -> block.split('\n') }
-            .map { it.sanitizeTextBlock() }
-            .filter { it.isNotBlank() }
-    }
-    private fun extractContentBlocks(
-        rawHtml: String,
-        chapterWebUrl: String?,
-        novelUrl: String,
-        pluginSite: String?,
-    ): List<ContentBlock> {
-        val document = Jsoup.parse(rawHtml)
-        val blocks = mutableListOf<ContentBlock>()
-        collectContentBlocks(
-            node = document.body(),
-            blocks = blocks,
-            chapterWebUrl = chapterWebUrl,
-            novelUrl = novelUrl,
-            pluginSite = pluginSite,
-        )
-        return blocks
-    }
-    private fun collectContentBlocks(
-        node: Node,
-        blocks: MutableList<ContentBlock>,
-        chapterWebUrl: String?,
-        novelUrl: String,
-        pluginSite: String?,
-    ) {
-        when (node) {
-            is TextNode -> {
-                val text = node.text().sanitizeTextBlock()
-                if (text.isNotBlank()) {
-                    blocks += ContentBlock.Text(text)
-                }
-            }
-            is Element -> {
-                val tag = node.tagName().lowercase()
-                when {
-                    tag == "script" ||
-                        tag == "style" ||
-                        tag == "head" ||
-                        tag == "meta" ||
-                        tag == "link" ||
-                        tag == "noscript" -> Unit
-                    tag == "img" -> {
-                        val rawUrl = node.attr("src")
-                            .ifBlank { node.attr("data-src") }
-                            .ifBlank { node.attr("data-original") }
-                            .trim()
-                        if (rawUrl.isBlank()) return
-                        val resolvedUrl = resolveContentResourceUrl(
-                            rawUrl = rawUrl,
-                            chapterWebUrl = chapterWebUrl,
-                            novelUrl = novelUrl,
-                            pluginSite = pluginSite,
-                        ) ?: return
-                        blocks += ContentBlock.Image(
-                            url = resolvedUrl,
-                            alt = node.attr("alt").sanitizeTextBlock().ifBlank { null },
-                        )
-                    }
-                    tag == "p" ||
-                        tag == "li" ||
-                        tag == "blockquote" ||
-                        tag == "h1" ||
-                        tag == "h2" ||
-                        tag == "h3" ||
-                        tag == "h4" ||
-                        tag == "h5" ||
-                        tag == "h6" ||
-                        tag == "pre" -> {
-                        val text = node.text().sanitizeTextBlock()
-                        if (text.isBlank()) return
-                        val structuredBlocks = parseStructuredFragmentToBlocks(
-                            rawPayload = text,
-                            chapterWebUrl = chapterWebUrl,
-                            novelUrl = novelUrl,
-                            pluginSite = pluginSite,
-                        )
-                        if (structuredBlocks.isNotEmpty()) {
-                            blocks += structuredBlocks
-                            return
-                        }
-                        val normalizedText = if (tag == "li") {
-                            "• $text"
-                        } else {
-                            text
-                        }
-                        blocks += ContentBlock.Text(normalizedText)
-                    }
-                    node.selectFirst("p, li, blockquote, h1, h2, h3, h4, h5, h6, pre, img") == null -> {
-                        val text = node.wholeText().sanitizeTextBlock()
-                        if (text.isNotBlank()) {
-                            blocks += ContentBlock.Text(text)
-                        }
-                    }
-                    else -> {
-                        node.childNodes().forEach { child ->
-                            collectContentBlocks(
-                                node = child,
-                                blocks = blocks,
-                                chapterWebUrl = chapterWebUrl,
-                                novelUrl = novelUrl,
-                                pluginSite = pluginSite,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-    private fun parseStructuredFragmentToBlocks(
-        rawPayload: String,
-        chapterWebUrl: String?,
-        novelUrl: String,
-        pluginSite: String?,
-    ): List<ContentBlock> {
-        if (!looksLikeStructuredPayload(rawPayload)) return emptyList()
-        val parsedRoot = parseStructuredRoot(rawPayload)
-        val renderedHtml = if (parsedRoot != null) {
-            val attachmentUrls = extractStructuredAttachmentUrls(parsedRoot)
-            val structuredNode = findStructuredNode(parsedRoot) ?: return emptyList()
-            renderStructuredElementAsHtml(structuredNode, attachmentUrls)
-        } else {
-            renderStructuredPayloadFallback(rawPayload).orEmpty()
-        }.trim()
-        if (renderedHtml.isBlank()) return emptyList()
-        val renderedDoc = Jsoup.parse("<div>$renderedHtml</div>")
-        val renderedCandidates = renderedDoc.select("p, li, blockquote, h1, h2, h3, h4, h5, h6, pre, img")
-            .filterNot { node ->
-                node.tagName().equals("p", ignoreCase = true) &&
-                    node.parent()?.tagName()?.equals("li", ignoreCase = true) == true
-            }
-        return renderedCandidates.mapNotNull { candidate ->
-            if (candidate.tagName().equals("img", ignoreCase = true)) {
-                val rawUrl = candidate.attr("src")
-                    .ifBlank { candidate.attr("data-src") }
-                    .ifBlank { candidate.attr("data-original") }
-                    .trim()
-                val resolvedUrl = resolveContentResourceUrl(
-                    rawUrl = rawUrl,
-                    chapterWebUrl = chapterWebUrl,
-                    novelUrl = novelUrl,
-                    pluginSite = pluginSite,
-                ) ?: return@mapNotNull null
-                ContentBlock.Image(
-                    url = resolvedUrl,
-                    alt = candidate.attr("alt").sanitizeTextBlock().ifBlank { null },
-                )
-            } else {
-                val candidateText = candidate.text().sanitizeTextBlock()
-                if (candidateText.isBlank()) {
-                    null
-                } else {
-                    val normalized = if (candidate.tagName().equals("li", ignoreCase = true)) {
-                        "• $candidateText"
-                    } else {
-                        candidateText
-                    }
-                    ContentBlock.Text(normalized)
-                }
-            }
-        }
-    }
-    private fun resolveContentResourceUrl(
-        rawUrl: String,
-        chapterWebUrl: String?,
-        novelUrl: String,
-        pluginSite: String?,
-    ): String? {
-        val trimmed = rawUrl.trim()
-        if (trimmed.isBlank()) return null
-        if (trimmed.startsWith("data:image/", ignoreCase = true)) {
-            return trimmed
-        }
-        if (NovelPluginImage.isSupported(trimmed)) {
-            return trimmed
-        }
-        if (trimmed.startsWith("blob:", ignoreCase = true)) {
-            return null
-        }
-        trimmed.toHttpUrlOrNull()?.let { return it.toString() }
-        chapterWebUrl
-            ?.let { resolveUrl(trimmed, it).trim().toHttpUrlOrNull() }
-            ?.let { return it.toString() }
-        return resolveNovelChapterWebUrl(
-            chapterUrl = trimmed,
-            pluginSite = pluginSite,
-            novelUrl = novelUrl,
-        )
-    }
-    private fun resolveRichContentBlocks(
-        blocks: List<NovelRichContentBlock>,
-        chapterWebUrl: String?,
-        novelUrl: String,
-        pluginSite: String?,
-    ): List<NovelRichContentBlock> {
-        return blocks.map { block ->
-            when (block) {
-                is NovelRichContentBlock.Image -> {
-                    val resolvedUrl = resolveContentResourceUrl(
-                        rawUrl = block.url,
-                        chapterWebUrl = chapterWebUrl,
-                        novelUrl = novelUrl,
-                        pluginSite = pluginSite,
-                    ) ?: block.url
-                    block.copy(url = resolvedUrl)
-                }
-                else -> block
-            }
-        }
-    }
-    private fun normalizeHtml(
-        rawHtml: String,
-        settings: NovelReaderSettings,
-        customCss: String?,
-        customJs: String?,
-    ): String {
-        val css = customCss?.takeIf { it.isNotBlank() }
-        val js = customJs?.takeIf { it.isNotBlank() }
-        val isDarkTheme = when (settings.theme) {
-            NovelReaderTheme.SYSTEM -> isSystemDark()
-            NovelReaderTheme.DARK -> true
-            NovelReaderTheme.LIGHT -> false
-        }
-        val background = if (isDarkTheme) "#121212" else "#FFFFFF"
-        val textColor = if (isDarkTheme) "#EDEDED" else "#1A1A1A"
-        val linkColor = if (isDarkTheme) "#80B4FF" else "#1E3A8A"
-        val baseStyle = """
-            body {
-              padding: ${settings.margin}px;
-              line-height: ${settings.lineHeight};
-              font-size: ${settings.fontSize}px;
-              background: $background;
-              color: $textColor;
-              word-break: break-word;
-            }
-            img { max-width: 100%; height: auto; }
-            a { color: $linkColor; }
-        """.trimIndent()
-        val injection = buildString {
-            append("<style>")
-            append('\n')
-            append(baseStyle)
-            if (css != null) {
-                append('\n')
-                append(css)
-            }
-            append('\n')
-            append("</style>")
-            if (js != null) {
-                append('\n')
-                append("<script>")
-                append('\n')
-                append(js)
-                append('\n')
-                append("</script>")
-            }
-        }
-        if (rawHtml.contains("<html", ignoreCase = true)) {
-            return if (injection.isNotBlank()) injectIntoHtml(rawHtml, injection) else rawHtml
-        }
-        val style = buildString {
-            append(baseStyle)
-            if (css != null) {
-                append('\n')
-                append(css)
-            }
-        }
-        return """
-            <!doctype html>
-            <html>
-              <head>
-                <meta charset="utf-8" />
-                <meta name="viewport" content="width=device-width, initial-scale=1" />
-                <style>$style</style>
-                ${js?.let { "<script>\n$it\n</script>" } ?: ""}
-              </head>
-              <body>
-                $rawHtml
-              </body>
-            </html>
-        """.trimIndent()
-    }
-    private fun injectIntoHtml(rawHtml: String, injection: String): String {
-        val headClose = Regex("</head>", RegexOption.IGNORE_CASE)
-        if (headClose.containsMatchIn(rawHtml)) {
-            return rawHtml.replaceFirst(headClose, "$injection</head>")
-        }
-        val headOpen = Regex("<head[^>]*>", RegexOption.IGNORE_CASE)
-        val headMatch = headOpen.find(rawHtml)
-        if (headMatch != null) {
-            return rawHtml.replaceRange(headMatch.range, headMatch.value + injection)
-        }
-        val bodyClose = Regex("</body>", RegexOption.IGNORE_CASE)
-        if (bodyClose.containsMatchIn(rawHtml)) {
-            return rawHtml.replaceFirst(bodyClose, "$injection</body>")
-        }
-        return injection + rawHtml
-    }
-    private fun String.sanitizeTextBlock(): String {
-        return this
-            .replace('\u00A0', ' ')
-            .replace("\r", "")
-            .trim()
-    }
-    private fun String.normalizeStructuredChapterPayload(): String {
-        val trimmedPayload = trim()
-        if (looksLikeHtmlPayload(trimmedPayload)) {
-            return this
-        }
-        val parsedRoot = parseStructuredRoot(this)
-        if (parsedRoot != null) {
-            val attachmentUrls = extractStructuredAttachmentUrls(parsedRoot)
-            val structuredNode = findStructuredNode(parsedRoot) ?: return this
-            val rendered = renderStructuredElementAsHtml(
-                element = structuredNode,
-                attachmentUrls = attachmentUrls,
-            ).trim()
-            if (rendered.isNotBlank()) {
-                return "<div>$rendered</div>"
-            }
-        }
-        val fallbackRendered = renderStructuredPayloadFallback(this).orEmpty().trim()
-        return if (fallbackRendered.isBlank()) this else "<div>$fallbackRendered</div>"
-    }
-    private fun parseStructuredRoot(rawPayload: String): JsonElement? {
-        val trimmed = rawPayload
-            .trim()
-            .removePrefix("\uFEFF")
-            .trim()
-        if (!looksLikeStructuredPayload(trimmed)) return null
-        val parseCandidates = linkedSetOf(trimmed)
-        extractJsonCandidate(trimmed)?.let { parseCandidates += it }
-        normalizeJsonLikePayload(trimmed)?.let { parseCandidates += it }
-        parseCandidates.forEach { candidate ->
-            val parsed = parseStructuredCandidate(candidate, decodeDepth = 0) ?: return@forEach
-            if (parsed is JsonObject || parsed is JsonArray) {
-                return parsed
-            }
-        }
-        return null
-    }
-    private fun parseStructuredCandidate(
-        candidate: String,
-        decodeDepth: Int,
-    ): JsonElement? {
-        if (decodeDepth > 4) return null
-        val trimmed = candidate.trim().trimEnd(';').trim()
-        if (trimmed.isBlank()) return null
-        val directParsed = runCatching { structuredJson.parseToJsonElement(trimmed) }.getOrNull()
-        if (directParsed != null) {
-            if (directParsed is JsonObject || directParsed is JsonArray) {
-                return directParsed
-            }
-            val primitiveContent = (directParsed as? JsonPrimitive)
-                ?.contentOrNull
-                ?.trim()
-                .orEmpty()
-            if (looksLikeStructuredPayload(primitiveContent)) {
-                return parseStructuredCandidate(primitiveContent, decodeDepth + 1)
-            }
-        }
-        if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
-            val decoded = runCatching { structuredJson.decodeFromString<String>(trimmed) }.getOrNull()
-            if (!decoded.isNullOrBlank()) {
-                return parseStructuredCandidate(decoded, decodeDepth + 1)
-            }
-        }
-        val normalizedCandidate = normalizeJsonLikePayload(trimmed)
-            ?.takeIf { it != trimmed }
-            ?: return null
-        return parseStructuredCandidate(normalizedCandidate, decodeDepth + 1)
-    }
-    private fun looksLikeStructuredPayload(rawValue: String): Boolean {
-        if (rawValue.isBlank()) return false
-        val trimmed = rawValue.trim()
-        return trimmed.startsWith("{") ||
-            trimmed.startsWith("[") ||
-            trimmed.startsWith("\"{") ||
-            trimmed.startsWith("\"[") ||
-            trimmed.startsWith("'{") ||
-            trimmed.startsWith("'[") ||
-            trimmed.startsWith("{\\\"") ||
-            trimmed.startsWith("[\\\"") ||
-            (trimmed.contains("\"type\"") && trimmed.contains("content")) ||
-            (trimmed.contains("'type'") && trimmed.contains("content"))
-    }
-    private fun extractJsonCandidate(rawPayload: String): String? {
-        val trimmed = rawPayload.trim()
-        if (trimmed.startsWith("<")) {
-            val htmlTextCandidate = Jsoup.parse(trimmed).body().wholeText().trim()
-            if (looksLikeStructuredPayload(htmlTextCandidate)) {
-                return htmlTextCandidate
-            }
-        }
-        val objectStart =
-            trimmed.indexOf('{').takeIf { it >= 0 } ?: trimmed.indexOf('[').takeIf { it >= 0 } ?: return null
-        val objectEnd = trimmed.lastIndexOf('}').takeIf { it > objectStart }
-            ?: trimmed.lastIndexOf(']').takeIf { it > objectStart }
-            ?: return null
-        return trimmed.substring(objectStart, objectEnd + 1).trim()
-    }
-    private fun normalizeJsonLikePayload(rawPayload: String): String? {
-        var candidate = rawPayload
-            .trim()
-            .removePrefix("\uFEFF")
-            .trim()
-        if (candidate.startsWith("return ")) {
-            candidate = candidate.removePrefix("return ").trim()
-        }
-        candidate = candidate.trimEnd(';').trim()
-        if (!looksLikeStructuredPayload(candidate)) return null
-        if (candidate.startsWith("'") && candidate.endsWith("'")) {
-            val inner = candidate.substring(1, candidate.lastIndex).replace("\"", "\\\"")
-            candidate = "\"$inner\""
-        }
-        if (candidate.contains("\\\"")) {
-            candidate = candidate.replace("\\\"", "\"")
-        }
-        if (candidate.contains("\\n")) {
-            candidate = candidate.replace("\\n", "\n")
-        }
-        if (candidate.contains("\\t")) {
-            candidate = candidate.replace("\\t", "\t")
-        }
-        candidate = Regex("([\\{,]\\s*)([A-Za-z_][A-Za-z0-9_\\-]*)(\\s*:)").replace(candidate, "$1\"$2\"$3")
-        candidate = Regex("\"([A-Za-z_][A-Za-z0-9_\\-]*)\\s*:\\s*\"").replace(candidate, "\"$1\":\"")
-        candidate = Regex("'([^'\\\\]*(?:\\\\.[^'\\\\]*)*)'").replace(candidate) { match ->
-            "\"${match.groupValues[1].replace("\"", "\\\"")}\""
-        }
-        candidate = Regex(",\\s*([}\\]])").replace(candidate, "$1")
-        return candidate
-    }
-    private fun findStructuredNode(element: JsonElement): JsonElement? {
-        return when (element) {
-            is JsonObject -> {
-                if (isStructuredNode(element)) {
-                    element
-                } else {
-                    listOf("content", "data", "body", "result", "payload", "value", "chapter")
-                        .firstNotNullOfOrNull { key ->
-                            val nested = element[key] ?: return@firstNotNullOfOrNull null
-                            findStructuredNode(nested)
-                                ?: parseStructuredRoot(nested.asStringOrNull().orEmpty())?.let(::findStructuredNode)
-                        }
-                }
-            }
-            is JsonArray -> {
-                val hasStructuredObjects = element.any {
-                    (it as? JsonObject)?.let(::isStructuredNode) == true
-                }
-                if (hasStructuredObjects) element else null
-            }
-            else -> null
-        }
-    }
-    private fun isStructuredNode(element: JsonObject): Boolean {
-        val normalizedType = normalizeStructuredType(element["type"].asStringOrNull())
-        if (normalizedType != null && normalizedType in STRUCTURED_NODE_TYPES) {
-            return true
-        }
-        return (element["content"] is JsonArray) ||
-            (element["content"] is JsonObject) ||
-            (element["text"].asStringOrNull() != null) ||
-            (element["attrs"] is JsonObject)
-    }
-    private fun extractStructuredAttachmentUrls(root: JsonElement): Map<String, String> {
-        val rootObject = root as? JsonObject ?: return emptyMap()
-        val mapping = mutableMapOf<String, String>()
-        fun appendAttachmentMapping(attachment: JsonObject) {
-            val url = attachment["url"].asStringOrNull()?.trim().orEmpty()
-            if (url.isBlank()) return
-            attachment["id"].asStringOrNull()?.trim()?.takeIf { it.isNotBlank() }?.let { key ->
-                mapping[key] = url
-            }
-            attachment["name"].asStringOrNull()?.trim()?.takeIf { it.isNotBlank() }?.let { key ->
-                mapping[key] = url
-            }
-        }
-        when (val attachments = rootObject["attachments"]) {
-            is JsonArray -> attachments.forEach { entry ->
-                val attachment = entry as? JsonObject ?: return@forEach
-                appendAttachmentMapping(attachment)
-            }
-            is JsonObject -> attachments.forEach { (key, value) ->
-                val valueObject = value as? JsonObject
-                val url = valueObject?.get("url").asStringOrNull()?.trim().orEmpty()
-                    .ifBlank { value.asStringOrNull().orEmpty().trim() }
-                if (url.isNotBlank()) {
-                    mapping[key.trim()] = url
-                }
-            }
-            else -> Unit
-        }
-        return mapping
-    }
-    private fun renderStructuredElementAsHtml(
-        element: JsonElement,
-        attachmentUrls: Map<String, String>,
-    ): String {
-        return when (element) {
-            is JsonObject -> renderStructuredNodeAsHtml(element, attachmentUrls)
-            is JsonArray -> buildString {
-                element.forEach { node ->
-                    append(renderStructuredElementAsHtml(node, attachmentUrls))
-                }
-            }
-            else -> ""
-        }
-    }
-    private fun renderStructuredNodeAsHtml(
-        node: JsonObject,
-        attachmentUrls: Map<String, String>,
-    ): String {
-        val type = normalizeStructuredType(node["type"].asStringOrNull()).orEmpty()
-        val attrs = node["attrs"] as? JsonObject
-        val children = node["content"] as? JsonArray
-        fun renderChildren(): String {
-            if (children == null) return ""
-            return buildString {
-                children.forEach { child ->
-                    append(renderStructuredElementAsHtml(child, attachmentUrls))
-                }
-            }
-        }
-        return when (type) {
-            "doc" -> renderChildren()
-            "paragraph" -> "<p>${renderChildren()}</p>"
-            "heading" -> {
-                val level = attrs?.get("level").asIntOrNull()?.coerceIn(1, 6) ?: 1
-                "<h$level>${renderChildren()}</h$level>"
-            }
-            "bulletlist" -> "<ul>${renderChildren()}</ul>"
-            "orderedlist" -> "<ol>${renderChildren()}</ol>"
-            "listitem" -> "<li>${renderChildren()}</li>"
-            "blockquote" -> "<blockquote>${renderChildren()}</blockquote>"
-            "hardbreak" -> "<br/>"
-            "horizontalrule" -> "<hr/>"
-            "image" -> renderStructuredImageNode(attrs, attachmentUrls)
-            "text" -> {
-                val escaped = node["text"].asStringOrNull().orEmpty().escapeHtml()
-                applyStructuredMarks(escaped, node["marks"] as? JsonArray)
-            }
-            else -> {
-                val inlineText = node["text"]
-                    .asStringOrNull()
-                    ?.takeIf { it.isNotBlank() }
-                    ?.escapeHtml()
-                if (inlineText != null) {
-                    applyStructuredMarks(inlineText, node["marks"] as? JsonArray)
-                } else {
-                    renderChildren()
-                }
-            }
-        }
-    }
-    private fun renderStructuredImageNode(
-        attrs: JsonObject?,
-        attachmentUrls: Map<String, String>,
-    ): String {
-        if (attrs == null) return ""
-        val directUrl = attrs["src"].asStringOrNull()?.trim().orEmpty()
-        val altText = attrs["alt"].asStringOrNull().orEmpty().escapeHtml()
-        if (directUrl.isNotBlank()) {
-            return "<img src=\"${directUrl.escapeHtmlAttribute()}\" alt=\"$altText\" />"
-        }
-        val imageReferences = mutableListOf<String>()
-        attrs["image"].asStringOrNull()?.trim()?.takeIf { it.isNotBlank() }?.let { imageReferences += it }
-        when (val imagesNode = attrs["images"]) {
-            is JsonArray -> imagesNode.forEach { entry ->
-                when (entry) {
-                    is JsonObject -> {
-                        entry["image"].asStringOrNull()?.trim()?.takeIf {
-                            it.isNotBlank()
-                        }?.let { imageReferences += it }
-                    }
-                    is JsonPrimitive -> entry.contentOrNull?.trim()?.takeIf { it.isNotBlank() }?.let {
-                        imageReferences +=
-                            it
-                    }
-                    else -> Unit
-                }
-            }
-            is JsonObject -> {
-                imagesNode["image"].asStringOrNull()?.trim()?.takeIf { it.isNotBlank() }?.let { imageReferences += it }
-            }
-            else -> Unit
-        }
-        val resolvedUrls = imageReferences.mapNotNull { reference ->
-            attachmentUrls[reference]
-        }
-        if (resolvedUrls.isEmpty()) return ""
-        return resolvedUrls.joinToString(separator = "") { url ->
-            "<img src=\"${url.escapeHtmlAttribute()}\" alt=\"$altText\" />"
-        }
-    }
-    private fun applyStructuredMarks(
-        text: String,
-        marks: JsonArray?,
-    ): String {
-        if (marks == null || marks.isEmpty()) return text
-        var rendered = text
-        marks.forEach { markElement ->
-            val mark = markElement as? JsonObject ?: return@forEach
-            rendered = when (normalizeStructuredType(mark["type"].asStringOrNull())) {
-                "bold", "strong" -> "<strong>$rendered</strong>"
-                "italic", "em" -> "<em>$rendered</em>"
-                "underline" -> "<u>$rendered</u>"
-                "strike", "s" -> "<s>$rendered</s>"
-                "code" -> "<code>$rendered</code>"
-                "link" -> {
-                    val href = (mark["attrs"] as? JsonObject)
-                        ?.get("href")
-                        .asStringOrNull()
-                        .orEmpty()
-                    if (href.isBlank()) rendered else "<a href=\"${href.escapeHtmlAttribute()}\">$rendered</a>"
-                }
-                else -> rendered
-            }
-        }
-        return rendered
-    }
-    private fun JsonElement?.asStringOrNull(): String? {
-        return (this as? JsonPrimitive)?.contentOrNull
-    }
-    private fun JsonElement?.asIntOrNull(): Int? {
-        return (this as? JsonPrimitive)?.intOrNull
-    }
-    private fun String.escapeHtml(): String {
-        return replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
-            .replace("'", "&#39;")
-    }
-    private fun String.escapeHtmlAttribute(): String {
-        return escapeHtml()
-    }
-    private fun renderStructuredPayloadFallback(rawPayload: String): String? {
-        val candidate = extractJsonCandidate(rawPayload) ?: rawPayload.trim()
-        if (!looksLikeStructuredPayload(candidate)) return null
-        val normalized = normalizeJsonLikePayload(candidate) ?: candidate
-        val textSegments = extractStructuredTextFallbackSegments(normalized)
-        val imageSegments = extractStructuredImageFallbackUrls(normalized)
-        if (textSegments.isEmpty() && imageSegments.isEmpty()) return null
-        val html = buildString {
-            textSegments.forEach { segment ->
-                append("<p>${segment.escapeHtml()}</p>")
-            }
-            imageSegments.forEach { url ->
-                append("<img src=\"${url.escapeHtmlAttribute()}\" alt=\"\" />")
-            }
-        }.trim()
-        return html.takeIf { it.isNotBlank() }
-    }
-    private fun looksLikeHtmlPayload(rawPayload: String): Boolean {
-        val trimmed = rawPayload.trim()
-        if (!trimmed.contains('<') || !trimmed.contains('>')) return false
-        return Regex("(?is)<\\s*(html|body|div|main|article|section|p|ul|ol|li|h1|h2|h3|h4|h5|h6|span)\\b")
-            .containsMatchIn(trimmed)
-    }
-    private fun extractStructuredTextFallbackSegments(payload: String): List<String> {
-        val results = mutableListOf<String>()
-        val textRegex = Regex("(?is)\"text\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"")
-        textRegex.findAll(payload).forEach { match ->
-            val rawText = match.groupValues.getOrNull(1).orEmpty()
-            val decodedText = rawText
-                .replace("\\\\", "\\")
-                .replace("\\n", "\n")
-                .replace("\\t", "\t")
-                .replace("\\r", "")
-                .replace("\\\"", "\"")
-                .replace("\\u00A0", " ")
-                .sanitizeTextBlock()
-            if (decodedText.isBlank()) return@forEach
-            val contextStart = (match.range.first - 220).coerceAtLeast(0)
-            val context = payload.substring(contextStart, match.range.first).lowercase()
-            val isListItemContext = context.contains("listitem") || context.contains("bulletlist")
-            val normalized = if (isListItemContext && !decodedText.startsWith("•")) {
-                "• $decodedText"
-            } else {
-                decodedText
-            }
-            results += normalized
-        }
-        return results
-    }
-    private fun extractStructuredImageFallbackUrls(payload: String): List<String> {
-        val urlRegex = Regex("(?is)\"url\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"")
-        val directHttpRegex = Regex("(?i)https?://[^\\s\"'<>]+\\.(?:png|jpe?g|gif|webp|bmp|svg)")
-        val urls = linkedSetOf<String>()
-        urlRegex.findAll(payload).forEach { match ->
-            val url = match.groupValues.getOrNull(1).orEmpty()
-                .replace("\\\\", "\\")
-                .replace("\\/", "/")
-                .replace("\\\"", "\"")
-                .trim()
-            if (url.startsWith("http://") || url.startsWith("https://")) {
-                urls += url
-            }
-        }
-        directHttpRegex.findAll(payload).forEach { match ->
-            val url = match.value.trim()
-            if (url.isNotBlank()) {
-                urls += url
-            }
-        }
-        return urls.toList()
-    }
-    private fun normalizeStructuredType(type: String?): String? {
-        return type
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?.lowercase()
-            ?.replace("_", "")
-            ?.replace("-", "")
-    }
     private suspend fun saveHistorySnapshot(chapterId: Long, sessionReadDurationMs: Long) {
         if (basePreferences.incognitoMode().get()) return
         runCatching {
@@ -4556,10 +3838,8 @@ class NovelReaderScreenModel(
             val richContentBlocks: List<NovelRichContentBlock>,
             val richContentUnsupportedFeaturesDetected: Boolean,
             val chapterOrderList: List<NovelChapter> = emptyList(),
-            val lastSavedIndex: Int,
-            val lastSavedScrollOffsetPx: Int,
-            val lastSavedWebProgressPercent: Int,
-            val lastSavedPageReaderProgress: PageReaderProgress? = null,
+            val fullChapterOrderList: List<NovelChapter> = emptyList(),
+            val progress: ReaderProgressState = ReaderProgressState(),
             val previousChapterId: Long?,
             val previousChapterName: String? = null,
             val nextChapterId: Long?,
@@ -4569,18 +3849,89 @@ class NovelReaderScreenModel(
             val selectedTextTranslationSelection: NovelSelectedTextSelection? = null,
             val selectedTextTranslationUiState: NovelSelectedTextTranslationUiState =
                 NovelSelectedTextTranslationUiState.Idle,
+            val geminiTranslation: ReaderGeminiState = ReaderGeminiState(),
+            val googleTranslation: ReaderGoogleState = ReaderGoogleState(),
+            val ttsUiState: NovelReaderTtsUiState = NovelReaderTtsUiState(),
+            val aiProviders: ReaderAiProvidersState = ReaderAiProvidersState(),
+        ) : State {
+            val textBlocks: List<String>
+                get() = contentBlocks
+                    .asSequence()
+                    .filterIsInstance<ContentBlock.Text>()
+                    .map { it.text }
+                    .toList()
+
+            // Backward-compat getters — keep existing code working
+            val lastSavedIndex: Int get() = progress.lastSavedIndex
+            val lastSavedScrollOffsetPx: Int get() = progress.lastSavedScrollOffsetPx
+            val lastSavedWebProgressPercent: Int get() = progress.lastSavedWebProgressPercent
+            val lastSavedPageReaderProgress: PageReaderProgress? get() = progress.lastSavedPageReaderProgress
+
+            val isGeminiTranslating: Boolean get() = geminiTranslation.isGeminiTranslating
+            val geminiTranslationProgress: Int get() = geminiTranslation.geminiTranslationProgress
+            val isGeminiTranslationVisible: Boolean get() = geminiTranslation.isGeminiTranslationVisible
+            val hasGeminiTranslationCache: Boolean get() = geminiTranslation.hasGeminiTranslationCache
+            val geminiLogs: List<String> get() = geminiTranslation.geminiLogs
+
+            val isGoogleTranslating: Boolean get() = googleTranslation.isGoogleTranslating
+            val googleTranslationProgress: Int get() = googleTranslation.googleTranslationProgress
+            val isGoogleTranslationVisible: Boolean get() = googleTranslation.isGoogleTranslationVisible
+            val hasGoogleTranslationCache: Boolean get() = googleTranslation.hasGoogleTranslationCache
+            val googleLogs: List<String> get() = googleTranslation.googleLogs
+            val translationPhase: TranslationPhase get() = googleTranslation.translationPhase
+
+            val openRouterModelIds: List<String> get() = aiProviders.openRouterModelIds
+            val isOpenRouterModelsLoading: Boolean get() = aiProviders.isOpenRouterModelsLoading
+            val isTestingOpenRouterConnection: Boolean get() = aiProviders.isTestingOpenRouterConnection
+            val openRouterApiTestStatus: ProviderApiTestStatus get() = aiProviders.openRouterApiTestStatus
+            val openRouterApiTestMessage: String? get() = aiProviders.openRouterApiTestMessage
+            val deepSeekModelIds: List<String> get() = aiProviders.deepSeekModelIds
+            val isDeepSeekModelsLoading: Boolean get() = aiProviders.isDeepSeekModelsLoading
+            val isTestingDeepSeekConnection: Boolean get() = aiProviders.isTestingDeepSeekConnection
+            val deepSeekApiTestStatus: ProviderApiTestStatus get() = aiProviders.deepSeekApiTestStatus
+            val deepSeekApiTestMessage: String? get() = aiProviders.deepSeekApiTestMessage
+            val mistralModelIds: List<String> get() = aiProviders.mistralModelIds
+            val isMistralModelsLoading: Boolean get() = aiProviders.isMistralModelsLoading
+            val isTestingMistralConnection: Boolean get() = aiProviders.isTestingMistralConnection
+            val mistralApiTestStatus: ProviderApiTestStatus get() = aiProviders.mistralApiTestStatus
+            val mistralApiTestMessage: String? get() = aiProviders.mistralApiTestMessage
+            val nvidiaModelIds: List<String> get() = aiProviders.nvidiaModelIds
+            val isNvidiaModelsLoading: Boolean get() = aiProviders.isNvidiaModelsLoading
+            val isTestingNvidiaConnection: Boolean get() = aiProviders.isTestingNvidiaConnection
+            val nvidiaApiTestStatus: ProviderApiTestStatus get() = aiProviders.nvidiaApiTestStatus
+            val nvidiaApiTestMessage: String? get() = aiProviders.nvidiaApiTestMessage
+            val ollamaCloudModelIds: List<String> get() = aiProviders.ollamaCloudModelIds
+            val isOllamaCloudModelsLoading: Boolean get() = aiProviders.isOllamaCloudModelsLoading
+            val isTestingOllamaCloudConnection: Boolean get() = aiProviders.isTestingOllamaCloudConnection
+            val ollamaCloudApiTestStatus: ProviderApiTestStatus get() = aiProviders.ollamaCloudApiTestStatus
+            val ollamaCloudApiTestMessage: String? get() = aiProviders.ollamaCloudApiTestMessage
+        }
+
+        data class ReaderProgressState(
+            val lastSavedIndex: Int = 0,
+            val lastSavedScrollOffsetPx: Int = 0,
+            val lastSavedWebProgressPercent: Int = 0,
+            val lastSavedPageReaderProgress: PageReaderProgress? = null,
+        )
+
+        data class ReaderGeminiState(
             val isGeminiTranslating: Boolean = false,
             val geminiTranslationProgress: Int = 0,
             val isGeminiTranslationVisible: Boolean = false,
             val hasGeminiTranslationCache: Boolean = false,
             val geminiLogs: List<String> = emptyList(),
+        )
+
+        data class ReaderGoogleState(
             val isGoogleTranslating: Boolean = false,
             val googleTranslationProgress: Int = 0,
             val isGoogleTranslationVisible: Boolean = false,
             val hasGoogleTranslationCache: Boolean = false,
             val googleLogs: List<String> = emptyList(),
             val translationPhase: TranslationPhase = TranslationPhase.IDLE,
-            val ttsUiState: NovelReaderTtsUiState = NovelReaderTtsUiState(),
+        )
+
+        data class ReaderAiProvidersState(
             val openRouterModelIds: List<String> = emptyList(),
             val isOpenRouterModelsLoading: Boolean = false,
             val isTestingOpenRouterConnection: Boolean = false,
@@ -4606,14 +3957,7 @@ class NovelReaderScreenModel(
             val isTestingOllamaCloudConnection: Boolean = false,
             val ollamaCloudApiTestStatus: ProviderApiTestStatus = ProviderApiTestStatus.Idle,
             val ollamaCloudApiTestMessage: String? = null,
-        ) : State {
-            val textBlocks: List<String>
-                get() = contentBlocks
-                    .asSequence()
-                    .filterIsInstance<ContentBlock.Text>()
-                    .map { it.text }
-                    .toList()
-        }
+        )
     }
     sealed interface ContentBlock {
         data class Text(val text: String) : ContentBlock
@@ -4788,4 +4132,787 @@ internal object NovelReaderChapterPrefetchCache {
             cache.clear()
         }
     }
+}
+
+internal val structuredJson = Json {
+    ignoreUnknownKeys = true
+    isLenient = true
+}
+
+internal val STRUCTURED_NODE_TYPES = setOf(
+    "doc",
+    "paragraph",
+    "heading",
+    "bulletlist",
+    "orderedlist",
+    "listitem",
+    "blockquote",
+    "hardbreak",
+    "horizontalrule",
+    "image",
+    "text",
+)
+
+internal fun extractTextBlocks(rawHtml: String): List<String> {
+    val document = Jsoup.parse(rawHtml)
+    val paragraphLikeNodes = document.select("p, li, blockquote, h1, h2, h3, h4, h5, h6, pre")
+        .filterNot { node ->
+            node.tagName().equals("p", ignoreCase = true) &&
+                node.parent()?.tagName()?.equals("li", ignoreCase = true) == true
+        }
+        .map { element -> element.text().sanitizeTextBlock() }
+        .filter { it.isNotBlank() }
+    if (paragraphLikeNodes.isNotEmpty()) {
+        return paragraphLikeNodes
+    }
+    val text = document.body().wholeText()
+        .sanitizeTextBlock()
+    if (text.isBlank()) return emptyList()
+    return text.split(Regex("\n{2,}"))
+        .flatMap { block -> block.split('\n') }
+        .map { it.sanitizeTextBlock() }
+        .filter { it.isNotBlank() }
+}
+
+internal fun extractContentBlocks(
+    rawHtml: String,
+    chapterWebUrl: String?,
+    novelUrl: String,
+    pluginSite: String?,
+): List<NovelReaderScreenModel.ContentBlock> {
+    val document = Jsoup.parse(rawHtml)
+    val blocks = mutableListOf<NovelReaderScreenModel.ContentBlock>()
+    collectContentBlocks(
+        node = document.body(),
+        blocks = blocks,
+        chapterWebUrl = chapterWebUrl,
+        novelUrl = novelUrl,
+        pluginSite = pluginSite,
+    )
+    return blocks
+}
+
+internal fun collectContentBlocks(
+    node: Node,
+    blocks: MutableList<NovelReaderScreenModel.ContentBlock>,
+    chapterWebUrl: String?,
+    novelUrl: String,
+    pluginSite: String?,
+) {
+    when (node) {
+        is TextNode -> {
+            val text = node.text().sanitizeTextBlock()
+            if (text.isNotBlank()) {
+                blocks += NovelReaderScreenModel.ContentBlock.Text(text)
+            }
+        }
+        is Element -> {
+            val tag = node.tagName().lowercase()
+            when {
+                tag == "script" ||
+                    tag == "style" ||
+                    tag == "head" ||
+                    tag == "meta" ||
+                    tag == "link" ||
+                    tag == "noscript" -> Unit
+                tag == "img" -> {
+                    val rawUrl = node.attr("src")
+                        .ifBlank { node.attr("data-src") }
+                        .ifBlank { node.attr("data-original") }
+                        .trim()
+                    if (rawUrl.isBlank()) return
+                    val resolvedUrl = resolveContentResourceUrl(
+                        rawUrl = rawUrl,
+                        chapterWebUrl = chapterWebUrl,
+                        novelUrl = novelUrl,
+                        pluginSite = pluginSite,
+                    ) ?: return
+                    blocks += NovelReaderScreenModel.ContentBlock.Image(
+                        url = resolvedUrl,
+                        alt = node.attr("alt").sanitizeTextBlock().ifBlank { null },
+                    )
+                }
+                tag == "p" ||
+                    tag == "li" ||
+                    tag == "blockquote" ||
+                    tag == "h1" ||
+                    tag == "h2" ||
+                    tag == "h3" ||
+                    tag == "h4" ||
+                    tag == "h5" ||
+                    tag == "h6" ||
+                    tag == "pre" -> {
+                    val text = node.text().sanitizeTextBlock()
+                    if (text.isBlank()) return
+                    val structuredBlocks = parseStructuredFragmentToBlocks(
+                        rawPayload = text,
+                        chapterWebUrl = chapterWebUrl,
+                        novelUrl = novelUrl,
+                        pluginSite = pluginSite,
+                    )
+                    if (structuredBlocks.isNotEmpty()) {
+                        blocks += structuredBlocks
+                        return
+                    }
+                    val normalizedText = if (tag == "li") {
+                        "• $text"
+                    } else {
+                        text
+                    }
+                    blocks += NovelReaderScreenModel.ContentBlock.Text(normalizedText)
+                }
+                node.selectFirst("p, li, blockquote, h1, h2, h3, h4, h5, h6, pre, img") == null -> {
+                    val text = node.wholeText().sanitizeTextBlock()
+                    if (text.isNotBlank()) {
+                        blocks += NovelReaderScreenModel.ContentBlock.Text(text)
+                    }
+                }
+                else -> {
+                    node.childNodes().forEach { child ->
+                        collectContentBlocks(
+                            node = child,
+                            blocks = blocks,
+                            chapterWebUrl = chapterWebUrl,
+                            novelUrl = novelUrl,
+                            pluginSite = pluginSite,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+internal fun parseStructuredFragmentToBlocks(
+    rawPayload: String,
+    chapterWebUrl: String?,
+    novelUrl: String,
+    pluginSite: String?,
+): List<NovelReaderScreenModel.ContentBlock> {
+    if (!looksLikeStructuredPayload(rawPayload)) return emptyList()
+    val parsedRoot = parseStructuredRoot(rawPayload)
+    val renderedHtml = if (parsedRoot != null) {
+        val attachmentUrls = extractStructuredAttachmentUrls(parsedRoot)
+        val structuredNode = findStructuredNode(parsedRoot) ?: return emptyList()
+        renderStructuredElementAsHtml(structuredNode, attachmentUrls)
+    } else {
+        renderStructuredPayloadFallback(rawPayload).orEmpty()
+    }.trim()
+    if (renderedHtml.isBlank()) return emptyList()
+    val renderedDoc = Jsoup.parse("<div>$renderedHtml</div>")
+    val renderedCandidates = renderedDoc.select("p, li, blockquote, h1, h2, h3, h4, h5, h6, pre, img")
+        .filterNot { node ->
+            node.tagName().equals("p", ignoreCase = true) &&
+                node.parent()?.tagName()?.equals("li", ignoreCase = true) == true
+        }
+    return renderedCandidates.mapNotNull { candidate ->
+        if (candidate.tagName().equals("img", ignoreCase = true)) {
+            val rawUrl = candidate.attr("src")
+                .ifBlank { candidate.attr("data-src") }
+                .ifBlank { candidate.attr("data-original") }
+                .trim()
+            val resolvedUrl = resolveContentResourceUrl(
+                rawUrl = rawUrl,
+                chapterWebUrl = chapterWebUrl,
+                novelUrl = novelUrl,
+                pluginSite = pluginSite,
+            ) ?: return@mapNotNull null
+            NovelReaderScreenModel.ContentBlock.Image(
+                url = resolvedUrl,
+                alt = candidate.attr("alt").sanitizeTextBlock().ifBlank { null },
+            )
+        } else {
+            val candidateText = candidate.text().sanitizeTextBlock()
+            if (candidateText.isBlank()) return@mapNotNull null
+            val normalizedText = if (candidate.tagName().equals("li", ignoreCase = true)) {
+                "• $candidateText"
+            } else {
+                candidateText
+            }
+            NovelReaderScreenModel.ContentBlock.Text(normalizedText)
+        }
+    }
+}
+
+internal fun looksLikeStructuredPayload(rawValue: String): Boolean {
+    if (rawValue.isBlank()) return false
+    val trimmed = rawValue.trim()
+    return trimmed.startsWith("{") ||
+        trimmed.startsWith("[") ||
+        trimmed.startsWith("\"{") ||
+        trimmed.startsWith("\"[") ||
+        trimmed.startsWith("'{") ||
+        trimmed.startsWith("'[") ||
+        trimmed.startsWith("{\\\"") ||
+        trimmed.startsWith("[\\\"") ||
+        (trimmed.contains("\"type\"") && trimmed.contains("content")) ||
+        (trimmed.contains("'type'") && trimmed.contains("content"))
+}
+
+internal fun extractJsonCandidate(rawPayload: String): String? {
+    val trimmed = rawPayload.trim()
+    if (trimmed.startsWith("<")) {
+        val htmlTextCandidate = Jsoup.parse(trimmed).body().wholeText().trim()
+        if (looksLikeStructuredPayload(htmlTextCandidate)) {
+            return htmlTextCandidate
+        }
+    }
+    val objectStart =
+        trimmed.indexOf('{').takeIf { it >= 0 } ?: trimmed.indexOf('[').takeIf { it >= 0 } ?: return null
+    val objectEnd = trimmed.lastIndexOf('}').takeIf { it > objectStart }
+        ?: trimmed.lastIndexOf(']').takeIf { it > objectStart }
+        ?: return null
+    return trimmed.substring(objectStart, objectEnd + 1).trim()
+}
+
+internal fun normalizeJsonLikePayload(rawPayload: String): String? {
+    var candidate = rawPayload
+        .trim()
+        .removePrefix("\uFEFF")
+        .trim()
+    if (candidate.startsWith("return ")) {
+        candidate = candidate.removePrefix("return ").trim()
+    }
+    candidate = candidate.trimEnd(';').trim()
+    if (!looksLikeStructuredPayload(candidate)) return null
+    if (candidate.startsWith("'") && candidate.endsWith("'")) {
+        val inner = candidate.substring(1, candidate.lastIndex).replace("\"", "\\\"")
+        candidate = "\"$inner\""
+    }
+    if (candidate.contains("\\\"")) {
+        candidate = candidate.replace("\\\"", "\"")
+    }
+    if (candidate.contains("\\n")) {
+        candidate = candidate.replace("\\n", "\n")
+    }
+    if (candidate.contains("\\t")) {
+        candidate = candidate.replace("\\t", "\t")
+    }
+    candidate = Regex("([\\{,]\\s*)([A-Za-z_][A-Za-z0-9_\\-]*)(\\s*:)").replace(candidate, "$1\"$2\"$3")
+    candidate = Regex("\"([A-Za-z_][A-Za-z0-9_\\-]*)\\s*:\\s*\"").replace(candidate, "\"$1\":\"")
+    candidate = Regex("'([^'\\\\]*(?:\\\\.[^'\\\\]*)*)'").replace(candidate) { match ->
+        "\"${match.groupValues[1].replace("\"", "\\\"")}\""
+    }
+    candidate = Regex(",\\s*([}\\]])").replace(candidate, "$1")
+    return candidate
+}
+
+internal fun findStructuredNode(element: JsonElement): JsonElement? {
+    return when (element) {
+        is JsonObject -> {
+            if (isStructuredNode(element)) {
+                element
+            } else {
+                listOf("content", "data", "body", "result", "payload", "value", "chapter")
+                    .firstNotNullOfOrNull { key ->
+                        val nested = element[key] ?: return@firstNotNullOfOrNull null
+                        findStructuredNode(nested)
+                            ?: parseStructuredRoot(nested.asStringOrNull().orEmpty())?.let(::findStructuredNode)
+                    }
+            }
+        }
+        is JsonArray -> {
+            val hasStructuredObjects = element.any {
+                (it as? JsonObject)?.let(::isStructuredNode) == true
+            }
+            if (hasStructuredObjects) element else null
+        }
+        else -> null
+    }
+}
+
+internal fun isStructuredNode(element: JsonObject): Boolean {
+    val normalizedType = normalizeStructuredType(element["type"].asStringOrNull())
+    if (normalizedType != null && normalizedType in STRUCTURED_NODE_TYPES) {
+        return true
+    }
+    return (element["content"] is JsonArray) ||
+        (element["content"] is JsonObject) ||
+        (element["text"].asStringOrNull() != null) ||
+        (element["attrs"] is JsonObject)
+}
+
+internal fun extractStructuredAttachmentUrls(root: JsonElement): Map<String, String> {
+    val rootObject = root as? JsonObject ?: return emptyMap()
+    val mapping = mutableMapOf<String, String>()
+    fun appendAttachmentMapping(attachment: JsonObject) {
+        val url = attachment["url"].asStringOrNull()?.trim().orEmpty()
+        if (url.isBlank()) return
+        attachment["id"].asStringOrNull()?.trim()?.takeIf { it.isNotBlank() }?.let { key ->
+            mapping[key] = url
+        }
+        attachment["name"].asStringOrNull()?.trim()?.takeIf { it.isNotBlank() }?.let { key ->
+            mapping[key] = url
+        }
+    }
+    when (val attachments = rootObject["attachments"]) {
+        is JsonArray -> attachments.forEach { entry ->
+            val attachment = entry as? JsonObject ?: return@forEach
+            appendAttachmentMapping(attachment)
+        }
+        is JsonObject -> attachments.forEach { (key, value) ->
+            val valueObject = value as? JsonObject
+            val url = valueObject?.get("url").asStringOrNull()?.trim().orEmpty()
+                .ifBlank { value.asStringOrNull().orEmpty().trim() }
+            if (url.isNotBlank()) {
+                mapping[key.trim()] = url
+            }
+        }
+        else -> Unit
+    }
+    return mapping
+}
+
+internal fun renderStructuredElementAsHtml(
+    element: JsonElement,
+    attachmentUrls: Map<String, String>,
+): String {
+    return when (element) {
+        is JsonObject -> renderStructuredNodeAsHtml(element, attachmentUrls)
+        is JsonArray -> buildString {
+            element.forEach { node ->
+                append(renderStructuredElementAsHtml(node, attachmentUrls))
+            }
+        }
+        else -> ""
+    }
+}
+
+internal fun renderStructuredNodeAsHtml(
+    node: JsonObject,
+    attachmentUrls: Map<String, String>,
+): String {
+    val type = normalizeStructuredType(node["type"].asStringOrNull()).orEmpty()
+    val attrs = node["attrs"] as? JsonObject
+    val children = node["content"] as? JsonArray
+    fun renderChildren(): String {
+        if (children == null) return ""
+        return buildString {
+            children.forEach { child ->
+                append(renderStructuredElementAsHtml(child, attachmentUrls))
+            }
+        }
+    }
+    return when (type) {
+        "doc" -> renderChildren()
+        "paragraph" -> "<p>${renderChildren()}</p>"
+        "heading" -> {
+            val level = attrs?.get("level").asIntOrNull()?.coerceIn(1, 6) ?: 1
+            "<h$level>${renderChildren()}</h$level>"
+        }
+        "bulletlist" -> "<ul>${renderChildren()}</ul>"
+        "orderedlist" -> "<ol>${renderChildren()}</ol>"
+        "listitem" -> "<li>${renderChildren()}</li>"
+        "blockquote" -> "<blockquote>${renderChildren()}</blockquote>"
+        "hardbreak" -> "<br/>"
+        "horizontalrule" -> "<hr/>"
+        "image" -> renderStructuredImageNode(attrs, attachmentUrls)
+        "text" -> {
+            val escaped = node["text"].asStringOrNull().orEmpty().escapeHtml()
+            applyStructuredMarks(escaped, node["marks"] as? JsonArray)
+        }
+        else -> {
+            val inlineText = node["text"]
+                .asStringOrNull()
+                ?.takeIf { it.isNotBlank() }
+                ?.escapeHtml()
+            if (inlineText != null) {
+                applyStructuredMarks(inlineText, node["marks"] as? JsonArray)
+            } else {
+                renderChildren()
+            }
+        }
+    }
+}
+
+internal fun renderStructuredImageNode(
+    attrs: JsonObject?,
+    attachmentUrls: Map<String, String>,
+): String {
+    if (attrs == null) return ""
+    val directUrl = attrs["src"].asStringOrNull()?.trim().orEmpty()
+    val altText = attrs["alt"].asStringOrNull().orEmpty().escapeHtml()
+    if (directUrl.isNotBlank()) {
+        return "<img src=\"${directUrl.escapeHtmlAttribute()}\" alt=\"$altText\" />"
+    }
+    val imageReferences = mutableListOf<String>()
+    attrs["image"].asStringOrNull()?.trim()?.takeIf { it.isNotBlank() }?.let { imageReferences += it }
+    when (val imagesNode = attrs["images"]) {
+        is JsonArray -> imagesNode.forEach { entry ->
+            when (entry) {
+                is JsonObject -> {
+                    entry["image"].asStringOrNull()?.trim()?.takeIf {
+                        it.isNotBlank()
+                    }?.let { imageReferences += it }
+                }
+                is JsonPrimitive -> entry.contentOrNull?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    imageReferences +=
+                        it
+                }
+                else -> Unit
+            }
+        }
+        is JsonObject -> {
+            imagesNode["image"].asStringOrNull()?.trim()?.takeIf { it.isNotBlank() }?.let { imageReferences += it }
+        }
+        else -> Unit
+    }
+    val resolvedUrls = imageReferences.mapNotNull { reference ->
+        attachmentUrls[reference]
+    }
+    if (resolvedUrls.isEmpty()) return ""
+    return resolvedUrls.joinToString(separator = "") { url ->
+        "<img src=\"${url.escapeHtmlAttribute()}\" alt=\"$altText\" />"
+    }
+}
+
+internal fun applyStructuredMarks(
+    text: String,
+    marks: JsonArray?,
+): String {
+    if (marks == null || marks.isEmpty()) return text
+    var rendered = text
+    marks.forEach { markElement ->
+        val mark = markElement as? JsonObject ?: return@forEach
+        rendered = when (normalizeStructuredType(mark["type"].asStringOrNull())) {
+            "bold", "strong" -> "<strong>$rendered</strong>"
+            "italic", "em" -> "<em>$rendered</em>"
+            "underline" -> "<u>$rendered</u>"
+            "strike", "s" -> "<s>$rendered</s>"
+            "code" -> "<code>$rendered</code>"
+            "link" -> {
+                val href = (mark["attrs"] as? JsonObject)
+                    ?.get("href")
+                    .asStringOrNull()
+                    .orEmpty()
+                if (href.isBlank()) rendered else "<a href=\"${href.escapeHtmlAttribute()}\">$rendered</a>"
+            }
+            else -> rendered
+        }
+    }
+    return rendered
+}
+
+internal fun JsonElement?.asStringOrNull(): String? {
+    return (this as? JsonPrimitive)?.contentOrNull
+}
+
+internal fun JsonElement?.asIntOrNull(): Int? {
+    return (this as? JsonPrimitive)?.intOrNull
+}
+
+internal fun String.escapeHtml(): String {
+    return replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&#39;")
+}
+
+internal fun String.escapeHtmlAttribute(): String {
+    return escapeHtml()
+}
+
+internal fun renderStructuredPayloadFallback(rawPayload: String): String? {
+    val candidate = extractJsonCandidate(rawPayload) ?: rawPayload.trim()
+    if (!looksLikeStructuredPayload(candidate)) return null
+    val normalized = normalizeJsonLikePayload(candidate) ?: candidate
+    val textSegments = extractStructuredTextFallbackSegments(normalized)
+    val imageSegments = extractStructuredImageFallbackUrls(normalized)
+    if (textSegments.isEmpty() && imageSegments.isEmpty()) return null
+    val html = buildString {
+        textSegments.forEach { segment ->
+            append("<p>${segment.escapeHtml()}</p>")
+        }
+        imageSegments.forEach { url ->
+            append("<img src=\"${url.escapeHtmlAttribute()}\" alt=\"\" />")
+        }
+    }.trim()
+    return html.takeIf { it.isNotBlank() }
+}
+
+internal fun looksLikeHtmlPayload(rawPayload: String): Boolean {
+    val trimmed = rawPayload.trim()
+    if (!trimmed.contains('<') || !trimmed.contains('>')) return false
+    return Regex("(?is)<\\s*(html|body|div|main|article|section|p|ul|ol|li|h1|h2|h3|h4|h5|h6|span)\\b")
+        .containsMatchIn(trimmed)
+}
+
+internal fun extractStructuredTextFallbackSegments(payload: String): List<String> {
+    val results = mutableListOf<String>()
+    val textRegex = Regex("(?is)\"text\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"")
+    textRegex.findAll(payload).forEach { match ->
+        val rawText = match.groupValues.getOrNull(1).orEmpty()
+        val decodedText = rawText
+            .replace("\\\\", "\\")
+            .replace("\\n", "\n")
+            .replace("\\t", "\t")
+            .replace("\\r", "")
+            .replace("\\\"", "\"")
+            .replace("\\u00A0", " ")
+            .sanitizeTextBlock()
+        if (decodedText.isBlank()) return@forEach
+        val contextStart = (match.range.first - 220).coerceAtLeast(0)
+        val context = payload.substring(contextStart, match.range.first).lowercase()
+        val isListItemContext = context.contains("listitem") || context.contains("bulletlist")
+        val normalized = if (isListItemContext && !decodedText.startsWith("•")) {
+            "• $decodedText"
+        } else {
+            decodedText
+        }
+        results += normalized
+    }
+    return results
+}
+
+internal fun extractStructuredImageFallbackUrls(payload: String): List<String> {
+    val urlRegex = Regex("(?is)\"url\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"")
+    val directHttpRegex = Regex("(?i)https?://[^\\s\"'<>]+\\.(?:png|jpe?g|gif|webp|bmp|svg)")
+    val urls = linkedSetOf<String>()
+    urlRegex.findAll(payload).forEach { match ->
+        val url = match.groupValues.getOrNull(1).orEmpty()
+            .replace("\\\\", "\\")
+            .replace("\\/", "/")
+            .replace("\\\"", "\"")
+            .trim()
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            urls += url
+        }
+    }
+    directHttpRegex.findAll(payload).forEach { match ->
+        val url = match.value.trim()
+        if (url.isNotBlank()) {
+            urls += url
+        }
+    }
+    return urls.toList()
+}
+
+internal fun normalizeStructuredType(type: String?): String? {
+    return type
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+        ?.lowercase()
+        ?.replace("_", "")
+        ?.replace("-", "")
+}
+
+internal fun String.sanitizeTextBlock(): String {
+    return this
+        .replace('\u00A0', ' ')
+        .replace("\r", "")
+        .trim()
+}
+
+internal fun String.normalizeStructuredChapterPayload(): String {
+    val trimmedPayload = trim()
+    if (looksLikeHtmlPayload(trimmedPayload)) {
+        return this
+    }
+    val parsedRoot = parseStructuredRoot(this)
+    if (parsedRoot != null) {
+        val attachmentUrls = extractStructuredAttachmentUrls(parsedRoot)
+        val structuredNode = findStructuredNode(parsedRoot) ?: return this
+        val rendered = renderStructuredElementAsHtml(
+            element = structuredNode,
+            attachmentUrls = attachmentUrls,
+        ).trim()
+        if (rendered.isNotBlank()) {
+            return "<div>$rendered</div>"
+        }
+    }
+    val fallbackRendered = renderStructuredPayloadFallback(this).orEmpty().trim()
+    return if (fallbackRendered.isBlank()) this else "<div>$fallbackRendered</div>"
+}
+
+internal fun parseStructuredCandidate(
+    candidate: String,
+    decodeDepth: Int,
+): JsonElement? {
+    if (decodeDepth > 4) return null
+    val trimmed = candidate.trim().trimEnd(';').trim()
+    if (trimmed.isBlank()) return null
+    val directParsed = runCatching { structuredJson.parseToJsonElement(trimmed) }.getOrNull()
+    if (directParsed != null) {
+        if (directParsed is JsonObject || directParsed is JsonArray) {
+            return directParsed
+        }
+        val primitiveContent = (directParsed as? JsonPrimitive)
+            ?.contentOrNull
+            ?.trim()
+            .orEmpty()
+        if (looksLikeStructuredPayload(primitiveContent)) {
+            return parseStructuredCandidate(primitiveContent, decodeDepth + 1)
+        }
+    }
+    if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+        val decoded = runCatching { structuredJson.decodeFromString<String>(trimmed) }.getOrNull()
+        if (!decoded.isNullOrBlank()) {
+            return parseStructuredCandidate(decoded, decodeDepth + 1)
+        }
+    }
+    val normalizedCandidate = normalizeJsonLikePayload(trimmed)
+        ?.takeIf { it != trimmed }
+        ?: return null
+    return parseStructuredCandidate(normalizedCandidate, decodeDepth + 1)
+}
+
+internal fun parseStructuredRoot(rawPayload: String): JsonElement? {
+    val trimmed = rawPayload
+        .trim()
+        .removePrefix("\uFEFF")
+        .trim()
+    if (!looksLikeStructuredPayload(trimmed)) return null
+    val parseCandidates = linkedSetOf(trimmed)
+    extractJsonCandidate(trimmed)?.let { parseCandidates += it }
+    normalizeJsonLikePayload(trimmed)?.let { parseCandidates += it }
+    parseCandidates.forEach { candidate ->
+        val parsed = parseStructuredCandidate(candidate, decodeDepth = 0) ?: return@forEach
+        if (parsed is JsonObject || parsed is JsonArray) {
+            return parsed
+        }
+    }
+    return null
+}
+
+internal fun resolveContentResourceUrl(
+    rawUrl: String,
+    chapterWebUrl: String?,
+    novelUrl: String,
+    pluginSite: String?,
+): String? {
+    val trimmed = rawUrl.trim()
+    if (trimmed.isBlank()) return null
+    if (trimmed.startsWith("data:image/", ignoreCase = true)) {
+        return trimmed
+    }
+    if (NovelPluginImage.isSupported(trimmed)) {
+        return trimmed
+    }
+    if (trimmed.startsWith("blob:", ignoreCase = true)) {
+        return null
+    }
+    trimmed.toHttpUrlOrNull()?.let { return it.toString() }
+    chapterWebUrl
+        ?.let { resolveUrl(trimmed, it).trim().toHttpUrlOrNull() }
+        ?.let { return it.toString() }
+    return resolveNovelChapterWebUrl(
+        chapterUrl = trimmed,
+        pluginSite = pluginSite,
+        novelUrl = novelUrl,
+    )
+}
+
+internal fun resolveRichContentBlocks(
+    blocks: List<NovelRichContentBlock>,
+    chapterWebUrl: String?,
+    novelUrl: String,
+    pluginSite: String?,
+): List<NovelRichContentBlock> {
+    return blocks.map { block ->
+        when (block) {
+            is NovelRichContentBlock.Image -> {
+                val resolvedUrl = resolveContentResourceUrl(
+                    rawUrl = block.url,
+                    chapterWebUrl = chapterWebUrl,
+                    novelUrl = novelUrl,
+                    pluginSite = pluginSite,
+                ) ?: block.url
+                block.copy(url = resolvedUrl)
+            }
+            else -> block
+        }
+    }
+}
+
+internal fun normalizeHtml(
+    rawHtml: String,
+    settings: NovelReaderSettings,
+    customCss: String?,
+    customJs: String?,
+): String {
+    val css = customCss?.takeIf { it.isNotBlank() }
+    val js = customJs?.takeIf { it.isNotBlank() }
+    val isDarkTheme = when (settings.theme) {
+        NovelReaderTheme.SYSTEM -> uy.kohesive.injekt.Injekt.get<android.app.Application>().isNightMode()
+        NovelReaderTheme.DARK -> true
+        NovelReaderTheme.LIGHT -> false
+    }
+    val background = if (isDarkTheme) "#121212" else "#FFFFFF"
+    val textColor = if (isDarkTheme) "#EDEDED" else "#1A1A1A"
+    val linkColor = if (isDarkTheme) "#80B4FF" else "#1E3A8A"
+    val baseStyle = """
+        body {
+          padding: ${settings.margin}px;
+          line-height: ${settings.lineHeight};
+          font-size: ${settings.fontSize}px;
+          background: $background;
+          color: $textColor;
+          word-break: break-word;
+        }
+        img { max-width: 100%; height: auto; }
+        a { color: $linkColor; }
+    """.trimIndent()
+    val injection = buildString {
+        append("<style>")
+        append('\n')
+        append(baseStyle)
+        if (css != null) {
+            append('\n')
+            append(css)
+        }
+        append('\n')
+        append("</style>")
+        if (js != null) {
+            append('\n')
+            append("<script>")
+            append('\n')
+            append(js)
+            append('\n')
+            append("</script>")
+        }
+    }
+    if (rawHtml.contains("<html", ignoreCase = true)) {
+        return if (injection.isNotBlank()) injectIntoHtml(rawHtml, injection) else rawHtml
+    }
+    val style = buildString {
+        append(baseStyle)
+        if (css != null) {
+            append('\n')
+            append(css)
+        }
+    }
+    return """
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <style>
+              $style
+            </style>
+            ${if (js != null) "<script>$js</script>" else ""}
+          </head>
+          <body>
+            $rawHtml
+          </body>
+        </html>
+    """.trimIndent()
+}
+
+internal fun injectIntoHtml(rawHtml: String, injection: String): String {
+    val headClose = Regex("</head>", RegexOption.IGNORE_CASE)
+    if (headClose.containsMatchIn(rawHtml)) {
+        return rawHtml.replaceFirst(headClose, "$injection</head>")
+    }
+    val headOpen = Regex("<head[^>]*>", RegexOption.IGNORE_CASE)
+    val headMatch = headOpen.find(rawHtml)
+    if (headMatch != null) {
+        return rawHtml.replaceRange(headMatch.range, headMatch.value + injection)
+    }
+    val bodyClose = Regex("</body>", RegexOption.IGNORE_CASE)
+    if (bodyClose.containsMatchIn(rawHtml)) {
+        return rawHtml.replaceFirst(bodyClose, "$injection</body>")
+    }
+    return injection + rawHtml
 }

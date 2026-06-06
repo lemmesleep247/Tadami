@@ -89,6 +89,7 @@ import eu.kanade.domain.entries.novel.interactor.UpdateNovel
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.entries.EditCoverAction
+import eu.kanade.presentation.entries.components.EditMetadataSheet
 import eu.kanade.presentation.entries.components.aurora.AuroraNoteEditorDialog
 import eu.kanade.presentation.entries.novel.NovelChapterSettingsDialog
 import eu.kanade.presentation.entries.novel.NovelScreen
@@ -98,7 +99,6 @@ import eu.kanade.presentation.entries.novel.components.NovelCoverDialog
 import eu.kanade.presentation.entries.novel.components.NovelTranslatedDownloadFormatSelector
 import eu.kanade.tachiyomi.data.download.novel.NovelTranslatedDownloadFormat
 import eu.kanade.tachiyomi.data.export.novel.NovelEpubExportProgress
-import eu.kanade.tachiyomi.extension.novel.runtime.hasVisiblePluginSettingsByDiscovery
 import eu.kanade.tachiyomi.extension.novel.runtime.resolveUrl
 import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.source.novel.NovelSiteSource
@@ -175,6 +175,7 @@ class NovelScreen(
         var showEpubExportDialog by remember { mutableStateOf(false) }
         var epubExportProgress by remember { mutableStateOf<NovelEpubExportProgress?>(null) }
         var showNotesDialog by remember { mutableStateOf(false) }
+        var showEditMetadataSheet by remember { mutableStateOf(false) }
         val epubExportPreferences = screenModel.getEpubExportPreferences()
         BackHandler(enabled = screenModel.isAnyChapterSelected) {
             screenModel.toggleAllSelection(false)
@@ -183,7 +184,7 @@ class NovelScreen(
         val rawNovelUrl = successState.novel.url
         val canOpenNovelWebView = rawNovelUrl.isNotBlank()
         val isReading = screenModel.isReadingStarted()
-        val isSourceConfigurable = successState.source.hasVisiblePluginSettingsByDiscovery()
+        val isSourceConfigurable = successState.isSourceConfigurable
         val actionAvailability = resolveNovelEntryActionAvailability(
             isFavorite = successState.novel.favorite,
             isSourceConfigurable = isSourceConfigurable,
@@ -500,6 +501,26 @@ class NovelScreen(
             onMultiDownloadClicked = screenModel::downloadSelectedChapters,
             onMultiDeleteClicked = screenModel::deleteDownloadedSelectedChapters,
             onSaveScrollPosition = screenModel::saveScrollPosition,
+            onClickEditInfo = { showEditMetadataSheet = true },
+            onRetrySuggestions = screenModel::retrySuggestions,
+            onOpenSuggestions = {
+                val seed = screenModel.getSuggestionSeed()
+                    ?: eu.kanade.tachiyomi.data.suggestions.SuggestionSeed(
+                        mediaType = eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType.NOVEL,
+                        primaryTitle = successState.novel.displayTitle,
+                        candidateTitles = emptyList(),
+                        description = successState.novel.displayDescription,
+                        author = successState.novel.displayAuthor,
+                        genres = successState.novel.displayGenre,
+                    )
+                navigator.push(
+                    eu.kanade.tachiyomi.ui.entries.suggestions.EntrySuggestionsScreen(
+                        seed = seed,
+                        sourceId = successState.novel.source,
+                        entryUrl = successState.novel.url,
+                    ),
+                )
+            },
         )
 
         if (showBatchDownloadDialog) {
@@ -607,6 +628,25 @@ class NovelScreen(
                             ),
                         )
                     }
+                },
+            )
+        }
+
+        if (showEditMetadataSheet) {
+            EditMetadataSheet(
+                onDismissRequest = { showEditMetadataSheet = false },
+                currentTitle = successState.novel.displayTitle,
+                currentAuthor = successState.novel.displayAuthor,
+                currentArtist = null,
+                currentDescription = successState.novel.displayDescription,
+                currentGenre = successState.novel.displayGenre,
+                currentStatus = successState.novel.displayStatus,
+                hasArtist = false,
+                onSave = { title, author, _, description, tags, status ->
+                    screenModel.updateNovelMetadata(title, author, description, tags, status)
+                },
+                onReset = {
+                    screenModel.resetNovelMetadata()
                 },
             )
         }

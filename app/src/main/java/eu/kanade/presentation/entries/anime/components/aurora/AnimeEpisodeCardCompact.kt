@@ -1,19 +1,21 @@
 package eu.kanade.presentation.entries.anime.components.aurora
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.LabelOff
+import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.BookmarkRemove
 import androidx.compose.material.icons.outlined.Delete
@@ -28,39 +30,36 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
-import coil3.request.crossfade
-import eu.kanade.presentation.components.buildAuroraCoverImageRequest
 import eu.kanade.presentation.components.relativeDateTimeText
-import eu.kanade.presentation.components.rememberAuroraCoverPlaceholderPainter
 import eu.kanade.presentation.entries.anime.components.EpisodeDownloadAction
 import eu.kanade.presentation.entries.anime.components.EpisodeDownloadIndicator
-import eu.kanade.presentation.entries.components.aurora.AURORA_DIMMED_ITEM_ALPHA
-import eu.kanade.presentation.entries.components.aurora.AURORA_NEW_ITEM_HIGHLIGHT_ALPHA
-import eu.kanade.presentation.entries.manga.components.aurora.GlassmorphismCard
+import eu.kanade.presentation.entries.anime.components.isLikelyEpisodeDescription
+import eu.kanade.presentation.entries.components.ItemCover
+import eu.kanade.presentation.entries.components.aurora.AuroraCompactEntryRowCard
 import eu.kanade.presentation.theme.AuroraTheme
 import eu.kanade.tachiyomi.data.download.anime.model.AnimeDownload
 import eu.kanade.tachiyomi.ui.entries.anime.EpisodeList
 import me.saket.swipe.SwipeableActionsBox
 import tachiyomi.domain.entries.anime.model.Anime
-import tachiyomi.domain.entries.anime.model.asAnimeCover
+import tachiyomi.domain.entries.anime.model.AnimeCover
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Compact episode card with 40x40 thumbnail and minimal design.
@@ -79,17 +78,11 @@ fun AnimeEpisodeCardCompact(
     onEpisodeSwipe: (LibraryPreferences.EpisodeSwipeAction) -> Unit,
     onDownloadEpisode: ((List<EpisodeList.Item>, EpisodeDownloadAction) -> Unit)?,
     modifier: Modifier = Modifier,
+    showPreviews: Boolean = true,
+    showSummaries: Boolean = true,
 ) {
     val colors = AuroraTheme.colors
-    val context = LocalContext.current
     val episode = item.episode
-    val placeholderPainter = rememberAuroraCoverPlaceholderPainter()
-    val cardAlpha = if (episode.seen) AURORA_DIMMED_ITEM_ALPHA else 1f
-    val cardTint = if (isNew && !episode.seen) {
-        colors.accent.copy(alpha = AURORA_NEW_ITEM_HIGHLIGHT_ALPHA)
-    } else {
-        null
-    }
     val startSwipeAction = auroraAnimeSwipeAction(
         action = episodeSwipeStartAction,
         seen = episode.seen,
@@ -110,157 +103,217 @@ fun AnimeEpisodeCardCompact(
     )
 
     val episodeCard: @Composable () -> Unit = {
-        GlassmorphismCard(
-            modifier = modifier.alpha(cardAlpha),
-            cornerRadius = 16.dp,
-            verticalPadding = 4.dp,
-            innerPadding = 12.dp,
-            overlayColor = cardTint,
+        AuroraCompactEntryRowCard(
+            modifier = modifier,
+            selected = selected,
+            highlighted = isNew && !episode.seen,
+            dimmed = episode.seen,
+            cornerRadius = 20.dp,
+            outerVerticalPadding = 6.dp,
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+            onClick = onClick,
+            onLongClick = onLongClick,
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (selected) colors.accent.copy(alpha = 0.16f) else Color.Transparent)
-                    .combinedClickable(
-                        onClick = onClick,
-                        onLongClick = onLongClick,
-                    )
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // 40x40 thumbnail
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.3f)),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    val coverRequest = remember(anime.id, anime.thumbnailUrl, anime.coverLastModified) {
-                        buildAuroraCoverImageRequest(context, anime.asAnimeCover()) {
-                            crossfade(true)
-                            size(40)
+                    val showPreviewImage = showPreviews
+                    if (showPreviewImage) {
+                        val targetWidth = 56.dp
+                        val imageData = if (!episode.previewUrl.isNullOrBlank()) {
+                            episode.previewUrl
+                        } else {
+                            AnimeCover(
+                                animeId = anime.id,
+                                sourceId = anime.source,
+                                isAnimeFavorite = anime.favorite,
+                                url = anime.thumbnailUrl,
+                                lastModified = anime.coverLastModified,
+                            )
+                        }
+                        ItemCover.Book(
+                            data = imageData,
+                            modifier = Modifier
+                                .width(targetWidth)
+                                .clip(RoundedCornerShape(8.dp)),
+                        )
+                    }
+
+                    // Episode info
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = episode.name,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+
+                        val summaryText = episode.summary.takeIf { !it.isNullOrBlank() && showSummaries }
+                            ?: episode.scanlator.takeIf {
+                                !it.isNullOrBlank() &&
+                                    showSummaries &&
+                                    it.isLikelyEpisodeDescription()
+                            }
+                        if (summaryText != null) {
+                            var expandSummary by remember { mutableStateOf(false) }
+                            Text(
+                                text = summaryText,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = colors.textSecondary.copy(alpha = 0.8f),
+                                maxLines = if (expandSummary) Int.MAX_VALUE else 3,
+                                overflow = TextOverflow.Ellipsis,
+                                lineHeight = 14.sp,
+                                modifier = Modifier.padding(vertical = 2.dp),
+                            )
+                        }
+
+                        // Meta info row
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            if (!episode.seen) {
+                                Icon(
+                                    imageVector = Icons.Filled.Circle,
+                                    contentDescription = null,
+                                    tint = colors.accent,
+                                    modifier = Modifier.size(6.dp),
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                            }
+                            Icon(
+                                Icons.Outlined.Schedule,
+                                contentDescription = null,
+                                tint = colors.textSecondary,
+                                modifier = Modifier.size(12.dp),
+                            )
+
+                            // Format upload date
+                            val uploadDateText = relativeDateTimeText(episode.dateUpload)
+
+                            Text(
+                                text = uploadDateText,
+                                fontSize = 12.sp,
+                                color = colors.textSecondary,
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            if (episode.bookmark) {
+                                AuroraEpisodeStatusBadge(
+                                    status = AuroraEpisodeStatus.Bookmark,
+                                    icon = Icons.Outlined.BookmarkAdd,
+                                    label = null,
+                                )
+                            }
+                            if (episode.fillermark) {
+                                AuroraEpisodeStatusBadge(
+                                    status = AuroraEpisodeStatus.Fillermark,
+                                    icon = Icons.Outlined.NewLabel,
+                                    label = stringResource(AYMR.strings.aurora_episode_badge_filler),
+                                )
+                            }
+                            if (episode.seen) {
+                                AuroraEpisodeStatusBadge(
+                                    status = AuroraEpisodeStatus.Seen,
+                                    icon = Icons.Outlined.Done,
+                                    label = stringResource(AYMR.strings.aurora_episode_badge_seen),
+                                )
+                            }
                         }
                     }
-                    AsyncImage(
-                        model = coverRequest,
-                        error = placeholderPainter,
-                        fallback = placeholderPainter,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(40.dp),
-                        alpha = 1f,
-                    )
+
+                    // Actions column
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                    ) {
+                        // Download indicator
+                        if (onDownloadEpisode != null && !isAnyEpisodeSelected) {
+                            EpisodeDownloadIndicator(
+                                enabled = true,
+                                downloadStateProvider = { item.downloadState },
+                                downloadProgressProvider = { item.downloadProgress },
+                                onClick = { onDownloadEpisode(listOf(item), it) },
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+
+                        // Seen checkmark
+                        if (episode.seen) {
+                            Icon(
+                                Icons.Outlined.Done,
+                                contentDescription = null,
+                                tint = colors.accent,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
                 }
 
-                // Episode info
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        text = episode.name,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-
-                    // Meta info row
+                // Progress bar for seen/in-progress episodes (starts under the poster!)
+                if (episode.seen || episode.totalSeconds > 0L) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp),
                     ) {
-                        Icon(
-                            Icons.Outlined.Schedule,
-                            contentDescription = null,
-                            tint = colors.textSecondary,
-                            modifier = Modifier.size(12.dp),
-                        )
-
-                        // Format upload date
-                        val uploadDateText = relativeDateTimeText(episode.dateUpload)
-
-                        Text(
-                            text = uploadDateText,
-                            fontSize = 12.sp,
-                            color = colors.textSecondary,
-                        )
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        if (episode.bookmark) {
-                            AuroraEpisodeStatusBadge(
-                                status = AuroraEpisodeStatus.Bookmark,
-                                icon = Icons.Outlined.BookmarkAdd,
-                                label = null,
-                            )
-                        }
-                        if (episode.fillermark) {
-                            AuroraEpisodeStatusBadge(
-                                status = AuroraEpisodeStatus.Fillermark,
-                                icon = Icons.Outlined.NewLabel,
-                                label = stringResource(AYMR.strings.aurora_episode_badge_filler),
-                            )
-                        }
-                        if (episode.seen) {
-                            AuroraEpisodeStatusBadge(
-                                status = AuroraEpisodeStatus.Seen,
-                                icon = Icons.Outlined.Done,
-                                label = stringResource(AYMR.strings.aurora_episode_badge_seen),
-                            )
-                        }
-                    }
-
-                    // Progress bar for seen episodes
-                    if (episode.seen) {
-                        Spacer(modifier = Modifier.height(2.dp))
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .weight(1f)
                                 .height(3.dp)
                                 .clip(RoundedCornerShape(50))
                                 .background(colors.divider),
                         ) {
+                            val progress = if (episode.seen) {
+                                1f
+                            } else {
+                                (
+                                    episode.lastSecondSeen.toFloat() /
+                                        maxOf(1L, episode.totalSeconds).toFloat()
+                                    ).coerceIn(0f, 1f)
+                            }
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
+                                    .fillMaxWidth(progress)
                                     .height(3.dp)
                                     .background(colors.accent),
                             )
                         }
-                    }
-                }
 
-                // Actions column
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    // Download indicator
-                    if (onDownloadEpisode != null && !isAnyEpisodeSelected) {
-                        EpisodeDownloadIndicator(
-                            enabled = true,
-                            downloadStateProvider = { item.downloadState },
-                            downloadProgressProvider = { item.downloadProgress },
-                            onClick = { onDownloadEpisode(listOf(item), it) },
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-
-                    // Seen checkmark
-                    if (episode.seen) {
-                        Icon(
-                            Icons.Outlined.Done,
-                            contentDescription = null,
-                            tint = colors.accent,
-                            modifier = Modifier.size(18.dp),
-                        )
+                        if (episode.totalSeconds > 0L) {
+                            val totalDurationText = episode.totalSeconds.milliseconds.toDigitalString()
+                            val durationText = if (!episode.seen && episode.lastSecondSeen > 0L) {
+                                val lastSeenDurationText = episode.lastSecondSeen.milliseconds.toDigitalString()
+                                "$lastSeenDurationText / $totalDurationText"
+                            } else {
+                                totalDurationText
+                            }
+                            Text(
+                                text = durationText,
+                                fontSize = 11.sp,
+                                color = colors.textSecondary,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
                     }
                 }
             }
@@ -275,7 +328,7 @@ fun AnimeEpisodeCardCompact(
             startActions = listOfNotNull(startSwipeAction),
             endActions = listOfNotNull(endSwipeAction),
             swipeThreshold = auroraSwipeActionThreshold,
-            backgroundUntilSwipeThreshold = MaterialTheme.colorScheme.surfaceContainerLowest,
+            backgroundUntilSwipeThreshold = Color.Transparent,
         ) {
             episodeCard()
         }
@@ -319,6 +372,7 @@ internal enum class AuroraEpisodeStatus {
     Bookmark,
     Fillermark,
     Seen,
+    InProgress,
 }
 
 internal fun shouldShowAuroraEpisodeStatusLabel(status: AuroraEpisodeStatus): Boolean {
@@ -388,3 +442,15 @@ private fun auroraSwipeAction(
 }
 
 private val auroraSwipeActionThreshold = 56.dp
+
+private fun kotlin.time.Duration.toDigitalString(): String {
+    return toComponents { _, hours, minutes, seconds, _ ->
+        val minutesStr = if (hours > 0) minutes.toString().padStart(2, '0') else minutes.toString()
+        val secondsStr = seconds.toString().padStart(2, '0')
+        if (hours > 0) {
+            "$hours:$minutesStr:$secondsStr"
+        } else {
+            "$minutes:$secondsStr"
+        }
+    }
+}

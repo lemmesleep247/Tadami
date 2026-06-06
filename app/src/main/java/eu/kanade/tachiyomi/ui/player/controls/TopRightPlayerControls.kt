@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Subtitles
@@ -57,6 +58,10 @@ fun TopRightPlayerControls(
     onMoreClick: () -> Unit,
     onMoreLongClick: () -> Unit,
 
+    // screenshot
+    showScreenshotButton: Boolean = false,
+    onScreenshotClick: () -> Unit = {},
+
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -88,6 +93,13 @@ fun TopRightPlayerControls(
                 icon = Icons.Default.HighQuality,
                 onClick = onQualityClick,
                 onLongClick = onQualityClick,
+                horizontalSpacing = MaterialTheme.padding.mediumSmall,
+            )
+        }
+        if (showScreenshotButton) {
+            ControlsButton(
+                icon = Icons.Default.CameraAlt,
+                onClick = onScreenshotClick,
                 horizontalSpacing = MaterialTheme.padding.mediumSmall,
             )
         }

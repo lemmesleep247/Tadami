@@ -2,8 +2,6 @@ package eu.kanade.presentation.components
 
 import android.animation.ValueAnimator
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.StartOffset
-import androidx.compose.animation.core.StartOffsetType
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -15,17 +13,22 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -314,6 +317,81 @@ private fun AuroraAmbientCanvas(
     }
 }
 
+private data class PetalConfig(
+    val initialX: Float,
+    val initialY: Float,
+    val speedY: Float,
+    val swayAmp: Float,
+    val swayFreq: Float,
+    val rotationSpeed: Float,
+    val scale: Float,
+    val phaseOffset: Float,
+)
+
+private val PETALS = listOf(
+    PetalConfig(0.10f, 0.05f, 0.22f, 0.035f, 1.4f, 40f, 0.85f, 0.0f),
+    PetalConfig(0.25f, 0.40f, 0.18f, 0.045f, 1.1f, -30f, 0.70f, 1.2f),
+    PetalConfig(0.40f, 0.15f, 0.26f, 0.025f, 1.8f, 60f, 1.10f, 0.5f),
+    PetalConfig(0.55f, 0.75f, 0.20f, 0.040f, 1.3f, -45f, 0.95f, 2.3f),
+    PetalConfig(0.70f, 0.30f, 0.24f, 0.030f, 1.6f, 50f, 0.80f, 3.1f),
+    PetalConfig(0.85f, 0.60f, 0.16f, 0.050f, 0.9f, -25f, 0.65f, 0.8f),
+    PetalConfig(0.95f, 0.10f, 0.28f, 0.020f, 2.0f, 70f, 1.00f, 4.2f),
+    PetalConfig(0.05f, 0.80f, 0.20f, 0.040f, 1.2f, -35f, 0.75f, 1.7f),
+    PetalConfig(0.18f, 0.65f, 0.25f, 0.030f, 1.5f, 55f, 0.90f, 2.8f),
+    PetalConfig(0.32f, 0.90f, 0.19f, 0.045f, 1.0f, -40f, 0.75f, 0.3f),
+    PetalConfig(0.48f, 0.35f, 0.23f, 0.035f, 1.3f, 45f, 1.05f, 1.9f),
+    PetalConfig(0.62f, 0.50f, 0.21f, 0.040f, 1.2f, -50f, 0.80f, 3.5f),
+    PetalConfig(0.78f, 0.85f, 0.17f, 0.050f, 0.8f, 30f, 0.70f, 0.9f),
+    PetalConfig(0.90f, 0.45f, 0.27f, 0.025f, 1.9f, -65f, 1.15f, 2.1f),
+    PetalConfig(0.12f, 0.32f, 0.21f, 0.038f, 1.4f, 35f, 0.85f, 0.6f),
+    PetalConfig(0.82f, 0.02f, 0.23f, 0.032f, 1.6f, -42f, 0.95f, 1.4f),
+    PetalConfig(0.22f, 0.12f, 0.24f, 0.033f, 1.5f, 48f, 0.88f, 3.7f),
+    PetalConfig(0.38f, 0.58f, 0.17f, 0.048f, 0.9f, -28f, 0.72f, 2.5f),
+    PetalConfig(0.52f, 0.08f, 0.27f, 0.028f, 1.7f, 58f, 1.12f, 0.1f),
+    PetalConfig(0.68f, 0.95f, 0.20f, 0.042f, 1.1f, -46f, 0.92f, 1.3f),
+    PetalConfig(0.74f, 0.22f, 0.25f, 0.031f, 1.6f, 52f, 0.82f, 2.9f),
+    PetalConfig(0.88f, 0.70f, 0.15f, 0.052f, 0.7f, -22f, 0.62f, 4.0f),
+    PetalConfig(0.98f, 0.28f, 0.29f, 0.022f, 2.1f, 72f, 1.02f, 0.7f),
+    PetalConfig(0.28f, 0.82f, 0.18f, 0.042f, 1.1f, -38f, 0.78f, 3.3f),
+)
+
+private data class StarConfig(
+    val xFraction: Float,
+    val yFraction: Float,
+    val pulseSpeed: Float,
+    val phase: Float,
+    val size: Float,
+)
+
+private val FLOATING_STARS = listOf(
+    StarConfig(0.12f, 0.15f, 1.2f, 0.0f, 2f),
+    StarConfig(0.85f, 0.25f, 0.8f, 1.5f, 3f),
+    StarConfig(0.35f, 0.78f, 1.5f, 0.7f, 1.5f),
+    StarConfig(0.72f, 0.65f, 1.0f, 2.3f, 2.5f),
+    StarConfig(0.22f, 0.45f, 0.7f, 3.1f, 2f),
+    StarConfig(0.90f, 0.82f, 1.4f, 1.1f, 3.5f),
+    StarConfig(0.08f, 0.70f, 1.1f, 0.4f, 2f),
+    StarConfig(0.55f, 0.12f, 1.3f, 2.8f, 1.8f),
+    StarConfig(0.42f, 0.30f, 0.9f, 1.9f, 2.5f),
+    StarConfig(0.68f, 0.28f, 1.6f, 0.2f, 1.5f),
+    StarConfig(0.18f, 0.88f, 0.6f, 3.5f, 3f),
+    StarConfig(0.80f, 0.55f, 1.2f, 2.0f, 2.2f),
+    StarConfig(0.48f, 0.92f, 1.0f, 1.7f, 2.5f),
+    StarConfig(0.28f, 0.22f, 1.5f, 0.9f, 1.8f),
+    StarConfig(0.62f, 0.85f, 0.8f, 2.5f, 3f),
+)
+
+private fun floatMod(value: Float, max: Float): Float {
+    val r = value % max
+    return if (r < 0f) r + max else r
+}
+
+private fun getCometProgress(elapsed: Float, duration: Float, delay: Float): Float {
+    val cycle = duration + delay
+    val progress = (elapsed % cycle) - delay
+    return if (progress < 0f) 0f else progress / duration
+}
+
 @Composable
 private fun AuroraSpecialBackgroundCanvas(
     colors: eu.kanade.presentation.theme.AuroraColors,
@@ -322,83 +400,53 @@ private fun AuroraSpecialBackgroundCanvas(
 ) {
     if (styleKey == "none" || colors.isEInk) return
 
-    val drift = if (animate) {
-        val transition = rememberInfiniteTransition(label = "auroraSpecialBackground")
-        transition.animateFloat(
-            initialValue = -0.08f,
-            targetValue = 0.08f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 18000),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "auroraSpecialDrift",
-        ).value
-    } else {
-        0f
+    var timeMillis by remember { mutableStateOf(0L) }
+
+    if (animate) {
+        LaunchedEffect(Unit) {
+            val startTime = android.os.SystemClock.uptimeMillis()
+            while (true) {
+                withFrameMillis { frameTime ->
+                    timeMillis = frameTime - startTime
+                }
+            }
+        }
     }
-    val spin = if (animate) {
-        val transition = rememberInfiniteTransition(label = "auroraSpecialSpin")
-        transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(tween(durationMillis = 22000)),
-            label = "auroraSpecialSpinValue",
-        ).value
-    } else {
-        0f
-    }
-    val pulse = if (animate) {
-        val transition = rememberInfiniteTransition(label = "auroraSpecialPulse")
-        transition.animateFloat(
-            initialValue = 0.7f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 2200),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "auroraSpecialPulseValue",
-        ).value
-    } else {
-        0.85f
-    }
-    val cometProgressOne = if (animate) {
-        val transition = rememberInfiniteTransition(label = "auroraSpecialCometOne")
-        transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = 22000,
-                    delayMillis = 5000,
-                ),
-                repeatMode = RepeatMode.Restart,
-                initialStartOffset = StartOffset(1800, StartOffsetType.FastForward),
-            ),
-            label = "auroraSpecialCometOneValue",
-        ).value
-    } else {
-        0f
-    }
-    val cometProgressTwo = if (animate) {
-        val transition = rememberInfiniteTransition(label = "auroraSpecialCometTwo")
-        transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = 28000,
-                    delayMillis = 9000,
-                ),
-                repeatMode = RepeatMode.Restart,
-                initialStartOffset = StartOffset(9600, StartOffsetType.FastForward),
-            ),
-            label = "auroraSpecialCometTwoValue",
-        ).value
-    } else {
-        0f
+
+    val elapsedSeconds = timeMillis / 1000f
+    // Use a slow linear spin for orbits without modulo resets to prevent teleporting/jumping
+    val orbitSpin = if (animate) elapsedSeconds * 4f else 0f
+
+    val pulseProgress = elapsedSeconds * (2f * Math.PI.toFloat() / 2.2f)
+    val pulse = if (animate) 0.85f + 0.15f * kotlin.math.sin(pulseProgress) else 0.85f
+
+    val cometProgressOne = if (animate) getCometProgress(elapsedSeconds + 1.8f, 22f, 5f) else 0f
+    val cometProgressTwo = if (animate) getCometProgress(elapsedSeconds + 9.6f, 28f, 9f) else 0f
+
+    val petalTemplatePath = remember {
+        Path().apply {
+            moveTo(0f, -0.5f)
+            quadraticTo(0.45f, -0.28f, 0.275f, 0.1f)
+            quadraticTo(0.1f, 0.5f, 0f, 0.5f)
+            quadraticTo(-0.1f, 0.5f, -0.275f, 0.1f)
+            quadraticTo(-0.45f, -0.28f, 0f, -0.5f)
+            close()
+        }
     }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
+        if (styleKey == "neon_orbit") {
+            FLOATING_STARS.forEach { star ->
+                val alpha =
+                    0.04f + 0.06f * kotlin.math.abs(kotlin.math.sin(elapsedSeconds * star.pulseSpeed + star.phase))
+                drawCircle(
+                    color = Color.White.copy(alpha = alpha),
+                    radius = star.size.dp.toPx(),
+                    center = Offset(star.xFraction * size.width, star.yFraction * size.height),
+                )
+            }
+        }
+
         when (styleKey) {
             "petal_storm" -> {
                 val petalColor = if (colors.isDark) {
@@ -406,71 +454,37 @@ private fun AuroraSpecialBackgroundCanvas(
                 } else {
                     Color(0xFFFF84B7)
                 }
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFFFFD9E8).copy(alpha = 0.16f * pulse),
-                            Color.Transparent,
-                        ),
-                        center = Offset(size.width * 0.5f, size.height * 0.2f),
-                        radius = size.minDimension * 0.78f,
-                    ),
-                )
-                listOf(
-                    Offset(size.width * 0.18f, size.height * 0.12f),
-                    Offset(size.width * 0.72f, size.height * 0.18f),
-                    Offset(size.width * 0.35f, size.height * 0.4f),
-                    Offset(size.width * 0.86f, size.height * 0.55f),
-                    Offset(size.width * 0.12f, size.height * 0.7f),
-                ).forEachIndexed { index, offset ->
-                    val xDrift = drift * (index + 1) * 0.12f
-                    val yDrift = drift * (index + 1) * 0.08f
-                    val rotation = spin + (index * 28f)
-                    val petalLength = 28f + (index * 4f)
-                    val petalWidth = 10f + (index * 1.8f)
-                    val path = Path().apply {
-                        moveTo(0f, -petalLength * 0.5f)
-                        quadraticTo(
-                            petalWidth * 0.9f,
-                            -petalLength * 0.28f,
-                            petalWidth * 0.55f,
-                            petalLength * 0.1f,
-                        )
-                        quadraticTo(
-                            petalWidth * 0.2f,
-                            petalLength * 0.5f,
-                            0f,
-                            petalLength * 0.5f,
-                        )
-                        quadraticTo(
-                            -petalWidth * 0.2f,
-                            petalLength * 0.5f,
-                            -petalWidth * 0.55f,
-                            petalLength * 0.1f,
-                        )
-                        quadraticTo(
-                            -petalWidth * 0.9f,
-                            -petalLength * 0.28f,
-                            0f,
-                            -petalLength * 0.5f,
-                        )
-                        close()
-                    }
+
+                val petalTime = elapsedSeconds * 0.20f
+                PETALS.forEachIndexed { index, petal ->
+                    val yVal = ((petal.initialY + petal.speedY * petalTime) % 1.2f) - 0.1f
+
+                    val sway = petal.swayAmp * kotlin.math.sin(petal.swayFreq * petalTime + petal.phaseOffset)
+                    val xVal = floatMod(petal.initialX + sway, 1.0f)
+
+                    val rotationDeg = petal.rotationSpeed * petalTime + (petal.phaseOffset * 50f)
+                    val scale3DX = kotlin.math.abs(
+                        kotlin.math.cos(petalTime * 2.5f + petal.phaseOffset),
+                    ).coerceAtLeast(0.12f)
+
+                    val petalLength = 28f + (index % 4) * 4f
+                    val petalWidth = 10f + (index % 3) * 1.8f
+
                     withTransform({
                         translate(
-                            left = offset.x + (size.width * xDrift),
-                            top = offset.y + (size.height * yDrift),
+                            left = xVal * size.width,
+                            top = yVal * size.height,
                         )
-                        rotate(rotation, pivot = Offset.Zero)
+                        rotate(rotationDeg, pivot = Offset.Zero)
+                        scale(
+                            scaleX = petal.scale * scale3DX * petalWidth,
+                            scaleY = petal.scale * petalLength,
+                            pivot = Offset.Zero,
+                        )
                     }) {
                         drawPath(
-                            path = path,
-                            color = petalColor.copy(alpha = 0.22f + (0.06f * index)),
-                        )
-                        drawCircle(
-                            color = Color.White.copy(alpha = 0.08f),
-                            radius = petalWidth * 0.18f,
-                            center = Offset(0f, -petalLength * 0.15f),
+                            path = petalTemplatePath,
+                            color = petalColor.copy(alpha = 0.22f + (0.06f * (index % 5))),
                         )
                     }
                 }
@@ -481,33 +495,143 @@ private fun AuroraSpecialBackgroundCanvas(
                     Color(0xFF9B8CFF),
                     colors.accent,
                 )
-                val center = Offset(size.width * 0.52f, size.height * 0.46f)
-                listOf(
-                    Offset(0.18f, 0.22f),
-                    Offset(0.74f, 0.2f),
-                    Offset(0.84f, 0.68f),
-                    Offset(0.22f, 0.78f),
-                ).forEachIndexed { index, fraction ->
-                    val orbitRadius = size.minDimension * (0.18f + (index * 0.08f))
-                    val angle = Math.toRadians((spin + index * 88f).toDouble())
-                    val x = center.x + kotlin.math.cos(angle).toFloat() * orbitRadius
-                    val y = center.y + kotlin.math.sin(angle).toFloat() * orbitRadius
-                    drawCircle(
-                        color = ringColors[index % ringColors.size].copy(alpha = 0.55f + (0.1f * pulse)),
-                        radius = 5f + index,
-                        center = Offset(x + (size.width * drift * fraction.x), y + (size.height * drift * fraction.y)),
-                    )
-                }
+
                 drawCircle(
                     brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF6EF6FF).copy(alpha = 0.16f),
-                            Color.Transparent,
-                        ),
-                        center = center,
-                        radius = size.minDimension * 0.55f,
+                        colors = listOf(Color(0xFF9B8CFF).copy(alpha = 0.02f * pulse), Color.Transparent),
+                        center = Offset(size.width * 0.85f, size.height * 0.15f),
+                        radius = size.minDimension * 0.8f,
                     ),
                 )
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(colors.accent.copy(alpha = 0.02f * pulse), Color.Transparent),
+                        center = Offset(size.width * 0.15f, size.height * 0.85f),
+                        radius = size.minDimension * 0.8f,
+                    ),
+                )
+
+                val center = Offset(size.width * 0.5f, size.height * 0.45f)
+                val strokeEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f), 0f)
+
+                for (i in 0..2) {
+                    val baseRadius = size.minDimension * (0.20f + i * 0.09f)
+
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.025f),
+                        radius = baseRadius,
+                        style = Stroke(width = 1.dp.toPx(), pathEffect = strokeEffect),
+                    )
+
+                    val colorsList = listOf(
+                        ringColors[i].copy(alpha = 0.12f),
+                        ringColors[i].copy(alpha = 0.04f),
+                        ringColors[i].copy(alpha = 0.005f),
+                        Color.Transparent,
+                        Color.Transparent,
+                        ringColors[i].copy(alpha = 0.04f),
+                        ringColors[i].copy(alpha = 0.12f),
+                    )
+                    val sweepBrush = Brush.sweepGradient(colors = colorsList, center = center)
+                    val rotationDir = if (i % 2 == 0) 1f else -1f
+
+                    withTransform({
+                        rotate(orbitSpin * (1f + i * 0.25f) * rotationDir * 1.5f, pivot = center)
+                    }) {
+                        drawCircle(
+                            brush = sweepBrush,
+                            radius = baseRadius,
+                            style = Stroke(width = 2.2.dp.toPx()),
+                        )
+                    }
+                }
+
+                val r0 = size.minDimension * 0.20f
+                val r1 = size.minDimension * 0.29f
+                val r2 = size.minDimension * 0.38f
+
+                val angle0 = Math.toRadians(orbitSpin * 0.8 + 0.0)
+                val p0 = Offset(
+                    center.x + kotlin.math.cos(angle0).toFloat() * r0,
+                    center.y + kotlin.math.sin(angle0).toFloat() * r0,
+                )
+
+                val angle1 = Math.toRadians(-orbitSpin * 0.5 + 60.0)
+                val p1 = Offset(
+                    center.x + kotlin.math.cos(angle1).toFloat() * r1,
+                    center.y + kotlin.math.sin(angle1).toFloat() * r1,
+                )
+
+                val angle2 = Math.toRadians(orbitSpin * 0.4 + 120.0)
+                val p2 = Offset(
+                    center.x + kotlin.math.cos(angle2).toFloat() * r2,
+                    center.y + kotlin.math.sin(angle2).toFloat() * r2,
+                )
+
+                val angle3 = Math.toRadians(orbitSpin * 0.7 + 180.0)
+                val p3 = Offset(
+                    center.x + kotlin.math.cos(angle3).toFloat() * r1,
+                    center.y + kotlin.math.sin(angle3).toFloat() * r1,
+                )
+
+                val angle4 = Math.toRadians(-orbitSpin * 0.6 + 240.0)
+                val p4 = Offset(
+                    center.x + kotlin.math.cos(angle4).toFloat() * r2,
+                    center.y + kotlin.math.sin(angle4).toFloat() * r2,
+                )
+
+                val angle5 = Math.toRadians(-orbitSpin * 0.9 + 300.0)
+                val p5 = Offset(
+                    center.x + kotlin.math.cos(angle5).toFloat() * r0,
+                    center.y + kotlin.math.sin(angle5).toFloat() * r0,
+                )
+
+                val nodes = listOf(p0, p1, p2, p3, p4, p5)
+                val nodeColors = listOf(
+                    Color(0xFF49E6FF),
+                    Color(0xFF9B8CFF),
+                    colors.accent,
+                    Color(0xFF9B8CFF),
+                    colors.accent,
+                    Color(0xFF49E6FF),
+                )
+                val nodeSizes = listOf(4.5f, 5.5f, 6.5f, 5.0f, 6.0f, 4.0f)
+
+                val maxDist = size.minDimension * 0.35f
+                for (j in 0 until nodes.size) {
+                    for (k in j + 1 until nodes.size) {
+                        val dx = nodes[j].x - nodes[k].x
+                        val dy = nodes[j].y - nodes[k].y
+                        val dist = kotlin.math.sqrt(dx * dx + dy * dy)
+                        if (dist < maxDist) {
+                            val alpha = (1f - dist / maxDist) * 0.06f * pulse
+                            drawLine(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(nodeColors[j], nodeColors[k]),
+                                    start = nodes[j],
+                                    end = nodes[k],
+                                ),
+                                start = nodes[j],
+                                end = nodes[k],
+                                strokeWidth = 1.dp.toPx(),
+                                alpha = alpha,
+                            )
+                        }
+                    }
+                }
+
+                for (j in 0 until nodes.size) {
+                    drawCircle(
+                        color = nodeColors[j].copy(alpha = 0.15f * pulse),
+                        radius = (nodeSizes[j] * 1.8f).dp.toPx(),
+                        center = nodes[j],
+                    )
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.35f),
+                        radius = nodeSizes[j].dp.toPx(),
+                        center = nodes[j],
+                    )
+                }
 
                 fun drawComet(
                     progress: Float,
@@ -544,25 +668,25 @@ private fun AuroraSpecialBackgroundCanvas(
                     )
 
                     drawLine(
-                        color = color.copy(alpha = 0.06f + (0.12f * visibility)),
+                        color = color.copy(alpha = 0.02f + (0.04f * visibility)),
                         start = tail,
                         end = head,
-                        strokeWidth = 3f,
+                        strokeWidth = 1.8f,
                         cap = StrokeCap.Round,
                     )
                     drawLine(
-                        color = Color.White.copy(alpha = 0.05f * visibility),
+                        color = Color.White.copy(alpha = 0.02f * visibility),
                         start = Offset(
                             x = tail.x + (tailUnit.x * tailLength * 0.22f),
                             y = tail.y + (tailUnit.y * tailLength * 0.22f),
                         ),
                         end = head,
-                        strokeWidth = 1.4f,
+                        strokeWidth = 1f,
                         cap = StrokeCap.Round,
                     )
                     drawCircle(
-                        color = Color.White.copy(alpha = 0.12f * visibility),
-                        radius = 3.5f,
+                        color = Color.White.copy(alpha = 0.04f * visibility),
+                        radius = 2.5f,
                         center = head,
                     )
                 }

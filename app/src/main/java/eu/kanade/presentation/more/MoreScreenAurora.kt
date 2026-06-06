@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Book
+import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.VideoSettings
@@ -50,11 +52,11 @@ import eu.kanade.presentation.components.AuroraBackground
 import eu.kanade.presentation.components.LocalHostScaffoldContentPadding
 import eu.kanade.presentation.more.resolveAuroraMoreSwitchColors
 import eu.kanade.presentation.more.settings.AuroraTopBarTitleText
-import eu.kanade.presentation.theme.AuroraSurfaceLevel
+import eu.kanade.presentation.more.settings.auroraCardStyle
 import eu.kanade.presentation.theme.AuroraTheme
 import eu.kanade.presentation.theme.LocalIsDefaultAppUiFont
-import eu.kanade.presentation.theme.resolveAuroraElevation
 import eu.kanade.tachiyomi.ui.more.DownloadQueueState
+import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.LocalAppHaptics
@@ -72,12 +74,14 @@ fun MoreScreenAurora(
     onCategoriesClick: () -> Unit,
     onDataStorageClick: () -> Unit,
     onPlayerSettingsClick: () -> Unit,
+    onMangaReaderSettingsClick: () -> Unit,
     onNovelReaderSettingsClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onAboutClick: () -> Unit,
     onDebugAppUpdatePreviewClick: () -> Unit,
     onStatsClick: () -> Unit,
     onAchievementsClick: () -> Unit,
+    onTreasuryClick: () -> Unit,
     onHelpClick: () -> Unit,
 ) {
     val colors = AuroraTheme.colors
@@ -129,8 +133,14 @@ fun MoreScreenAurora(
                 )
 
                 AuroraSettingItem(
-                    title = stringResource(AYMR.strings.pref_category_novel_reader),
+                    title = stringResource(MR.strings.pref_category_reader),
                     icon = Icons.AutoMirrored.Outlined.ChromeReaderMode,
+                    onClick = onMangaReaderSettingsClick,
+                )
+
+                AuroraSettingItem(
+                    title = stringResource(AYMR.strings.pref_category_novel_reader),
+                    icon = Icons.Outlined.Book,
                     onClick = onNovelReaderSettingsClick,
                 )
 
@@ -144,6 +154,12 @@ fun MoreScreenAurora(
                     title = stringResource(AYMR.strings.aurora_achievements),
                     icon = Icons.Filled.EmojiEvents,
                     onClick = onAchievementsClick,
+                )
+
+                AuroraSettingItem(
+                    title = stringResource(AYMR.strings.label_treasury),
+                    icon = Icons.Outlined.Inventory2,
+                    onClick = onTreasuryClick,
                 )
 
                 AuroraSettingItem(
@@ -239,11 +255,12 @@ fun AuroraSettingItem(
         },
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = AURORA_MORE_CARD_VERTICAL_INSET),
+            .padding(vertical = AURORA_MORE_CARD_VERTICAL_INSET)
+            .auroraCardStyle(colors, RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (!colors.isDark && !colors.isEInk) {
-                Color.White
+                Color.Transparent
             } else {
                 resolveAuroraMoreCardContainerColor(colors)
             },
@@ -257,11 +274,7 @@ fun AuroraSettingItem(
             null
         },
         elevation = CardDefaults.cardElevation(
-            defaultElevation = if (!colors.isDark && !colors.isEInk) {
-                resolveAuroraElevation(colors, AuroraSurfaceLevel.Glass)
-            } else {
-                0.dp
-            },
+            defaultElevation = 0.dp,
         ),
     ) {
         Row(
@@ -314,11 +327,12 @@ fun AuroraToggleItem(
         },
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = AURORA_MORE_CARD_VERTICAL_INSET),
+            .padding(vertical = AURORA_MORE_CARD_VERTICAL_INSET)
+            .auroraCardStyle(colors, RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (!colors.isDark && !colors.isEInk) {
-                Color.White
+                Color.Transparent
             } else {
                 resolveAuroraMoreCardContainerColor(colors)
             },
@@ -332,11 +346,7 @@ fun AuroraToggleItem(
             null
         },
         elevation = CardDefaults.cardElevation(
-            defaultElevation = if (!colors.isDark && !colors.isEInk) {
-                resolveAuroraElevation(colors, AuroraSurfaceLevel.Glass)
-            } else {
-                0.dp
-            },
+            defaultElevation = 0.dp,
         ),
     ) {
         Row(

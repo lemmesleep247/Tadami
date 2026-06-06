@@ -6,7 +6,6 @@ import eu.kanade.domain.sync.SyncPreferences
 import eu.kanade.tachiyomi.data.backup.BackupDecoder
 import eu.kanade.tachiyomi.data.backup.BackupNotifier
 import eu.kanade.tachiyomi.data.backup.create.BackupCreator
-import eu.kanade.tachiyomi.data.backup.create.BackupOptions
 import eu.kanade.tachiyomi.data.backup.models.Backup
 import eu.kanade.tachiyomi.data.backup.restore.BackupRestorer
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
@@ -126,7 +125,8 @@ class SyncManager(
     private suspend fun createLocalBackup(): Backup? {
         val backupFile = context.createFileInCacheDir("cloud_sync_local.tachibk")
         return try {
-            backupCreator.backup(backupFile.toUri(), BackupOptions())
+            val options = syncPreferences.getCloudSyncOptions()
+            backupCreator.backup(backupFile.toUri(), options)
             backupDecoder.decode(backupFile.toUri())
         } catch (e: Exception) {
             this.logcat(LogPriority.ERROR, e) { "Failed to create local backup for sync" }

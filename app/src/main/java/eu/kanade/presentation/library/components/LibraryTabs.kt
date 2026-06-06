@@ -1,5 +1,6 @@
 package eu.kanade.presentation.library.components
 
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material3.HorizontalDivider
@@ -20,6 +21,7 @@ internal fun LibraryTabs(
     categories: List<Category>,
     pagerState: PagerState,
     getNumberOfItemsForCategory: (Category) -> Int?,
+    onTabItemLongClick: ((Int) -> Unit)? = null,
     onTabItemClick: (Int) -> Unit,
 ) {
     val currentPageIndex = pagerState.currentPage.coerceAtMost(categories.lastIndex)
@@ -37,10 +39,21 @@ internal fun LibraryTabs(
             categories.forEachIndexed { index, category ->
                 Tab(
                     selected = currentPageIndex == index,
-                    onClick = {
-                        appHaptics.tap()
-                        onTabItemClick(index)
-                    },
+                    onClick = {},
+                    modifier = Modifier.combinedClickable(
+                        onClick = {
+                            appHaptics.tap()
+                            onTabItemClick(index)
+                        },
+                        onLongClick = if (onTabItemLongClick != null) {
+                            {
+                                appHaptics.tap()
+                                onTabItemLongClick(index)
+                            }
+                        } else {
+                            null
+                        },
+                    ),
                     text = {
                         TabText(
                             text = category.visualName,

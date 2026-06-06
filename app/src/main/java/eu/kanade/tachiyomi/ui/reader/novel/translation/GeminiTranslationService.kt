@@ -1,4 +1,4 @@
-﻿package eu.kanade.tachiyomi.ui.reader.novel.translation
+package eu.kanade.tachiyomi.ui.reader.novel.translation
 
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.await
@@ -7,9 +7,7 @@ import eu.kanade.tachiyomi.ui.reader.novel.setting.GeminiPromptMode
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelTranslationProvider
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -103,9 +101,9 @@ class GeminiTranslationService(
             params.topK
         }
         val requestMaxOutputTokens = if (usePrivateBridge) {
-            GeminiPrivateBridge.requestMaxOutputTokensOverride(8192)
+            GeminiPrivateBridge.requestMaxOutputTokensOverride(16384)
         } else {
-            8192
+            16384
         }
         val requestFrequencyPenalty = if (usePrivateBridge) {
             GeminiPrivateBridge.requestFrequencyPenaltyOverride(0f)
@@ -353,14 +351,6 @@ class GeminiTranslationService(
     }
 }
 
-private fun kotlinx.serialization.json.JsonElement?.asObjectOrNull(): JsonObject? {
-    return this as? JsonObject
-}
-
-private fun kotlinx.serialization.json.JsonElement?.asArrayOrNull(): JsonArray? {
-    return this as? JsonArray
-}
-
 private fun JsonArray?.extractTextParts(): List<String> {
     return this.orEmpty().mapNotNull { part ->
         part.asObjectOrNull()
@@ -369,12 +359,6 @@ private fun JsonArray?.extractTextParts(): List<String> {
             ?.trim()
             ?.takeIf { it.isNotBlank() }
     }
-}
-
-private fun kotlinx.serialization.json.JsonElement?.asStringOrNull(): String? {
-    val primitive = this as? JsonPrimitive ?: return null
-    if (primitive is JsonNull) return null
-    return primitive.content
 }
 
 private fun logLargeTextToGeminiLog(

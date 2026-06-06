@@ -5,8 +5,8 @@ import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
@@ -23,6 +23,8 @@ import eu.kanade.presentation.more.MoreScreen
 import eu.kanade.presentation.more.MoreScreenAurora
 import eu.kanade.presentation.more.settings.screen.HelpScreen
 import eu.kanade.presentation.more.settings.screen.SettingsNovelReaderScreen
+import eu.kanade.presentation.more.settings.screen.SettingsReaderScreen
+import eu.kanade.presentation.more.settings.screen.SettingsTreasuryScreen
 import eu.kanade.presentation.more.settings.screen.about.AboutScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
@@ -46,7 +48,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import tachiyomi.presentation.core.util.collectAsState as preferenceCollectAsState
+import tachiyomi.presentation.core.util.collectAsStateWithLifecycle as preferenceCollectAsState
 
 data object MoreTab : Tab {
 
@@ -71,15 +73,15 @@ data object MoreTab : Tab {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = rememberScreenModel { MoreScreenModel() }
-        val downloadQueueState by screenModel.downloadQueueState.collectAsState(DownloadQueueState.Stopped)
+        val downloadQueueState by screenModel.downloadQueueState.collectAsStateWithLifecycle(DownloadQueueState.Stopped)
 
         val uiPreferences = Injekt.get<UiPreferences>()
         val theme by uiPreferences.appTheme().preferenceCollectAsState()
         val navStyle = currentNavigationStyle()
 
         if (theme.isAuroraStyle) {
-            val downloadedOnly by screenModel.downloadedOnlyFlow.collectAsState()
-            val incognitoMode by screenModel.incognitoModeFlow.collectAsState()
+            val downloadedOnly by screenModel.downloadedOnlyFlow.collectAsStateWithLifecycle()
+            val incognitoMode by screenModel.incognitoModeFlow.collectAsStateWithLifecycle()
 
             MoreScreenAurora(
                 navStyle = navStyle,
@@ -93,6 +95,7 @@ data object MoreTab : Tab {
                 onCategoriesClick = { navigator.push(CategoriesTab) },
                 onDataStorageClick = { navigator.push(SettingsScreen(SettingsScreen.Destination.DataAndStorage)) },
                 onPlayerSettingsClick = { navigator.push(PlayerSettingsScreen(mainSettings = false)) },
+                onMangaReaderSettingsClick = { navigator.push(SettingsReaderScreen) },
                 onNovelReaderSettingsClick = { navigator.push(SettingsNovelReaderScreen) },
                 onSettingsClick = { navigator.push(SettingsScreen()) },
                 onAboutClick = { navigator.push(AboutScreen) },
@@ -100,6 +103,7 @@ data object MoreTab : Tab {
                 onDebugAppUpdatePreviewClick = { navigator.push(DebugAppUpdatePreviewScreen()) },
                 onStatsClick = { navigator.push(StatsTab) },
                 onAchievementsClick = { navigator.push(AchievementScreenVoyager) },
+                onTreasuryClick = { navigator.push(SettingsTreasuryScreen) },
             )
         } else {
             MoreScreen(
@@ -116,6 +120,7 @@ data object MoreTab : Tab {
                 onClickStorage = { navigator.push(StorageTab) },
                 onClickDataAndStorage = { navigator.push(SettingsScreen(SettingsScreen.Destination.DataAndStorage)) },
                 onClickPlayerSettings = { navigator.push(PlayerSettingsScreen(mainSettings = false)) },
+                onClickMangaReaderSettings = { navigator.push(SettingsReaderScreen) },
                 onClickNovelReaderSettings = { navigator.push(SettingsNovelReaderScreen) },
                 onClickSettings = { navigator.push(SettingsScreen()) },
                 onClickAbout = { navigator.push(AboutScreen) },

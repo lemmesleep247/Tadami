@@ -19,7 +19,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,7 +60,6 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -93,6 +92,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastAll
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
@@ -169,8 +169,6 @@ import kotlinx.coroutines.withContext
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.category.model.Category
-import tachiyomi.domain.category.novel.interactor.GetVisibleNovelCategories
-import tachiyomi.domain.category.novel.model.NovelCategory
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.manga.model.Manga
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovel
@@ -185,7 +183,7 @@ import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.EmptyScreenAction
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.presentation.core.util.LocalAppHaptics
-import tachiyomi.presentation.core.util.collectAsState
+import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
 import tachiyomi.presentation.core.util.showSoftKeyboard
 import tachiyomi.source.local.entries.anime.isLocal
 import tachiyomi.source.local.entries.manga.isLocal
@@ -237,39 +235,37 @@ data object AnimeLibraryTab : Tab {
         val mangaScreenModel = rememberScreenModel { MangaLibraryScreenModel() }
         val settingsScreenModel = rememberScreenModel { AnimeLibrarySettingsScreenModel() }
         val mangaSettingsScreenModel = rememberScreenModel { MangaLibrarySettingsScreenModel() }
-        val state by screenModel.state.collectAsState()
-        val mangaState by mangaScreenModel.state.collectAsState()
+        val state by screenModel.state.collectAsStateWithLifecycle()
+        val mangaState by mangaScreenModel.state.collectAsStateWithLifecycle()
         val novelReaderPreferences = remember { Injekt.get<NovelReaderPreferences>() }
-        val isNovelTranslatorEnabled by novelReaderPreferences.geminiEnabled().collectAsState()
+        val isNovelTranslatorEnabled by novelReaderPreferences.geminiEnabled().collectAsStateWithLifecycle()
 
         val uiPreferences = Injekt.get<UiPreferences>()
-        val theme by uiPreferences.appTheme().collectAsState()
-        val showAnimeSection by uiPreferences.showAnimeSection().collectAsState()
-        val showMangaSection by uiPreferences.showMangaSection().collectAsState()
-        val showNovelSection by uiPreferences.showNovelSection().collectAsState()
-        val immersiveModeEnabled by uiPreferences.auroraLibraryImmersiveMode().collectAsState()
+        val theme by uiPreferences.appTheme().collectAsStateWithLifecycle()
+        val showAnimeSection by uiPreferences.showAnimeSection().collectAsStateWithLifecycle()
+        val showMangaSection by uiPreferences.showMangaSection().collectAsStateWithLifecycle()
+        val showNovelSection by uiPreferences.showNovelSection().collectAsStateWithLifecycle()
+        val immersiveModeEnabled by uiPreferences.auroraLibraryImmersiveMode().collectAsStateWithLifecycle()
         val swipeSwitchesCategories by uiPreferences
             .auroraLibrarySwipeSwitchesCategories()
-            .collectAsState()
+            .collectAsStateWithLifecycle()
         val bottomNavVisibilityController = LocalBottomNavVisibilityController.current
         val useSeparateDisplayModePerMedia by settingsScreenModel
             .libraryPreferences
             .separateDisplayModePerMedia()
-            .collectAsState()
+            .collectAsStateWithLifecycle()
         val showContinueViewingButton by settingsScreenModel
             .libraryPreferences
             .showContinueViewingButton()
-            .collectAsState()
+            .collectAsStateWithLifecycle()
         val showCategoryTabs by settingsScreenModel
             .libraryPreferences
             .categoryTabs()
-            .collectAsState()
+            .collectAsStateWithLifecycle()
         val showCategoryNumberOfItems by settingsScreenModel
             .libraryPreferences
             .categoryNumberOfItems()
-            .collectAsState()
-        val getVisibleNovelCategories = remember { Injekt.get<GetVisibleNovelCategories>() }
-        val visibleNovelCategories by getVisibleNovelCategories.subscribe().collectAsState(initial = emptyList())
+            .collectAsStateWithLifecycle()
         val isAurora = theme.isAuroraStyle
         val configuration = LocalConfiguration.current
         val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -295,7 +291,7 @@ data object AnimeLibraryTab : Tab {
         val shouldActivateNovelLibrary = showNovelSection && auroraCurrentSection == Section.Novel
         val inactiveNovelRawItems = if (showNovelSection && !shouldActivateNovelLibrary) {
             val getLibraryNovel = remember { Injekt.get<GetLibraryNovel>() }
-            val items by getLibraryNovel.subscribe().collectAsState(initial = emptyList())
+            val items by getLibraryNovel.subscribe().collectAsStateWithLifecycle(initialValue = emptyList())
             items
         } else {
             emptyList()
@@ -305,10 +301,18 @@ data object AnimeLibraryTab : Tab {
         } else {
             null
         }
-        val novelState = novelScreenModel?.state?.collectAsState()?.value ?: NovelLibraryScreenModel.State(
+        val novelState = novelScreenModel?.state?.collectAsStateWithLifecycle()?.value ?: NovelLibraryScreenModel.State(
             isLoading = false,
-            rawItems = inactiveNovelRawItems.map { eu.kanade.presentation.library.novel.NovelLibraryItem.Single(it) },
-            items = inactiveNovelRawItems.map { eu.kanade.presentation.library.novel.NovelLibraryItem.Single(it) },
+            library = mapOf(
+                Category(
+                    id = Category.UNCATEGORIZED_ID,
+                    name = "",
+                    order = 0,
+                    flags = 0,
+                    hidden = false,
+                    hiddenFromHomeHub = false,
+                ) to inactiveNovelRawItems.map { eu.kanade.presentation.library.novel.NovelLibraryItem.Single(it) },
+            ),
         )
         val animeDisplayMode by remember(useSeparateDisplayModePerMedia) {
             screenModel.getDisplayMode(useSeparateDisplayModePerMedia)
@@ -451,29 +455,10 @@ data object AnimeLibraryTab : Tab {
             requestedIndex = mangaScreenModel.activeCategoryIndex,
             categoryCount = mangaState.categories.size,
         )
-        val novelsByCategory = remember(novelState.items) {
-            novelState.items.groupBy { it.category }
-        }
-        val novelCategories = remember(visibleNovelCategories, novelsByCategory) {
-            val mappedCategories = visibleNovelCategories.map(NovelCategory::toCategory)
-            if (novelsByCategory.isNotEmpty() && !novelsByCategory.containsKey(Category.UNCATEGORIZED_ID)) {
-                mappedCategories.filterNot(Category::isSystemCategory)
-            } else {
-                mappedCategories
-            }
-        }
         val novelCategoryIndex = coerceAuroraLibraryCategoryIndex(
             requestedIndex = novelScreenModel?.activeCategoryIndex ?: 0,
-            categoryCount = novelCategories.size,
+            categoryCount = novelState.categories.size,
         )
-        val currentNovelCategoryItems = remember(novelState.items, novelCategories, novelCategoryIndex) {
-            val categoryId = novelCategories.getOrNull(novelCategoryIndex)?.id
-            if (categoryId == null) {
-                novelState.items
-            } else {
-                novelState.items.filter { it.category == categoryId }
-            }
-        }
 
         LaunchedEffect(state.categories.size, animeCategoryIndex) {
             if (shouldSyncAuroraLibraryCategoryIndex(
@@ -495,10 +480,10 @@ data object AnimeLibraryTab : Tab {
                 mangaScreenModel.activeCategoryIndex = mangaCategoryIndex
             }
         }
-        LaunchedEffect(novelCategories.size, novelCategoryIndex) {
+        LaunchedEffect(novelState.categories.size, novelCategoryIndex) {
             val activeNovelScreenModel = novelScreenModel ?: return@LaunchedEffect
             if (shouldSyncAuroraLibraryCategoryIndex(
-                    categoryCount = novelCategories.size,
+                    categoryCount = novelState.categories.size,
                     currentIndex = activeNovelScreenModel.activeCategoryIndex,
                     targetIndex = novelCategoryIndex,
                 )
@@ -665,7 +650,7 @@ data object AnimeLibraryTab : Tab {
 
                 val pagerState = rememberPagerState(
                     initialPage = novelCategoryIndex,
-                    pageCount = { novelCategories.size },
+                    pageCount = { novelState.categories.size },
                 )
                 val isProgrammaticScroll = remember { mutableStateOf(false) }
                 LaunchedEffect(pagerState.currentPage) {
@@ -684,16 +669,9 @@ data object AnimeLibraryTab : Tab {
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
                     verticalAlignment = Alignment.Top,
-                    userScrollEnabled = swipeSwitchesCategories && novelCategories.size > 1,
+                    userScrollEnabled = swipeSwitchesCategories && novelState.categories.size > 1,
                 ) { page ->
-                    val items = remember(novelState.items, novelCategories, page) {
-                        val categoryId = novelCategories.getOrNull(page)?.id
-                        if (categoryId == null) {
-                            novelState.items
-                        } else {
-                            novelState.items.filter { it.category == categoryId }
-                        }
-                    }
+                    val items = novelState.getLibraryItemsByPage(page)
                     NovelLibraryAuroraContent(
                         items = items,
                         selection = novelState.selection,
@@ -833,7 +811,7 @@ data object AnimeLibraryTab : Tab {
         val auroraCategories = when (auroraCurrentSection) {
             Section.Anime -> state.categories
             Section.Manga -> mangaState.categories
-            Section.Novel -> novelCategories
+            Section.Novel -> novelState.categories
             null -> emptyList()
         }
         val auroraCategoryIndex = when (auroraCurrentSection) {
@@ -847,7 +825,7 @@ data object AnimeLibraryTab : Tab {
             )
             Section.Novel -> coerceAuroraLibraryCategoryIndex(
                 requestedIndex = novelScreenModel?.activeCategoryIndex ?: 0,
-                categoryCount = novelCategories.size,
+                categoryCount = novelState.categories.size,
             )
             null -> 0
         }
@@ -866,7 +844,7 @@ data object AnimeLibraryTab : Tab {
             )
             Section.Novel -> shouldShowAuroraLibraryCategoryTabsRow(
                 section = Section.Novel,
-                categoryCount = novelCategories.size,
+                categoryCount = novelState.categories.size,
                 showCategoryTabs = showCategoryTabs,
                 searchQuery = novelState.searchQuery,
             )
@@ -889,7 +867,36 @@ data object AnimeLibraryTab : Tab {
                 Section.Novel -> {
                     novelScreenModel?.activeCategoryIndex = coerceAuroraLibraryCategoryIndex(
                         requestedIndex = index,
-                        categoryCount = novelCategories.size,
+                        categoryCount = novelState.categories.size,
+                    )
+                }
+                null -> Unit
+            }
+        }
+        val onAuroraCategoryLongSelected: (Int) -> Unit = { index ->
+            when (auroraCurrentSection) {
+                Section.Anime -> {
+                    screenModel.selectAll(
+                        coerceAuroraLibraryCategoryIndex(
+                            requestedIndex = index,
+                            categoryCount = state.categories.size,
+                        ),
+                    )
+                }
+                Section.Manga -> {
+                    mangaScreenModel.selectAll(
+                        coerceAuroraLibraryCategoryIndex(
+                            requestedIndex = index,
+                            categoryCount = mangaState.categories.size,
+                        ),
+                    )
+                }
+                Section.Novel -> {
+                    novelScreenModel?.selectAll(
+                        coerceAuroraLibraryCategoryIndex(
+                            requestedIndex = index,
+                            categoryCount = novelState.categories.size,
+                        ),
                     )
                 }
                 null -> Unit
@@ -1168,6 +1175,7 @@ data object AnimeLibraryTab : Tab {
                                     selectedCategoryIndex = auroraCategoryIndex,
                                     showCategories = showAuroraCategoryTabs,
                                     onCategorySelected = onAuroraCategorySelected,
+                                    onCategoryLongSelected = onAuroraCategoryLongSelected,
                                     getCountForCategory = { category ->
                                         when (auroraCurrentSection) {
                                             Section.Anime -> state.getAnimeCountForCategory(category)
@@ -1176,7 +1184,7 @@ data object AnimeLibraryTab : Tab {
                                                 if (showCategoryNumberOfItems ||
                                                     !novelState.searchQuery.isNullOrEmpty()
                                                 ) {
-                                                    novelsByCategory[category.id]?.size ?: 0
+                                                    novelState.library[category]?.size ?: 0
                                                 } else {
                                                     null
                                                 }
@@ -1198,6 +1206,7 @@ data object AnimeLibraryTab : Tab {
                             hasActiveFilters = state.hasActiveFilters,
                             showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty(),
                             onChangeCurrentPage = { screenModel.activeCategoryIndex = it },
+                            onCategoryLongSelected = screenModel::selectAll,
                             onAnimeClicked = { navigator.push(AnimeScreen(it)) },
                             onContinueWatchingClicked = { it: LibraryAnime ->
                                 scope.launchIO {
@@ -1640,6 +1649,7 @@ private fun AuroraLibraryPinnedHeader(
     selectedCategoryIndex: Int,
     showCategories: Boolean,
     onCategorySelected: (Int) -> Unit,
+    onCategoryLongSelected: ((Int) -> Unit)? = null,
     getCountForCategory: (Category) -> Int?,
 ) {
     val colors = AuroraTheme.colors
@@ -1856,6 +1866,7 @@ private fun AuroraLibraryPinnedHeader(
                 categories = categories,
                 selectedIndex = selectedCategoryIndex,
                 onCategorySelected = onCategorySelected,
+                onCategoryLongSelected = onCategoryLongSelected,
                 getCountForCategory = getCountForCategory,
             )
         }
@@ -1887,6 +1898,7 @@ private fun AuroraLibraryCategoryTabs(
     categories: List<Category>,
     selectedIndex: Int,
     onCategorySelected: (Int) -> Unit,
+    onCategoryLongSelected: ((Int) -> Unit)? = null,
     getCountForCategory: (Category) -> Int?,
 ) {
     val colors = AuroraTheme.colors
@@ -2023,10 +2035,20 @@ private fun AuroraLibraryCategoryTabs(
                                     Modifier
                                 },
                             )
-                            .clickable {
-                                appHaptics.tap()
-                                onCategorySelected(index)
-                            }
+                            .combinedClickable(
+                                onClick = {
+                                    appHaptics.tap()
+                                    onCategorySelected(index)
+                                },
+                                onLongClick = if (onCategoryLongSelected != null) {
+                                    {
+                                        appHaptics.tap()
+                                        onCategoryLongSelected(index)
+                                    }
+                                } else {
+                                    null
+                                },
+                            )
                             .padding(horizontal = 14.dp, vertical = 9.dp)
                             .onGloballyPositioned { coordinates ->
                                 tabWidths[index] = coordinates.size.width
@@ -2228,15 +2250,4 @@ internal fun shouldSyncAuroraLibraryCategoryIndex(
 ): Boolean {
     if (categoryCount <= 0) return false
     return currentIndex != targetIndex
-}
-
-private fun NovelCategory.toCategory(): Category {
-    return Category(
-        id = id,
-        name = name,
-        order = order,
-        flags = flags,
-        hidden = hidden,
-        hiddenFromHomeHub = false,
-    )
 }

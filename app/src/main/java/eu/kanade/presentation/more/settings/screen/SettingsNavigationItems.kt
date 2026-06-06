@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ChromeReaderMode
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material.icons.outlined.Audiotrack
+import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.CollectionsBookmark
 import androidx.compose.material.icons.outlined.EditNote
@@ -92,7 +93,7 @@ internal fun mainSettingsNavigationItems(): List<SettingsNavigationItem> = listO
         key = "novel_reader",
         titleRes = AYMR.strings.pref_category_novel_reader,
         subtitleRes = AYMR.strings.pref_novel_reader_summary,
-        icon = Icons.AutoMirrored.Outlined.ChromeReaderMode,
+        icon = Icons.Outlined.Book,
         screen = SettingsNovelReaderScreen,
     ),
     SettingsNavigationItem(

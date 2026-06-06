@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.entries.components.aurora.AuroraNotePreviewCard
 import eu.kanade.presentation.entries.components.aurora.AuroraTitleHeroActionButton
+import eu.kanade.presentation.entries.components.aurora.auroraCoverHeroCardStyle
 import eu.kanade.presentation.entries.components.aurora.resolveAuroraHeroChipBorderColor
 import eu.kanade.presentation.entries.components.aurora.resolveAuroraHeroChipContainerColor
 import eu.kanade.presentation.entries.components.aurora.resolveAuroraHeroChipTextColor
@@ -76,22 +77,30 @@ fun MangaHeroContent(
                 .then(
                     if (colors.isDark) {
                         Modifier
-                    } else {
+                    } else if (colors.isEInk) {
                         Modifier
                             .clip(heroPanelShape)
                             .background(resolveAuroraHeroPanelContainerColor(colors))
                             .border(1.dp, resolveAuroraHeroPanelBorderColor(colors), heroPanelShape)
                             .padding(horizontal = 12.dp, vertical = 14.dp)
+                    } else {
+                        Modifier
+                            .auroraCoverHeroCardStyle(
+                                colors = colors,
+                                shape = heroPanelShape,
+                                cornerRadius = 24.dp,
+                            )
+                            .padding(horizontal = 12.dp, vertical = 14.dp)
                     },
                 ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (!manga.genre.isNullOrEmpty() && manga.genre!!.isNotEmpty()) {
+            if (!manga.displayGenre.isNullOrEmpty() && manga.displayGenre!!.isNotEmpty()) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    manga.genre!!.take(3).forEach { genre ->
+                    manga.displayGenre!!.take(3).forEach { genre ->
                         if (genre.isNotBlank()) {
                             Box(
                                 modifier = Modifier
@@ -123,7 +132,7 @@ fun MangaHeroContent(
             }
 
             Text(
-                text = translation?.title ?: manga.title,
+                text = translation?.title ?: manga.displayTitle,
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Black,
                 color = titleColor,

@@ -76,7 +76,7 @@ import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.achievement.handler.AchievementHandler
 import tachiyomi.data.achievement.handler.FeatureUsageCollector
-import tachiyomi.data.achievement.model.AchievementEvent
+import tachiyomi.domain.achievement.model.AchievementEvent
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.domain.release.service.AppUpdatePreferences
 import tachiyomi.i18n.MR
@@ -291,6 +291,15 @@ object AboutScreen : Screen() {
                                 onPreferenceClick = { uriHandler.openUri(RELEASE_URL) },
                             )
                         }
+                    }
+
+                    item {
+                        TextPreferenceWidget(
+                            modifier = itemModifier,
+                            title = stringResource(MR.strings.support_project),
+                            subtitle = stringResource(MR.strings.support_project_summary),
+                            onPreferenceClick = { navigator.push(SupportProjectScreen()) },
+                        )
                     }
 
                     item {

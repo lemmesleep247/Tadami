@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.Headers.Companion.headersOf
 import okhttp3.OkHttpClient
 import tachiyomi.core.common.util.lang.withIOContext
@@ -66,17 +65,4 @@ private fun normalizeOpenRouterBaseUrl(baseUrl: String): String {
         lower.endsWith("/v1") -> trimmed
         else -> "$trimmed/api/v1"
     }
-}
-
-private fun kotlinx.serialization.json.JsonElement?.asObjectOrNull(): JsonObject? {
-    return this as? JsonObject
-}
-
-private fun kotlinx.serialization.json.JsonElement?.asArrayOrNull(): kotlinx.serialization.json.JsonArray? {
-    return this as? kotlinx.serialization.json.JsonArray
-}
-
-private fun kotlinx.serialization.json.JsonElement?.asStringOrNull(): String? {
-    val primitive = this as? JsonPrimitive ?: return null
-    return if (primitive.isString) primitive.content else null
 }

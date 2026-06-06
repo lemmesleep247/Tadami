@@ -162,5 +162,13 @@ class NetworkToLocalNovelTest {
             novelUpdates: List<tachiyomi.domain.entries.novel.model.NovelUpdate>,
         ): Boolean = error("not used")
         override suspend fun resetNovelViewerFlags(): Boolean = error("not used")
+        override suspend fun updateNovelMetadata(
+            novelId: Long,
+            customTitle: String?,
+            customAuthor: String?,
+            customDescription: String?,
+            customGenre: List<String>?,
+            customStatus: Long?,
+        ): Boolean = error("not used")
     }
 }

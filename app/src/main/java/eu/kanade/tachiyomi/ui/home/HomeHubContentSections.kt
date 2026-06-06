@@ -37,14 +37,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -564,26 +566,74 @@ internal fun QuickSourceButton(sourceName: String?, onClick: () -> Unit) {
     val auroraAdaptiveSpec = rememberAuroraAdaptiveSpec()
     val contentMaxWidthDp = auroraAdaptiveSpec.updatesMaxWidthDp ?: auroraAdaptiveSpec.entryMaxWidthDp
     val sourceButtonShape = RoundedCornerShape(14.dp)
+    val isLightTheme = !colors.isDark && !colors.isEInk
     val sourceSurface = when {
         colors.isEInk -> resolveAuroraSurfaceColor(colors, AuroraSurfaceLevel.Strong)
-        colors.background.luminance() < 0.5f -> {
-            Color.White.copy(alpha = 0.05f)
-        }
-        else -> Color.White
+        colors.isDark -> Color.White.copy(alpha = 0.05f)
+        else -> Color.Transparent
     }
     val sourceBorderBrush = remember(colors) { auroraMenuRimLightBrush(colors) }
-    val sourceShadowElevation = when {
-        colors.isEInk -> 0.dp
-        colors.isDark -> 2.dp
-        else -> 2.dp
-    }
     val sourceShowBorder = colors.isDark || colors.isEInk
     val sourceBorderWidth = if (sourceShowBorder) 1.dp else 0.dp
 
     Box(
         modifier = Modifier
             .auroraCenteredMaxWidth(contentMaxWidthDp)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 20.dp, vertical = if (isLightTheme) 12.dp else 10.dp)
+            .then(
+                if (isLightTheme) {
+                    Modifier
+                        .drawBehind {
+                            val radius = 14.dp.toPx()
+                            val cornerRadius = CornerRadius(radius, radius)
+
+                            val neutralOffsetY = 3.dp.toPx()
+                            val warmOffsetY = 5.dp.toPx()
+
+                            val neutralInset = 1.dp.toPx()
+                            val warmInset = 3.dp.toPx()
+
+                            // 1. Neutral shadow
+                            drawRoundRect(
+                                color = Color.Black.copy(alpha = 0.035f),
+                                topLeft = Offset(x = neutralInset, y = neutralOffsetY),
+                                size = Size(width = size.width - neutralInset * 2, height = size.height),
+                                cornerRadius = cornerRadius,
+                            )
+
+                            // 2. Accent glow
+                            drawRoundRect(
+                                color = colors.accent.copy(alpha = 0.025f),
+                                topLeft = Offset(x = warmInset, y = warmOffsetY),
+                                size = Size(width = size.width - warmInset * 2, height = size.height),
+                                cornerRadius = cornerRadius,
+                            )
+                        }
+                        .background(
+                            brush = Brush.verticalGradient(
+                                listOf(
+                                    Color.White.copy(alpha = 0.78f),
+                                    Color.White.copy(alpha = 0.68f),
+                                    Color.White.copy(alpha = 0.60f),
+                                ),
+                            ),
+                            shape = sourceButtonShape,
+                        )
+                        .border(
+                            width = 1.dp,
+                            brush = Brush.verticalGradient(
+                                listOf(
+                                    Color.White.copy(alpha = 0.75f),
+                                    Color.White.copy(alpha = 0.28f),
+                                    Color.White.copy(alpha = 0.12f),
+                                ),
+                            ),
+                            shape = sourceButtonShape,
+                        )
+                } else {
+                    Modifier
+                },
+            ),
     ) {
         Button(
             onClick = {
@@ -596,10 +646,10 @@ internal fun QuickSourceButton(sourceName: String?, onClick: () -> Unit) {
             ),
             shape = sourceButtonShape,
             elevation = ButtonDefaults.buttonElevation(
-                defaultElevation = if (sourceShowBorder) 0.dp else 2.dp,
-                pressedElevation = if (sourceShowBorder) 0.dp else 6.dp,
-                focusedElevation = if (sourceShowBorder) 0.dp else 4.dp,
-                hoveredElevation = if (sourceShowBorder) 0.dp else 4.dp,
+                defaultElevation = 0.dp,
+                pressedElevation = 0.dp,
+                focusedElevation = 0.dp,
+                hoveredElevation = 0.dp,
             ),
             modifier = Modifier
                 .fillMaxWidth()
@@ -682,12 +732,13 @@ internal fun HomeHubRecentPosterCard(
     val fallbackPainter = rememberThemeAwareCoverErrorPainter(
         variant = AuroraCoverPlaceholderVariant.Portrait,
     )
+    val isLightTheme = !colors.isDark && !colors.isEInk
     val outerSurface = if (colors.isDark) {
         colors.glass.copy(alpha = surfaceSpec.containerAlpha)
     } else if (colors.isEInk) {
         resolveAuroraSurfaceColor(colors, AuroraSurfaceLevel.Glass)
     } else {
-        Color.White
+        Color.Transparent
     }
     val posterSurface = if (colors.isDark) {
         colors.cardBackground.copy(alpha = surfaceSpec.posterAlpha)
@@ -695,19 +746,7 @@ internal fun HomeHubRecentPosterCard(
         resolveAuroraSurfaceColor(colors, AuroraSurfaceLevel.Subtle)
     }
 
-    Card(
-        onClick = {
-            appHaptics.tap()
-            onClick()
-        },
-        modifier = modifier,
-        shape = cardShape,
-        colors = CardDefaults.cardColors(containerColor = outerSurface),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (!colors.isDark && !colors.isEInk) 2.dp else 0.dp,
-            pressedElevation = if (!colors.isDark && !colors.isEInk) 6.dp else 0.dp,
-        ),
-    ) {
+    val cardContent: @Composable () -> Unit = {
         Column(modifier = Modifier.padding(6.dp)) {
             Box(
                 modifier = Modifier
@@ -771,6 +810,77 @@ internal fun HomeHubRecentPosterCard(
                     )
                 }
             }
+        }
+    }
+
+    if (isLightTheme) {
+        Box(
+            modifier = modifier
+                .drawBehind {
+                    val radius = 18.dp.toPx()
+                    val cornerRadius = CornerRadius(radius, radius)
+                    val neutralOffsetY = 3.dp.toPx()
+                    val warmOffsetY = 5.dp.toPx()
+                    val neutralInset = 1.dp.toPx()
+                    val warmInset = 3.dp.toPx()
+
+                    drawRoundRect(
+                        color = Color.Black.copy(alpha = 0.035f),
+                        topLeft = Offset(x = neutralInset, y = neutralOffsetY),
+                        size = Size(width = size.width - neutralInset * 2, height = size.height),
+                        cornerRadius = cornerRadius,
+                    )
+                    drawRoundRect(
+                        color = colors.accent.copy(alpha = 0.025f),
+                        topLeft = Offset(x = warmInset, y = warmOffsetY),
+                        size = Size(width = size.width - warmInset * 2, height = size.height),
+                        cornerRadius = cornerRadius,
+                    )
+                }
+                .background(
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.78f),
+                            Color.White.copy(alpha = 0.68f),
+                            Color.White.copy(alpha = 0.60f),
+                        ),
+                    ),
+                    shape = cardShape,
+                )
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.75f),
+                            Color.White.copy(alpha = 0.28f),
+                            Color.White.copy(alpha = 0.12f),
+                        ),
+                    ),
+                    shape = cardShape,
+                )
+                .clip(cardShape)
+                .clickable {
+                    appHaptics.tap()
+                    onClick()
+                },
+        ) {
+            cardContent()
+        }
+    } else {
+        Card(
+            onClick = {
+                appHaptics.tap()
+                onClick()
+            },
+            modifier = modifier,
+            shape = cardShape,
+            colors = CardDefaults.cardColors(containerColor = outerSurface),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = 0.dp,
+                pressedElevation = 0.dp,
+            ),
+        ) {
+            cardContent()
         }
     }
 }

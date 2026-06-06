@@ -108,6 +108,4 @@ private const val CHALLENGE_PEEK_BYTES = 8L * 1024L
 private val CHALLENGE_HTML_MARKERS = arrayOf(
     "challenge-error-title",
     "challenge-error-text",
-    "cf-mitigated",
-    "cf-error-details",
 )

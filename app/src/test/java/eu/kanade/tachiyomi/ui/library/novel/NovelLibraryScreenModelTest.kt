@@ -6,6 +6,7 @@ import eu.kanade.domain.entries.novel.interactor.UpdateNovel
 import eu.kanade.presentation.components.SEARCH_DEBOUNCE_MILLIS
 import eu.kanade.presentation.library.novel.NovelLibraryItem
 import eu.kanade.tachiyomi.data.download.novel.NovelDownloadCache
+import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.model.SManga
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.domain.category.novel.interactor.GetNovelCategories
+import tachiyomi.domain.category.novel.interactor.GetVisibleNovelCategories
 import tachiyomi.domain.category.novel.interactor.SetNovelCategories
 import tachiyomi.domain.category.novel.model.NovelCategory
 import tachiyomi.domain.entries.novel.interactor.GetLibraryNovel
@@ -48,6 +50,8 @@ import tachiyomi.domain.series.novel.interactor.GetLibraryNovelSeries
 import tachiyomi.domain.series.novel.interactor.GetNovelIdsInAnySeries
 import tachiyomi.domain.series.novel.interactor.UpdateNovelSeries
 import tachiyomi.domain.source.novel.service.NovelSourceManager
+import tachiyomi.domain.track.novel.interactor.GetTracksPerNovel
+import tachiyomi.domain.track.novel.model.NovelTrack
 
 class NovelLibraryScreenModelTest {
 
@@ -68,7 +72,11 @@ class NovelLibraryScreenModelTest {
     private lateinit var getLibraryNovelSeries: GetLibraryNovelSeries
     private lateinit var getNovelIdsInAnySeries: GetNovelIdsInAnySeries
     private lateinit var downloadCache: NovelDownloadCache
+    private lateinit var downloadedIdsFlow: MutableStateFlow<Set<Long>>
     private lateinit var sourceManager: NovelSourceManager
+    private lateinit var getVisibleNovelCategories: GetVisibleNovelCategories
+    private lateinit var getTracksPerNovel: GetTracksPerNovel
+    private lateinit var trackerManager: TrackerManager
 
     @BeforeEach
     fun setup() {
@@ -89,7 +97,16 @@ class NovelLibraryScreenModelTest {
         getLibraryNovelSeries = mockk()
         getNovelIdsInAnySeries = mockk()
         downloadCache = mockk(relaxed = true)
+        downloadedIdsFlow = MutableStateFlow(emptySet())
+        every { downloadCache.downloadedIds } returns downloadedIdsFlow
         sourceManager = mockk(relaxed = true)
+        getVisibleNovelCategories = mockk()
+        getTracksPerNovel = mockk()
+        trackerManager = mockk(relaxed = true)
+        every { getVisibleNovelCategories.subscribe() } returns MutableStateFlow(
+            listOf(NovelCategory.createDefault(0L)),
+        )
+        every { getTracksPerNovel.subscribe() } returns MutableStateFlow(emptyMap<Long, List<NovelTrack>>())
         coEvery { getNovelCategories.await(any<Long>()) } returns emptyList()
         coEvery { getNovelCategories.await() } returns emptyList<NovelCategory>()
         coJustRun { setNovelCategories.await(any(), any()) }
@@ -218,6 +235,7 @@ class NovelLibraryScreenModelTest {
         val downloaded = libraryNovel(id = 1L, title = "Downloaded")
         val notDownloaded = libraryNovel(id = 2L, title = "Not Downloaded")
         libraryFlow.value = listOf(downloaded, notDownloaded)
+        downloadedIdsFlow.value = setOf(downloaded.id)
 
         val screenModel = trackedNovelLibraryScreenModel(
             getLibraryNovel = getLibraryNovel,
@@ -242,10 +260,7 @@ class NovelLibraryScreenModelTest {
         libraryFlow.value = listOf(downloaded)
         var isDownloaded = false
         var resolveCount = 0
-        val downloadCacheChanges = MutableSharedFlow<Unit>(
-            replay = 1,
-            extraBufferCapacity = 3,
-        ).also { it.tryEmit(Unit) }
+        val downloadCacheChanges = MutableSharedFlow<Unit>(replay = 1).also { it.tryEmit(Unit) }
 
         val screenModel = trackedNovelLibraryScreenModel(
             getLibraryNovel = getLibraryNovel,
@@ -268,7 +283,7 @@ class NovelLibraryScreenModelTest {
         screenModel.state.value.items.shouldContainExactly()
 
         isDownloaded = true
-        downloadCacheChanges.tryEmit(Unit)
+        downloadedIdsFlow.value = setOf(downloaded.id)
         testDispatcher.scheduler.advanceUntilIdle()
 
         screenModel.state.value.items.shouldContainExactly(libraryNovelItem(id = 1L, title = "Downloaded"))
@@ -504,6 +519,8 @@ class NovelLibraryScreenModelTest {
             getLibraryNovelSeries = getLibraryNovelSeries,
             getNovelIdsInAnySeries = getNovelIdsInAnySeries,
             getNovelCategories = getNovelCategories,
+            getVisibleNovelCategories = getVisibleNovelCategories,
+            getTracksPerNovel = getTracksPerNovel,
             setNovelCategories = setNovelCategories,
             updateNovel = updateNovel,
             createNovelSeries = createNovelSeries,
@@ -515,10 +532,8 @@ class NovelLibraryScreenModelTest {
             libraryPreferences = libraryPreferences,
             sourceManager = sourceManager,
             downloadCache = downloadCache,
-            hasDownloadedChapters = hasDownloadedChapters,
-            downloadedIdsDispatcher = downloadedIdsDispatcher,
-            downloadCacheChanges = downloadCacheChanges,
             searchDebounceMillis = searchDebounceMillis,
+            trackerManager = trackerManager,
         ).also(activeScreenModels::add)
     }
 

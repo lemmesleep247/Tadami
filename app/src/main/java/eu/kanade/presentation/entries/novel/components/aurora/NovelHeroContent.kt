@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.entries.components.aurora.AuroraNotePreviewCard
 import eu.kanade.presentation.entries.components.aurora.AuroraTitleHeroActionButton
+import eu.kanade.presentation.entries.components.aurora.auroraCoverHeroCardStyle
 import eu.kanade.presentation.entries.components.aurora.resolveAuroraHeroChipBorderColor
 import eu.kanade.presentation.entries.components.aurora.resolveAuroraHeroChipContainerColor
 import eu.kanade.presentation.entries.components.aurora.resolveAuroraHeroChipTextColor
@@ -74,9 +75,9 @@ fun NovelHeroContent(
     val coverTitleFontFamily = LocalCoverTitleFontFamily.current
     val heroPanelShape = RoundedCornerShape(24.dp)
     val titleColor = resolveAuroraHeroTitleColor(colors)
-    val normalizedGenres = remember(novel.genre) {
+    val normalizedGenres = remember(novel.displayGenre) {
         val seen = LinkedHashSet<String>()
-        novel.genre.orEmpty()
+        novel.displayGenre.orEmpty()
             .flatMap { value ->
                 value
                     .split(Regex("[,;/|\\n\\r\\t•·]+"))
@@ -101,11 +102,19 @@ fun NovelHeroContent(
                 .then(
                     if (colors.isDark) {
                         Modifier
-                    } else {
+                    } else if (colors.isEInk) {
                         Modifier
                             .clip(heroPanelShape)
                             .background(resolveAuroraHeroPanelContainerColor(colors))
                             .border(1.dp, resolveAuroraHeroPanelBorderColor(colors), heroPanelShape)
+                            .padding(horizontal = 12.dp, vertical = 14.dp)
+                    } else {
+                        Modifier
+                            .auroraCoverHeroCardStyle(
+                                colors = colors,
+                                shape = heroPanelShape,
+                                cornerRadius = 24.dp,
+                            )
                             .padding(horizontal = 12.dp, vertical = 14.dp)
                     },
                 ),
@@ -147,7 +156,7 @@ fun NovelHeroContent(
             }
 
             Text(
-                text = translation?.title ?: novel.title,
+                text = translation?.title ?: novel.displayTitle,
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Black,
                 color = titleColor,
@@ -165,7 +174,7 @@ fun NovelHeroContent(
                 modifier = Modifier.fillMaxWidth(),
                 ratingValue = rating?.let { String.format(Locale.ROOT, "%.1f", it) }
                     ?: stringResource(MR.strings.not_applicable),
-                statusValue = MangaStatusFormatter.formatStatus(context, novel.status),
+                statusValue = MangaStatusFormatter.formatStatus(context, novel.displayStatus),
                 chaptersValue = pluralStringResource(
                     MR.plurals.manga_num_chapters,
                     count = chapterCount,

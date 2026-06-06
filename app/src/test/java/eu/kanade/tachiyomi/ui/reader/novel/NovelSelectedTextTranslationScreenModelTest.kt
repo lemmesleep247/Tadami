@@ -53,6 +53,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.Isolated
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.domain.achievement.repository.ActivityDataRepository
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.NovelUpdate
@@ -511,6 +512,7 @@ class NovelSelectedTextTranslationScreenModelTest {
             deepSeekTranslationService = deepSeekTranslationService,
             deepSeekModelsService = deepSeekModelsService,
             selectedTextTranslationProvider = selectedTextTranslationProvider,
+            activityDataRepository = mockk<ActivityDataRepository>(relaxed = true),
         )
         activeScreenModels += model
         return model
@@ -635,6 +637,15 @@ class NovelSelectedTextTranslationScreenModelTest {
         override suspend fun updateNovel(update: NovelUpdate): Boolean = true
         override suspend fun updateAllNovel(novelUpdates: List<NovelUpdate>): Boolean = true
         override suspend fun resetNovelViewerFlags(): Boolean = true
+
+        override suspend fun updateNovelMetadata(
+            novelId: Long,
+            customTitle: String?,
+            customAuthor: String?,
+            customDescription: String?,
+            customGenre: List<String>?,
+            customStatus: Long?,
+        ): Boolean = true
     }
 
     private class FakeNovelPluginStorage(

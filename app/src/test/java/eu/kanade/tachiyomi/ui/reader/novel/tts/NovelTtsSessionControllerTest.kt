@@ -215,6 +215,35 @@ class NovelTtsSessionControllerTest {
         }
     }
 
+    @Test
+    fun `resume with text-source switch does not reload the chapter from source`() {
+        runBlocking {
+            val speaker = FakeSpeaker()
+            val chapterSource = FakeChapterSource(listOf(chapter(chapterId = 1L)))
+            val controller = NovelTtsSessionController(
+                chapterSource = chapterSource,
+                speaker = speaker,
+                sessionStore = InMemoryNovelTtsSessionStore(),
+            )
+
+            controller.startFromCurrentPosition(
+                chapterId = 1L,
+                utteranceId = "chapter-1-utterance-0",
+                preferTranslatedText = false,
+                autoAdvanceChapter = true,
+            )
+            val loadCallsAfterStart = chapterSource.loadCallCount
+
+            controller.pause()
+            controller.setPreferredTranslatedText(true)
+            controller.resume()
+
+            // resume() -> restartFromCurrentPosition() must use the cache, not call loadChapter() again
+            chapterSource.loadCallCount shouldBe loadCallsAfterStart
+            controller.state.value.session.shouldNotBeNull().textSource shouldBe NovelTtsTextSource.TRANSLATED
+        }
+    }
+
     private fun chapter(
         chapterId: Long,
         nextChapterId: Long? = null,
@@ -274,8 +303,13 @@ class NovelTtsSessionControllerTest {
         chapters: List<NovelTtsResolvedChapter>,
     ) : NovelTtsChapterSource {
         private val chaptersById = chapters.associateBy { it.chapterId }
+        var loadCallCount = 0
+            private set
 
-        override suspend fun loadChapter(chapterId: Long): NovelTtsResolvedChapter? = chaptersById[chapterId]
+        override suspend fun loadChapter(chapterId: Long): NovelTtsResolvedChapter? {
+            loadCallCount++
+            return chaptersById[chapterId]
+        }
     }
 
     private class FakeSpeaker : NovelTtsPlaybackSpeaker {

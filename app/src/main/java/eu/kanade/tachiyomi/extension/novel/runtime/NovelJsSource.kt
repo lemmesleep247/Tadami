@@ -96,6 +96,23 @@ class NovelJsSource internal constructor(
         }
     override val pluginId: String = plugin.id
 
+    override val supportsRelatedNovels: Boolean
+        get() = capabilities?.hasRelatedNovels == true
+
+    override suspend fun getRelatedNovels(novel: SNovel): List<SNovel> {
+        return runPluginSafe(
+            operation = "relatedNovels(url=${novel.url})",
+            defaultValue = emptyList(),
+        ) {
+            val payload = mutex.withLock {
+                val runtime = ensureRuntimeLocked()
+                if (capabilities?.hasRelatedNovels != true) return@withLock ""
+                callPlugin(runtime, "relatedNovels", toJsString(novel.url))
+            }
+            parseNovelItems(payload).map { it.toSNovel() }
+        }
+    }
+
     private fun resolveSiteUrl(): String? {
         // Prefer the user-configured URL from settings (e.g. Komga's "url" setting).
         // This allows plugins whose site is dynamically configured (stored via
@@ -826,6 +843,11 @@ class NovelJsSource internal constructor(
                 else -> null
             },
             hasPluginSettings = hasSettings,
+            hasRelatedNovels = (
+                instance.evaluate(
+                    "typeof __plugin.relatedNovels === \"function\"",
+                ) as? Boolean
+                ) == true,
         )
         runtime = instance
         return instance

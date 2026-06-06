@@ -7,7 +7,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +39,7 @@ import eu.kanade.presentation.entries.anime.EpisodeSettingsDialog
 import eu.kanade.presentation.entries.anime.SeasonSettingsDialog
 import eu.kanade.presentation.entries.anime.components.AnimeImagesDialog
 import eu.kanade.presentation.entries.components.DeleteItemsDialog
+import eu.kanade.presentation.entries.components.EditMetadataSheet
 import eu.kanade.presentation.entries.components.SetIntervalDialog
 import eu.kanade.presentation.entries.components.aurora.AuroraNoteEditorDialog
 import eu.kanade.presentation.more.settings.screen.player.PlayerSettingsGesturesScreen.SkipIntroLengthDialog
@@ -118,6 +118,7 @@ class AnimeScreen(
         val successState = state as AnimeScreenModel.State.Success
         val isAnimeHttpSource = remember { successState.source is AnimeHttpSource }
         var showNotesDialog by remember { mutableStateOf(false) }
+        var showEditMetadataSheet by remember { mutableStateOf(false) }
 
         LaunchedEffect(successState.anime, screenModel.source) {
             if (isAnimeHttpSource) {
@@ -207,6 +208,9 @@ class AnimeScreen(
             onEditNotesClicked = {
                 showNotesDialog = true
             },
+            onClickEditInfo = {
+                showEditMetadataSheet = true
+            },
             onMigrateClicked = {
                 navigator.push(MigrateAnimeSearchScreen(successState.anime.id))
             }.takeIf { successState.anime.favorite },
@@ -245,6 +249,25 @@ class AnimeScreen(
                 if (dubbing.isNotBlank()) append(dubbing)
             }.takeIf { it.isNotBlank() },
             onRetryMetadata = screenModel::retryMetadataLoad,
+            onRetrySuggestions = screenModel::retrySuggestions,
+            onOpenSuggestions = {
+                val seed = screenModel.getSuggestionSeed()
+                    ?: eu.kanade.tachiyomi.data.suggestions.SuggestionSeed(
+                        mediaType = eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType.ANIME,
+                        primaryTitle = successState.anime.title,
+                        candidateTitles = emptyList(),
+                        description = successState.anime.description,
+                        author = successState.anime.displayAuthor,
+                        genres = successState.anime.displayGenre,
+                    )
+                navigator.push(
+                    eu.kanade.tachiyomi.ui.entries.suggestions.EntrySuggestionsScreen(
+                        seed = seed,
+                        sourceId = successState.source.id,
+                        entryUrl = successState.anime.url,
+                    ),
+                )
+            },
         )
 
         val onDismissRequest = {
@@ -347,7 +370,7 @@ class AnimeScreen(
             }
             AnimeScreenModel.Dialog.FullImages -> {
                 val sm = rememberScreenModel { AnimeImageScreenModel(successState.anime.id) }
-                val anime by sm.state.collectAsState()
+                val anime by sm.state.collectAsStateWithLifecycle()
                 if (anime != null) {
                     val getContent = rememberLauncherForActivityResult(
                         ActivityResultContracts.GetContent(),
@@ -453,6 +476,25 @@ class AnimeScreen(
                             ),
                         )
                     }
+                },
+            )
+        }
+
+        if (showEditMetadataSheet) {
+            EditMetadataSheet(
+                onDismissRequest = { showEditMetadataSheet = false },
+                currentTitle = successState.anime.displayTitle,
+                currentAuthor = successState.anime.displayAuthor,
+                currentArtist = successState.anime.displayArtist,
+                currentDescription = successState.anime.displayDescription,
+                currentGenre = successState.anime.displayGenre,
+                currentStatus = successState.anime.displayStatus,
+                hasArtist = true,
+                onSave = { title, author, artist, description, tags, status ->
+                    screenModel.updateAnimeMetadata(title, author, artist, description, tags, status)
+                },
+                onReset = {
+                    screenModel.resetAnimeMetadata()
                 },
             )
         }

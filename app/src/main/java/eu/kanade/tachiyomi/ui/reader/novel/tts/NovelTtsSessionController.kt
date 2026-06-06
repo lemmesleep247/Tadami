@@ -87,6 +87,10 @@ class NovelTtsSessionController(
     override val state: StateFlow<NovelTtsSessionUiState> = mutableState.asStateFlow()
     private var preferredTranslatedText: Boolean = false
 
+    /** In-memory cache of the last successfully loaded chapter. Avoids redundant IO when
+     *  only the text source changes (e.g. original <-> translated switch during resume). */
+    private var cachedResolvedChapter: NovelTtsResolvedChapter? = null
+
     suspend fun startFromCurrentPosition(
         chapterId: Long,
         utteranceId: String?,
@@ -94,7 +98,7 @@ class NovelTtsSessionController(
         autoAdvanceChapter: Boolean,
     ) {
         preferredTranslatedText = preferTranslatedText
-        val resolvedChapter = chapterSource.loadChapter(chapterId) ?: return
+        val resolvedChapter = loadChapterCached(chapterId) ?: return
         val session = buildSession(
             resolvedChapter = resolvedChapter,
             utteranceId = utteranceId,
@@ -200,7 +204,7 @@ class NovelTtsSessionController(
     suspend fun restoreFromCheckpoint() {
         val checkpoint = sessionStore.loadCheckpoint() ?: return
         preferredTranslatedText = checkpoint.textSource == NovelTtsTextSource.TRANSLATED
-        val resolvedChapter = chapterSource.loadChapter(checkpoint.chapterId) ?: return
+        val resolvedChapter = loadChapterCached(checkpoint.chapterId) ?: return
         val session = buildSession(
             resolvedChapter = resolvedChapter,
             utteranceId = checkpoint.utteranceId,
@@ -282,7 +286,12 @@ class NovelTtsSessionController(
 
     private suspend fun restartFromCurrentPosition(preferTranslatedText: Boolean) {
         val session = mutableState.value.session ?: return
-        val resolvedChapter = chapterSource.loadChapter(session.chapterId) ?: return
+        // Use cached chapter to avoid redundant IO — resolvedChapter already carries both
+        // originalModel and translatedModel, so switching text source needs no reload.
+        val resolvedChapter = cachedResolvedChapter
+            ?.takeIf { it.chapterId == session.chapterId }
+            ?: loadChapterCached(session.chapterId)
+            ?: return
         val rebuiltSession = buildSession(
             resolvedChapter = resolvedChapter,
             utteranceId = session.utterance.id,
@@ -297,5 +306,10 @@ class NovelTtsSessionController(
             flushQueue = true,
             startWordIndex = rebuiltSession.wordIndex,
         )
+    }
+
+    /** Loads a chapter from [chapterSource], updating [cachedResolvedChapter] on success. */
+    private suspend fun loadChapterCached(chapterId: Long): NovelTtsResolvedChapter? {
+        return chapterSource.loadChapter(chapterId)?.also { cachedResolvedChapter = it }
     }
 }

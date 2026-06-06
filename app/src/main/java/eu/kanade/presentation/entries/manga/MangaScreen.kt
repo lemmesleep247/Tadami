@@ -32,7 +32,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -51,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastMap
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.components.relativeDateTimeText
@@ -89,7 +89,7 @@ import tachiyomi.presentation.core.components.material.ExtendedFloatingActionBut
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.util.collectAsState
+import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
 import tachiyomi.presentation.core.util.shouldExpandFAB
 import tachiyomi.source.local.entries.manga.isLocal
 import uy.kohesive.injekt.Injekt
@@ -134,6 +134,7 @@ fun MangaScreen(
     onEditFetchIntervalClicked: (() -> Unit)?,
     onEditNotesClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
+    onClickEditInfo: (() -> Unit)? = null,
 
     // For bottom action menu
     onMultiBookmarkClicked: (List<Chapter>, bookmarked: Boolean) -> Unit,
@@ -148,6 +149,8 @@ fun MangaScreen(
     onChapterSelected: (ChapterList.Item, Boolean, Boolean, Boolean) -> Unit,
     onAllChapterSelected: (Boolean) -> Unit,
     onInvertSelection: () -> Unit,
+    onRetrySuggestions: () -> Unit = {},
+    onOpenSuggestions: () -> Unit = {},
 ) {
     val navigator = LocalNavigator.currentOrThrow
     val onSettingsClicked: (() -> Unit)? = {
@@ -155,8 +158,8 @@ fun MangaScreen(
     }.takeIf { state.source is ConfigurableSource }
 
     val uiPreferences = Injekt.get<eu.kanade.domain.ui.UiPreferences>()
-    val theme by uiPreferences.appTheme().collectAsState()
-    val autoJumpToNextEnabled by uiPreferences.entryAutoJumpToNextManga().collectAsState()
+    val theme by uiPreferences.appTheme().collectAsStateWithLifecycle()
+    val autoJumpToNextEnabled by uiPreferences.entryAutoJumpToNextManga().collectAsStateWithLifecycle()
     val autoJumpToNextLabel = stringResource(
         if (autoJumpToNextEnabled) {
             AYMR.strings.action_disable_auto_jump_next_chapter
@@ -199,6 +202,7 @@ fun MangaScreen(
             onEditFetchIntervalClicked = onEditFetchIntervalClicked,
             onEditNotesClicked = onEditNotesClicked,
             onMigrateClicked = onMigrateClicked,
+            onClickEditInfo = onClickEditInfo,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
             onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
             onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
@@ -211,6 +215,8 @@ fun MangaScreen(
             isAutoJumpToNextEnabled = autoJumpToNextEnabled,
             autoJumpToNextLabel = autoJumpToNextLabel,
             onToggleAutoJumpToNext = onToggleAutoJumpToNext,
+            onRetrySuggestions = onRetrySuggestions,
+            onOpenSuggestions = onOpenSuggestions,
         )
         return
     }
@@ -252,6 +258,7 @@ fun MangaScreen(
             onEditCategoryClicked = onEditCategoryClicked,
             onEditIntervalClicked = onEditFetchIntervalClicked,
             onMigrateClicked = onMigrateClicked,
+            onClickEditInfo = onClickEditInfo,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
             onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
             onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
@@ -295,6 +302,7 @@ fun MangaScreen(
             onEditCategoryClicked = onEditCategoryClicked,
             onEditIntervalClicked = onEditFetchIntervalClicked,
             onMigrateClicked = onMigrateClicked,
+            onClickEditInfo = onClickEditInfo,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
             onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
             onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
@@ -348,6 +356,7 @@ private fun MangaScreenSmallImpl(
     onEditCategoryClicked: (() -> Unit)?,
     onEditIntervalClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
+    onClickEditInfo: (() -> Unit)?,
     onSettingsClicked: (() -> Unit)?,
     isAutoJumpToNextEnabled: Boolean,
     autoJumpToNextLabel: String,
@@ -430,7 +439,7 @@ private fun MangaScreenSmallImpl(
                 label = "Top Bar Background",
             )
             EntryToolbar(
-                title = state.manga.title,
+                title = state.manga.displayTitle,
                 hasFilters = state.filterActive,
                 navigateUp = navigateUp,
                 onClickFilter = onFilterClicked,
@@ -439,6 +448,7 @@ private fun MangaScreenSmallImpl(
                 onClickEditCategory = onEditCategoryClicked,
                 onClickRefresh = onRefresh,
                 onClickMigrate = onMigrateClicked,
+                onClickEditInfo = onClickEditInfo,
                 onClickSettings = onSettingsClicked,
                 onToggleAutoJumpToNext = onToggleAutoJumpToNext,
                 autoJumpToNextLabel = autoJumpToNextLabel,
@@ -573,8 +583,8 @@ private fun MangaScreenSmallImpl(
                     ) {
                         ExpandableMangaDescription(
                             defaultExpandState = state.isFromSource,
-                            description = state.manga.description,
-                            tagsProvider = { state.manga.genre },
+                            description = state.manga.displayDescription,
+                            tagsProvider = { state.manga.displayGenre },
                             onTagSearch = onTagSearch,
                             onCopyTagToClipboard = onCopyTagToClipboard,
                         )
@@ -672,6 +682,7 @@ fun MangaScreenLargeImpl(
     onEditCategoryClicked: (() -> Unit)?,
     onEditIntervalClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
+    onClickEditInfo: (() -> Unit)?,
     onSettingsClicked: (() -> Unit)?,
     isAutoJumpToNextEnabled: Boolean,
     autoJumpToNextLabel: String,
@@ -738,7 +749,7 @@ fun MangaScreenLargeImpl(
             }
             EntryToolbar(
                 modifier = Modifier.onSizeChanged { topBarHeight = it.height },
-                title = state.manga.title,
+                title = state.manga.displayTitle,
                 hasFilters = state.filterActive,
                 navigateUp = navigateUp,
                 onClickFilter = onFilterButtonClicked,
@@ -747,6 +758,7 @@ fun MangaScreenLargeImpl(
                 onClickEditCategory = onEditCategoryClicked,
                 onClickRefresh = onRefresh,
                 onClickMigrate = onMigrateClicked,
+                onClickEditInfo = onClickEditInfo,
                 onClickSettings = onSettingsClicked,
                 onToggleAutoJumpToNext = onToggleAutoJumpToNext,
                 autoJumpToNextLabel = autoJumpToNextLabel,
@@ -851,8 +863,8 @@ fun MangaScreenLargeImpl(
                         )
                         ExpandableMangaDescription(
                             defaultExpandState = true,
-                            description = state.manga.description,
-                            tagsProvider = { state.manga.genre },
+                            description = state.manga.displayDescription,
+                            tagsProvider = { state.manga.displayGenre },
                             onTagSearch = onTagSearch,
                             onCopyTagToClipboard = onCopyTagToClipboard,
                         )

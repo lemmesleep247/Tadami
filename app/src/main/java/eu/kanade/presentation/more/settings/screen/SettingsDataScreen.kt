@@ -7,23 +7,38 @@ import android.net.Uri
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.CloudUpload
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MultiChoiceSegmentedButtonRow
-import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,23 +51,34 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.hippo.unifile.UniFile
 import eu.kanade.domain.sync.SyncPreferences
+import eu.kanade.presentation.more.resolveAuroraMoreCardBorderColor
+import eu.kanade.presentation.more.resolveAuroraMoreCardContainerColor
 import eu.kanade.presentation.more.settings.AuroraTopBarIconButton
+import eu.kanade.presentation.more.settings.LocalSettingsUiStyle
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.SettingsUiStyle
 import eu.kanade.presentation.more.settings.rememberResolvedSettingsUiStyle
+import eu.kanade.presentation.more.settings.screen.data.CloudSyncOptionsScreen
 import eu.kanade.presentation.more.settings.screen.data.CreateBackupScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
 import eu.kanade.presentation.more.settings.screen.data.StorageInfo
 import eu.kanade.presentation.more.settings.widget.BasePreferenceWidget
 import eu.kanade.presentation.more.settings.widget.PrefsHorizontalPadding
+import eu.kanade.presentation.theme.AuroraSurfaceLevel
+import eu.kanade.presentation.theme.AuroraTheme
+import eu.kanade.presentation.theme.resolveAuroraElevation
 import eu.kanade.presentation.util.relativeTimeSpanString
 import eu.kanade.tachiyomi.data.backup.create.BackupCreateJob
 import eu.kanade.tachiyomi.data.backup.restore.BackupRestoreJob
@@ -64,6 +90,7 @@ import eu.kanade.tachiyomi.data.export.LibraryExporter.ExportOptions
 import eu.kanade.tachiyomi.data.sync.SyncManager
 import eu.kanade.tachiyomi.data.sync.service.GoogleDriveService
 import eu.kanade.tachiyomi.data.sync.service.GoogleDriveSyncService
+import eu.kanade.tachiyomi.data.sync.service.SyncJob
 import eu.kanade.tachiyomi.ui.storage.StorageTab
 import eu.kanade.tachiyomi.util.system.DeviceUtil
 import eu.kanade.tachiyomi.util.system.toast
@@ -87,6 +114,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.components.material.TextButton
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.util.LocalAppHaptics
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -130,6 +158,7 @@ object SettingsDataScreen : SearchableSettings {
             Preference.PreferenceItem.InfoPreference(stringResource(MR.strings.pref_storage_location_info)),
 
             getBackupAndRestoreGroup(backupPreferences = backupPreferences),
+            getCloudSyncGroup(),
             getDataGroup(),
             getExportGroup(),
         )
@@ -210,6 +239,7 @@ object SettingsDataScreen : SearchableSettings {
         val navigator = LocalNavigator.currentOrThrow
 
         val lastAutoBackup by backupPreferences.lastAutoBackupTimestamp().collectAsState()
+        val backupInterval by backupPreferences.backupInterval().collectAsState()
 
         val chooseBackup = rememberLauncherForActivityResult(
             object : ActivityResultContracts.GetContent() {
@@ -250,44 +280,319 @@ object SettingsDataScreen : SearchableSettings {
                 Preference.PreferenceItem.CustomPreference(
                     title = stringResource(restorePreferenceKeyString),
                 ) {
-                    BasePreferenceWidget(
-                        subcomponent = {
-                            MultiChoiceSegmentedButtonRow(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(intrinsicSize = IntrinsicSize.Min)
-                                    .padding(horizontal = PrefsHorizontalPadding),
-                            ) {
-                                SegmentedButton(
-                                    modifier = Modifier.fillMaxHeight(),
-                                    checked = false,
-                                    onCheckedChange = { navigator.push(CreateBackupScreen()) },
-                                    shape = RectangleShape,
-                                ) {
-                                    Text(stringResource(MR.strings.pref_create_backup))
-                                }
-                                SegmentedButton(
-                                    modifier = Modifier.fillMaxHeight(),
-                                    checked = false,
-                                    onCheckedChange = {
-                                        if (!BackupRestoreJob.isRunning(context)) {
-                                            if (DeviceUtil.isMiui && DeviceUtil.isMiuiOptimizationDisabled()) {
-                                                context.toast(MR.strings.restore_miui_warning)
-                                            }
+                    val context = LocalContext.current
+                    val navigator = LocalNavigator.currentOrThrow
+                    val appHaptics = LocalAppHaptics.current
 
-                                            // no need to catch because it's wrapped with a chooser
-                                            chooseBackup.launch("*/*")
-                                        } else {
-                                            context.toast(MR.strings.restore_in_progress)
-                                        }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        val isAurora = LocalSettingsUiStyle.current == SettingsUiStyle.Aurora
+                        val cardShape = RoundedCornerShape(16.dp)
+
+                        // Create Backup interactive state
+                        val createInteractionSource = remember { MutableInteractionSource() }
+                        val isCreatePressed by createInteractionSource.collectIsPressedAsState()
+                        val createScale by animateFloatAsState(
+                            targetValue = if (isCreatePressed) 0.96f else 1f,
+                            animationSpec = androidx.compose.animation.core.spring(
+                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessLow,
+                            ),
+                            label = "create_backup_scale",
+                        )
+
+                        // Restore Backup interactive state
+                        val restoreInteractionSource = remember { MutableInteractionSource() }
+                        val isRestorePressed by restoreInteractionSource.collectIsPressedAsState()
+                        val restoreScale by animateFloatAsState(
+                            targetValue = if (isRestorePressed) 0.96f else 1f,
+                            animationSpec = androidx.compose.animation.core.spring(
+                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessLow,
+                            ),
+                            label = "restore_backup_scale",
+                        )
+
+                        // Create Backup card
+                        if (isAurora) {
+                            val auroraColors = AuroraTheme.colors
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .graphicsLayer {
+                                        scaleX = createScale
+                                        scaleY = createScale
+                                    }
+                                    .clickable(
+                                        interactionSource = createInteractionSource,
+                                        indication = androidx.compose.foundation.LocalIndication.current,
+                                        onClick = {
+                                            appHaptics.tap()
+                                            navigator.push(CreateBackupScreen())
+                                        },
+                                    ),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (auroraColors.isDark || auroraColors.isEInk) {
+                                        resolveAuroraMoreCardContainerColor(auroraColors)
+                                    } else {
+                                        Color.White
                                     },
-                                    shape = RectangleShape,
+                                ),
+                                border = if (auroraColors.isEInk) {
+                                    BorderStroke(
+                                        width = 1.dp,
+                                        color = resolveAuroraMoreCardBorderColor(auroraColors),
+                                    )
+                                } else {
+                                    BorderStroke(
+                                        width = 1.dp,
+                                        color = if (auroraColors.isDark) {
+                                            Color.White.copy(alpha = 0.08f)
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                    )
+                                },
+                                elevation = CardDefaults.cardElevation(
+                                    defaultElevation = if (!auroraColors.isDark && !auroraColors.isEInk) {
+                                        resolveAuroraElevation(auroraColors, AuroraSurfaceLevel.Glass)
+                                    } else {
+                                        0.dp
+                                    },
+                                ),
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
                                 ) {
-                                    Text(stringResource(MR.strings.pref_restore_backup))
+                                    Icon(
+                                        imageVector = Icons.Outlined.CloudUpload,
+                                        contentDescription = null,
+                                        tint = auroraColors.accent,
+                                        modifier = Modifier.size(28.dp),
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        text = stringResource(MR.strings.pref_create_backup),
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            letterSpacing = 0.2.sp,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        ),
+                                        color = auroraColors.textPrimary,
+                                        modifier = Modifier.padding(horizontal = 8.dp),
+                                        maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    )
                                 }
                             }
-                        },
-                    )
+                        } else {
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .graphicsLayer {
+                                        scaleX = createScale
+                                        scaleY = createScale
+                                    }
+                                    .clickable(
+                                        interactionSource = createInteractionSource,
+                                        indication = androidx.compose.foundation.LocalIndication.current,
+                                        onClick = {
+                                            appHaptics.tap()
+                                            navigator.push(CreateBackupScreen())
+                                        },
+                                    ),
+                                shape = cardShape,
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                ),
+                                border = BorderStroke(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                ),
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.CloudUpload,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(28.dp),
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        text = stringResource(MR.strings.pref_create_backup),
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            letterSpacing = 0.2.sp,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(horizontal = 8.dp),
+                                        maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+
+                        // Restore Backup card
+                        if (isAurora) {
+                            val auroraColors = AuroraTheme.colors
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .graphicsLayer {
+                                        scaleX = restoreScale
+                                        scaleY = restoreScale
+                                    }
+                                    .clickable(
+                                        interactionSource = restoreInteractionSource,
+                                        indication = androidx.compose.foundation.LocalIndication.current,
+                                        onClick = {
+                                            appHaptics.tap()
+                                            if (!BackupRestoreJob.isRunning(context)) {
+                                                if (DeviceUtil.isMiui &&
+                                                    DeviceUtil.isMiuiOptimizationDisabled()
+                                                ) {
+                                                    context.toast(MR.strings.restore_miui_warning)
+                                                }
+                                                chooseBackup.launch("*/*")
+                                            } else {
+                                                context.toast(MR.strings.restore_in_progress)
+                                            }
+                                        },
+                                    ),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (auroraColors.isDark || auroraColors.isEInk) {
+                                        resolveAuroraMoreCardContainerColor(auroraColors)
+                                    } else {
+                                        Color.White
+                                    },
+                                ),
+                                border = if (auroraColors.isEInk) {
+                                    BorderStroke(
+                                        width = 1.dp,
+                                        color = resolveAuroraMoreCardBorderColor(auroraColors),
+                                    )
+                                } else {
+                                    BorderStroke(
+                                        width = 1.dp,
+                                        color = if (auroraColors.isDark) {
+                                            Color.White.copy(alpha = 0.08f)
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                    )
+                                },
+                                elevation = CardDefaults.cardElevation(
+                                    defaultElevation = if (!auroraColors.isDark && !auroraColors.isEInk) {
+                                        resolveAuroraElevation(auroraColors, AuroraSurfaceLevel.Glass)
+                                    } else {
+                                        0.dp
+                                    },
+                                ),
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.CloudDownload,
+                                        contentDescription = null,
+                                        tint = auroraColors.accent,
+                                        modifier = Modifier.size(28.dp),
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        text = stringResource(MR.strings.pref_restore_backup),
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            letterSpacing = 0.2.sp,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        ),
+                                        color = auroraColors.textPrimary,
+                                        modifier = Modifier.padding(horizontal = 8.dp),
+                                        maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        } else {
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .graphicsLayer {
+                                        scaleX = restoreScale
+                                        scaleY = restoreScale
+                                    }
+                                    .clickable(
+                                        interactionSource = restoreInteractionSource,
+                                        indication = androidx.compose.foundation.LocalIndication.current,
+                                        onClick = {
+                                            appHaptics.tap()
+                                            if (!BackupRestoreJob.isRunning(context)) {
+                                                if (DeviceUtil.isMiui &&
+                                                    DeviceUtil.isMiuiOptimizationDisabled()
+                                                ) {
+                                                    context.toast(MR.strings.restore_miui_warning)
+                                                }
+                                                chooseBackup.launch("*/*")
+                                            } else {
+                                                context.toast(MR.strings.restore_in_progress)
+                                            }
+                                        },
+                                    ),
+                                shape = cardShape,
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                ),
+                                border = BorderStroke(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                ),
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.CloudDownload,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(28.dp),
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        text = stringResource(MR.strings.pref_restore_backup),
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            letterSpacing = 0.2.sp,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(horizontal = 8.dp),
+                                        maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 },
 
                 // Automatic backups
@@ -307,6 +612,21 @@ object SettingsDataScreen : SearchableSettings {
                         true
                     },
                 ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = backupPreferences.numberOfBackupsToKeep(),
+                    entries = persistentMapOf(
+                        4 to stringResource(MR.strings.backup_slots_4),
+                        10 to stringResource(MR.strings.backup_slots_10),
+                        20 to stringResource(MR.strings.backup_slots_20),
+                        50 to stringResource(MR.strings.backup_slots_50),
+                        0 to stringResource(MR.strings.backup_slots_all),
+                    ),
+                    title = stringResource(MR.strings.pref_backup_slots),
+                    enabled = backupInterval != 0,
+                    onValueChanged = {
+                        true
+                    },
+                ),
                 Preference.PreferenceItem.InfoPreference(
                     stringResource(MR.strings.backup_info) + "\n\n" +
                         stringResource(MR.strings.last_auto_backup_info, relativeTimeSpanString(lastAutoBackup)),
@@ -315,7 +635,8 @@ object SettingsDataScreen : SearchableSettings {
                 // ── Cloud Backup ────────────────────────────────────────────────
                 Preference.PreferenceItem.TextPreference(
                     title = stringResource(MR.strings.pref_cloud_backup_folder),
-                    subtitle = cloudBackupSubtitle(context, backupPreferences),
+                    subtitle = stringResource(MR.strings.pref_cloud_backup_folder_subtitle) +
+                        "\n" + cloudBackupSubtitle(context, backupPreferences),
                     onClick = {
                         try {
                             cloudBackupPicker.launch(null)
@@ -397,9 +718,11 @@ object SettingsDataScreen : SearchableSettings {
         val scope = rememberCoroutineScope()
         val syncPreferences = remember { Injekt.get<SyncPreferences>() }
         val googleDriveService = remember { Injekt.get<GoogleDriveService>() }
+        val navigator = LocalNavigator.currentOrThrow
 
         val googleDriveAccessToken by syncPreferences.googleDriveAccessToken().collectAsState()
         val googleDriveRefreshToken by syncPreferences.googleDriveRefreshToken().collectAsState()
+        val googleDriveEmail by syncPreferences.googleDriveEmail().collectAsState()
         val isSignedIn = googleDriveAccessToken.isNotBlank() && googleDriveRefreshToken.isNotBlank()
         val cloudSyncEnabledPref = syncPreferences.cloudSyncEnabled()
         val syncService by syncPreferences.syncService().collectAsState()
@@ -458,6 +781,39 @@ object SettingsDataScreen : SearchableSettings {
             )
         }
 
+        var showSignOutDialog by remember { mutableStateOf(false) }
+
+        if (showSignOutDialog) {
+            AlertDialog(
+                onDismissRequest = { showSignOutDialog = false },
+                title = { Text(stringResource(AYMR.strings.pref_sign_out_confirmation_title)) },
+                text = { Text(stringResource(AYMR.strings.pref_sign_out_confirmation_message)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showSignOutDialog = false
+                            scope.launchNonCancellable {
+                                googleDriveService.signOut()
+                                syncPreferences.syncService().set(SyncPreferences.SYNC_SERVICE_NONE)
+                                cloudSyncEnabledPref.set(false)
+                                SyncJob.setupTask(context, 0)
+                                withUIContext {
+                                    context.toast(AYMR.strings.pref_google_drive_sign_out)
+                                }
+                            }
+                        },
+                    ) {
+                        Text(stringResource(AYMR.strings.pref_google_drive_sign_out))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showSignOutDialog = false }) {
+                        Text(stringResource(MR.strings.action_cancel))
+                    }
+                },
+            )
+        }
+
         return Preference.PreferenceGroup(
             title = stringResource(AYMR.strings.cloud_sync),
             preferenceItems = persistentListOf(
@@ -465,22 +821,20 @@ object SettingsDataScreen : SearchableSettings {
                 Preference.PreferenceItem.TextPreference(
                     title = stringResource(AYMR.strings.google_drive),
                     subtitle = if (isSignedIn) {
-                        stringResource(AYMR.strings.google_drive_login_success)
+                        val email = remember(googleDriveEmail) { googleDriveEmail }
+                        if (email.isNotBlank()) {
+                            stringResource(AYMR.strings.pref_google_drive_connected, email)
+                        } else {
+                            stringResource(AYMR.strings.google_drive_login_success)
+                        }
                     } else {
                         stringResource(AYMR.strings.google_drive_not_signed_in)
                     },
-                    onClick = {
-                        if (isSignedIn) {
-                            // Sign out
-                            scope.launchNonCancellable {
-                                googleDriveService.signOut()
-                                syncPreferences.syncService().set(SyncPreferences.SYNC_SERVICE_NONE)
-                                cloudSyncEnabledPref.set(false)
-                                withUIContext {
-                                    context.toast(AYMR.strings.pref_google_drive_sign_out)
-                                }
-                            }
-                        } else {
+                    icon = Icons.Outlined.Cloud,
+                    onClick = if (isSignedIn) {
+                        null
+                    } else {
+                        {
                             // Sign in
                             try {
                                 val intent = googleDriveService.getSignInIntent()
@@ -495,6 +849,19 @@ object SettingsDataScreen : SearchableSettings {
                             }
                         }
                     },
+                    widget = if (isSignedIn) {
+                        {
+                            TextButton(
+                                onClick = {
+                                    showSignOutDialog = true
+                                },
+                            ) {
+                                Text(stringResource(AYMR.strings.pref_google_drive_sign_out))
+                            }
+                        }
+                    } else {
+                        null
+                    },
                 ),
 
                 // Enable/disable sync toggle
@@ -506,14 +873,48 @@ object SettingsDataScreen : SearchableSettings {
                     } else {
                         stringResource(MR.strings.off)
                     },
+                    icon = Icons.Outlined.Backup,
                     enabled = isSignedIn,
                     onValueChanged = { enabled ->
                         if (enabled) {
                             syncPreferences.syncService().set(SyncPreferences.SYNC_SERVICE_GOOGLE_DRIVE)
+                            SyncJob.setupTask(context)
                         } else {
                             syncPreferences.syncService().set(SyncPreferences.SYNC_SERVICE_NONE)
+                            SyncJob.setupTask(context, 0)
                         }
                         true
+                    },
+                ),
+
+                // Auto Sync Interval selection
+                Preference.PreferenceItem.ListPreference(
+                    preference = syncPreferences.syncInterval(),
+                    entries = persistentMapOf(
+                        0 to stringResource(MR.strings.off),
+                        6 to stringResource(MR.strings.update_6hour),
+                        12 to stringResource(MR.strings.update_12hour),
+                        24 to stringResource(MR.strings.update_24hour),
+                        48 to stringResource(MR.strings.update_48hour),
+                        168 to stringResource(MR.strings.update_weekly),
+                    ),
+                    title = stringResource(AYMR.strings.pref_sync_interval),
+                    icon = Icons.Outlined.Sync,
+                    enabled = isSignedIn && syncService == SyncPreferences.SYNC_SERVICE_GOOGLE_DRIVE,
+                    onValueChanged = {
+                        SyncJob.setupTask(context, it)
+                        true
+                    },
+                ),
+
+                // Cloud Sync Options
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(AYMR.strings.pref_cloud_sync_options),
+                    subtitle = stringResource(AYMR.strings.pref_cloud_sync_options_summary),
+                    icon = Icons.Outlined.Settings,
+                    enabled = isSignedIn && syncService == SyncPreferences.SYNC_SERVICE_GOOGLE_DRIVE,
+                    onClick = {
+                        navigator.push(CloudSyncOptionsScreen())
                     },
                 ),
 
@@ -525,12 +926,17 @@ object SettingsDataScreen : SearchableSettings {
                     } else {
                         stringResource(AYMR.strings.never)
                     },
+                    icon = Icons.Outlined.Sync,
                     enabled = isSignedIn && syncService == SyncPreferences.SYNC_SERVICE_GOOGLE_DRIVE,
                     onClick = {
+                        context.toast(AYMR.strings.pref_sync_started)
                         scope.launchNonCancellable {
                             try {
                                 val syncManager = SyncManager(context)
                                 syncManager.syncData()
+                                withUIContext {
+                                    context.toast(AYMR.strings.cloud_sync_successful)
+                                }
                             } catch (e: Exception) {
                                 logcat { "Sync error: ${e.message}" }
                                 withUIContext {
@@ -549,6 +955,7 @@ object SettingsDataScreen : SearchableSettings {
                 // Delete sync data
                 Preference.PreferenceItem.TextPreference(
                     title = stringResource(AYMR.strings.pref_google_drive_purge_sync_data),
+                    icon = Icons.Outlined.Delete,
                     enabled = isSignedIn,
                     onClick = {
                         showPurgeDialog = true

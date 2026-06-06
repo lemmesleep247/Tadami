@@ -40,7 +40,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +58,7 @@ import androidx.core.util.Consumer
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import androidx.interpolator.view.animation.LinearOutSlowInInterpolator
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
@@ -142,7 +142,7 @@ import tachiyomi.domain.release.service.AppUpdatePreferences
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.util.AppHapticsProvider
-import tachiyomi.presentation.core.util.collectAsState
+import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -185,7 +185,16 @@ class MainActivity : BaseActivity() {
             fallbackColorArgb = resolveMainActivityThemeBackgroundArgb(),
         )
 
-        val didMigration = Migrator.awaitAndRelease()
+        // Await preference migrations without blocking the main thread.
+        // The splash screen will keep showing (ready = false) until this completes,
+        // giving migrations time to finish without triggering an ANR.
+        val didMigration = mutableStateOf(false)
+        val migrationReady = mutableStateOf(false)
+        lifecycleScope.launch {
+            didMigration.value = Migrator.await()
+            Migrator.release()
+            migrationReady.value = true
+        }
 
         // Do not let the launcher create a new activity http://stackoverflow.com/questions/16283079
         if (!isTaskRoot) {
@@ -198,9 +207,9 @@ class MainActivity : BaseActivity() {
 
             var incognito by remember { mutableStateOf(getMangaIncognitoState.await(null)) }
             var incognitoAnime by remember { mutableStateOf(getAnimeIncognitoState.await(null)) }
-            val downloadOnly by preferences.downloadedOnly().collectAsState()
-            val indexing by downloadCache.isInitializing.collectAsState()
-            val indexingAnime by animeDownloadCache.isInitializing.collectAsState()
+            val downloadOnly by preferences.downloadedOnly().collectAsStateWithLifecycle()
+            val indexing by downloadCache.isInitializing.collectAsStateWithLifecycle()
+            val indexingAnime by animeDownloadCache.isInitializing.collectAsStateWithLifecycle()
 
             val isSystemInDarkTheme = isSystemInDarkTheme()
             val statusBarBackgroundColor = when {
@@ -212,9 +221,9 @@ class MainActivity : BaseActivity() {
 
             // Get current theme for Aurora detection
             val uiPreferences = remember { Injekt.get<UiPreferences>() }
-            val theme by uiPreferences.appTheme().collectAsState()
-            val hapticFeedbackMode by uiPreferences.hapticFeedbackMode().collectAsState()
-            val eInkProfile by uiPreferences.eInkProfile().collectAsState()
+            val theme by uiPreferences.appTheme().collectAsStateWithLifecycle()
+            val hapticFeedbackMode by uiPreferences.hapticFeedbackMode().collectAsStateWithLifecycle()
+            val eInkProfile by uiPreferences.eInkProfile().collectAsStateWithLifecycle()
             val isAurora = theme.isAuroraStyle
 
             AppHapticsProvider(
@@ -393,7 +402,12 @@ class MainActivity : BaseActivity() {
                 }
             }
 
-            var showChangelog by remember { mutableStateOf(didMigration && !BuildConfig.DEBUG) }
+            var showChangelog by remember { mutableStateOf(false) }
+            LaunchedEffect(migrationReady.value) {
+                if (migrationReady.value && didMigration.value && !BuildConfig.DEBUG) {
+                    showChangelog = true
+                }
+            }
             if (showChangelog) {
                 AlertDialog(
                     onDismissRequest = { showChangelog = false },

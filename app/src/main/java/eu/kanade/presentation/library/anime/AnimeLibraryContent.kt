@@ -36,6 +36,7 @@ fun AnimeLibraryContent(
     hasActiveFilters: Boolean,
     showPageTabs: Boolean,
     onChangeCurrentPage: (Int) -> Unit,
+    onCategoryLongSelected: ((Int) -> Unit)? = null,
     onAnimeClicked: (Long) -> Unit,
     onContinueWatchingClicked: ((LibraryAnime) -> Unit)?,
     onToggleSelection: (LibraryAnime) -> Unit,
@@ -71,6 +72,7 @@ fun AnimeLibraryContent(
                 categories = categories,
                 pagerState = pagerState,
                 getNumberOfItemsForCategory = getNumberOfAnimeForCategory,
+                onTabItemLongClick = onCategoryLongSelected,
             ) { scope.launch { pagerState.animateScrollToPage(it) } }
         }
 

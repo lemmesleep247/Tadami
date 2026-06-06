@@ -66,6 +66,7 @@ import org.junit.jupiter.api.parallel.Isolated
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.domain.achievement.repository.ActivityDataRepository
 import tachiyomi.domain.entries.novel.interactor.GetNovel
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.NovelUpdate
@@ -228,18 +229,21 @@ class NovelReaderScreenModelTest {
 
             val successState = screenModel.state.value.shouldBeInstanceOf<NovelReaderScreenModel.State.Success>()
             val sentinelTime = 123L
-            setPrivateField(screenModel, "rawHtml", "<p>stale</p>")
-            setPrivateField(screenModel, "parsedContentBlocks", successState.contentBlocks)
-            setPrivateField(
-                screenModel,
-                "parsedRichContentResult",
-                NovelRichContentParseResult(
-                    blocks = emptyList(),
-                    unsupportedFeaturesDetected = false,
-                ),
+            val model = NovelReaderContentModel(
+                canonicalHtml = "<p>stale</p>",
+                chapterWebUrl = "https://example.org/ch1",
+                novelUrl = "https://example.org/novel",
+                pluginSite = "site",
             )
-            setPrivateField(screenModel, "geminiTranslatedByIndex", mapOf(0 to "g"))
-            setPrivateField(screenModel, "googleTranslatedByIndex", mapOf(0 to "g"))
+            model.parsedRichContentResult = NovelRichContentParseResult(
+                blocks = emptyList(),
+                unsupportedFeaturesDetected = false,
+            )
+            setPrivateField(screenModel, "contentModel", model)
+            val holder = NovelReaderTranslationHolder { emptyList() }
+            holder.put("gemini", mapOf(0 to "g"))
+            holder.put("google", mapOf(0 to "g"))
+            setPrivateField(screenModel, "translationHolder", holder)
             setPrivateField(screenModel, "geminiLogs", listOf("gemini"))
             setPrivateField(screenModel, "googleLogs", listOf("google"))
             setPrivateField(screenModel, "isGeminiTranslating", true)
@@ -258,11 +262,11 @@ class NovelReaderScreenModelTest {
 
             invokePrivateClearChapterTransientState(screenModel)
 
-            getPrivateFieldOrNull<String>(screenModel, "rawHtml") shouldBe null
-            getPrivateFieldOrNull<List<Any?>>(screenModel, "parsedContentBlocks") shouldBe null
-            getPrivateFieldOrNull<NovelRichContentParseResult>(screenModel, "parsedRichContentResult") shouldBe null
-            getPrivateField<Map<Any?, Any?>>(screenModel, "geminiTranslatedByIndex") shouldBe emptyMap<Any?, Any?>()
-            getPrivateField<Map<Any?, Any?>>(screenModel, "googleTranslatedByIndex") shouldBe emptyMap<Any?, Any?>()
+            getPrivateFieldOrNull<NovelReaderContentModel>(screenModel, "contentModel") shouldBe null
+            getPrivateField<NovelReaderTranslationHolder>(screenModel, "translationHolder").isEmpty("gemini") shouldBe
+                true
+            getPrivateField<NovelReaderTranslationHolder>(screenModel, "translationHolder").isEmpty("google") shouldBe
+                true
             getPrivateField<List<Any?>>(screenModel, "geminiLogs") shouldBe emptyList<Any?>()
             getPrivateField<List<Any?>>(screenModel, "googleLogs") shouldBe emptyList<Any?>()
             getPrivateField<Boolean>(screenModel, "isGeminiTranslating") shouldBe false
@@ -361,7 +365,9 @@ class NovelReaderScreenModelTest {
                 geminiApiKey = "test-key",
             )
 
-            setPrivateField(screenModel, "geminiTranslatedByIndex", translatedByIndex)
+            val holder = NovelReaderTranslationHolder { successState.textBlocks }
+            holder.put("gemini", translatedByIndex)
+            setPrivateField(screenModel, "translationHolder", holder)
             setPrivateField(screenModel, "isGeminiTranslationVisible", true)
             setPrivateField(screenModel, "hasGeminiTranslationCache", true)
             setPrivateField(screenModel, "isGeminiTranslating", false)
@@ -742,7 +748,9 @@ class NovelReaderScreenModelTest {
             )
 
             setPrivateField(screenModel, "currentChapter", chapter)
-            setPrivateField(screenModel, "geminiTranslatedByIndex", mapOf(0 to "Переведенный абзац"))
+            val holder = NovelReaderTranslationHolder { emptyList() }
+            holder.put("gemini", mapOf(0 to "Переведенный абзац"))
+            setPrivateField(screenModel, "translationHolder", holder)
             setPrivateField(screenModel, "isGeminiTranslationVisible", false)
 
             val translatedModel = invokePrivateResolveTranslatedTtsChapterModel(
@@ -809,7 +817,9 @@ class NovelReaderScreenModelTest {
             )
 
             setPrivateField(screenModel, "currentChapter", chapter)
-            setPrivateField(screenModel, "googleTranslatedByIndex", mapOf(0 to "Переведенный абзац"))
+            val holder = NovelReaderTranslationHolder { emptyList() }
+            holder.put("google", mapOf(0 to "Переведенный абзац"))
+            setPrivateField(screenModel, "translationHolder", holder)
             setPrivateField(screenModel, "isGoogleTranslationVisible", true)
 
             val translatedModel = invokePrivateResolveTranslatedTtsChapterModel(
@@ -857,7 +867,10 @@ class NovelReaderScreenModelTest {
             }
 
             val state = screenModel.state.value.shouldBeInstanceOf<NovelReaderScreenModel.State.Success>()
-            setPrivateField(screenModel, "googleTranslatedByIndex", mapOf(0 to "Переведённый абзац"))
+            val holder = NovelReaderTranslationHolder { emptyList() }
+            holder.put("google", mapOf(0 to "Переведённый абзац"))
+            setPrivateField(screenModel, "translationHolder", holder)
+            setPrivateField(screenModel, "isGoogleTranslationVisible", true)
             setPrivateField(screenModel, "isGoogleTranslationVisible", true)
 
             invokePrivateUpdateContent(
@@ -1631,6 +1644,7 @@ class NovelReaderScreenModelTest {
                 url = "https://example.org/ch1",
             )
             val chapterRepo = FakeNovelChapterRepository(chapter)
+            val activityDataRepository = mockk<ActivityDataRepository>(relaxed = true)
 
             val screenModel = trackedNovelReaderScreenModel(
                 chapterId = chapter.id,
@@ -1640,6 +1654,7 @@ class NovelReaderScreenModelTest {
                 pluginStorage = FakeNovelPluginStorage(emptyList()),
                 novelReaderPreferences = createNovelReaderPreferences(),
                 isSystemDark = { false },
+                activityDataRepository = activityDataRepository,
             )
 
             withTimeout(1_000) {
@@ -1649,10 +1664,18 @@ class NovelReaderScreenModelTest {
             }
 
             screenModel.updateReadingProgress(currentIndex = 9, totalItems = 10)
+            screenModel.awaitPendingProgressPersistence()
             yield()
 
             chapterRepo.lastUpdate?.read shouldBe true
             chapterRepo.lastUpdate?.lastPageRead shouldBe 9L
+            coVerify(exactly = 1) {
+                activityDataRepository.recordReading(
+                    id = chapter.id,
+                    chaptersCount = 1,
+                    durationMs = match { it >= 0L },
+                )
+            }
         }
     }
 
@@ -2733,6 +2756,7 @@ class NovelReaderScreenModelTest {
         googleTranslationService: GoogleTranslationService = this.googleTranslationService,
         translationQueueManager: TranslationQueueManager = this.translationQueueManager,
         novelDownloadManager: NovelDownloadManager? = null,
+        activityDataRepository: ActivityDataRepository = mockk(relaxed = true),
     ): NovelReaderScreenModel {
         ensureReaderScreenModelDependencies()
         return NovelReaderScreenModel(
@@ -2758,6 +2782,7 @@ class NovelReaderScreenModelTest {
             deepSeekModelsService = deepSeekModelsService,
             googleTranslationService = googleTranslationService,
             translationQueueManager = translationQueueManager,
+            activityDataRepository = activityDataRepository,
         ).also(activeScreenModels::add)
     }
 
@@ -2905,6 +2930,15 @@ class NovelReaderScreenModelTest {
         override suspend fun updateNovel(update: NovelUpdate): Boolean = true
         override suspend fun updateAllNovel(novelUpdates: List<NovelUpdate>): Boolean = true
         override suspend fun resetNovelViewerFlags(): Boolean = true
+
+        override suspend fun updateNovelMetadata(
+            novelId: Long,
+            customTitle: String?,
+            customAuthor: String?,
+            customDescription: String?,
+            customGenre: List<String>?,
+            customStatus: Long?,
+        ): Boolean = true
     }
 
     private class FakeNovelSourceManager(

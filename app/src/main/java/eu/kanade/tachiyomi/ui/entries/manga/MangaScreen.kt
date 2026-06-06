@@ -7,7 +7,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +33,7 @@ import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.entries.EditCoverAction
 import eu.kanade.presentation.entries.components.AuthRequiredDialog
 import eu.kanade.presentation.entries.components.DeleteItemsDialog
+import eu.kanade.presentation.entries.components.EditMetadataSheet
 import eu.kanade.presentation.entries.components.SetIntervalDialog
 import eu.kanade.presentation.entries.components.aurora.AuroraNoteEditorDialog
 import eu.kanade.presentation.entries.manga.ChapterSettingsDialog
@@ -77,7 +77,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.screens.LoadingScreen
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import tachiyomi.presentation.core.util.collectAsState as collectPreferenceAsState
+import tachiyomi.presentation.core.util.collectAsStateWithLifecycle as collectPreferenceAsState
 
 class MangaScreen(
     private val mangaId: Long,
@@ -116,6 +116,7 @@ class MangaScreen(
         val successState = state as MangaScreenModel.State.Success
         val isHttpSource = remember { successState.source is HttpSource }
         var showNotesDialog by remember { mutableStateOf(false) }
+        var showEditMetadataSheet by remember { mutableStateOf(false) }
         val showScanlatorSelector = successState.showScanlatorSelector &&
             shouldShowMangaScanlatorSelector(
                 isPreferenceEnabled = showMangaScanlatorBranches,
@@ -194,6 +195,9 @@ class MangaScreen(
             onEditNotesClicked = {
                 showNotesDialog = true
             },
+            onClickEditInfo = {
+                showEditMetadataSheet = true
+            },
             onMigrateClicked = {
                 navigator.push(MigrateMangaSearchScreen(successState.manga.id))
             }.takeIf { shouldExposeMangaMigrationAction(successState.manga.id) },
@@ -205,6 +209,25 @@ class MangaScreen(
             onChapterSelected = screenModel::toggleSelection,
             onAllChapterSelected = screenModel::toggleAllSelection,
             onInvertSelection = screenModel::invertSelection,
+            onRetrySuggestions = screenModel::retrySuggestions,
+            onOpenSuggestions = {
+                val seed = screenModel.getSuggestionSeed()
+                    ?: eu.kanade.tachiyomi.data.suggestions.SuggestionSeed(
+                        mediaType = eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType.MANGA,
+                        primaryTitle = successState.manga.title,
+                        candidateTitles = emptyList(),
+                        description = successState.manga.description,
+                        author = successState.manga.author,
+                        genres = successState.manga.genre,
+                    )
+                navigator.push(
+                    eu.kanade.tachiyomi.ui.entries.suggestions.EntrySuggestionsScreen(
+                        seed = seed,
+                        sourceId = successState.source.id,
+                        entryUrl = successState.manga.url,
+                    ),
+                )
+            },
         )
 
         var showScanlatorsDialog by remember { mutableStateOf(false) }
@@ -301,7 +324,7 @@ class MangaScreen(
             }
             MangaScreenModel.Dialog.FullCover -> {
                 val sm = rememberScreenModel { MangaCoverScreenModel(successState.manga.id) }
-                val manga by sm.state.collectAsState()
+                val manga by sm.state.collectAsStateWithLifecycle()
                 if (manga != null) {
                     val getContent = rememberLauncherForActivityResult(
                         ActivityResultContracts.GetContent(),
@@ -361,6 +384,25 @@ class MangaScreen(
                             ),
                         )
                     }
+                },
+            )
+        }
+
+        if (showEditMetadataSheet) {
+            EditMetadataSheet(
+                onDismissRequest = { showEditMetadataSheet = false },
+                currentTitle = successState.manga.displayTitle,
+                currentAuthor = successState.manga.displayAuthor,
+                currentArtist = successState.manga.displayArtist,
+                currentDescription = successState.manga.displayDescription,
+                currentGenre = successState.manga.displayGenre,
+                currentStatus = successState.manga.displayStatus,
+                hasArtist = true,
+                onSave = { title, author, artist, description, tags, status ->
+                    screenModel.updateMangaMetadata(title, author, artist, description, tags, status)
+                },
+                onReset = {
+                    screenModel.resetMangaMetadata()
                 },
             )
         }

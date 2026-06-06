@@ -2,6 +2,7 @@ package eu.kanade.presentation.entries.novel
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -37,8 +38,6 @@ import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.SelectAll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Snackbar
@@ -57,7 +56,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -70,7 +71,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import eu.kanade.domain.entries.novel.model.normalizeNovelDescription
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.presentation.components.auroraMenuRimLightBrush
 import eu.kanade.presentation.entries.TitleFastScrollOverlayAccumulator
 import eu.kanade.presentation.entries.components.AuroraEntryDropdownMenu
 import eu.kanade.presentation.entries.components.AuroraEntryDropdownMenuItem
@@ -79,6 +82,9 @@ import eu.kanade.presentation.entries.components.EntryBottomActionMenu
 import eu.kanade.presentation.entries.components.aurora.AuroraTitleHeroActionFab
 import eu.kanade.presentation.entries.components.aurora.AuroraZIndex
 import eu.kanade.presentation.entries.components.aurora.auroraPosterLongPress
+import eu.kanade.presentation.entries.components.aurora.auroraSpringClick
+import eu.kanade.presentation.entries.components.aurora.resolveAuroraDetailCardBackgroundColors
+import eu.kanade.presentation.entries.components.aurora.resolveAuroraDetailCardBorderColors
 import eu.kanade.presentation.entries.components.normalizeAuroraGlobalSearchQuery
 import eu.kanade.presentation.entries.manga.components.ScanlatorBranchSelector
 import eu.kanade.presentation.entries.novel.components.aurora.ChaptersHeader
@@ -104,6 +110,8 @@ import eu.kanade.tachiyomi.ui.entries.novel.NovelScreenModel
 import eu.kanade.tachiyomi.ui.entries.novel.resolveNovelChapterDisplayData
 import eu.kanade.tachiyomi.ui.entries.novel.resolveNovelChapterRowIndex
 import eu.kanade.tachiyomi.ui.entries.novel.resolveNovelVisibleChapterRows
+import eu.kanade.tachiyomi.util.debugTitleCoverFlow
+import eu.kanade.tachiyomi.util.previewTitleCoverUrl
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -176,9 +184,24 @@ fun NovelScreenAuroraImpl(
     isAutoJumpToNextEnabled: Boolean,
     autoJumpToNextLabel: String,
     onToggleAutoJumpToNext: () -> Unit,
+    onClickEditInfo: (() -> Unit)? = null,
+    onRetrySuggestions: () -> Unit = {},
+    onOpenSuggestions: () -> Unit = {},
 ) {
     val novel = state.novel
-    val globalSearchQuery = remember(novel.title) { normalizeAuroraGlobalSearchQuery(novel.title) }
+    LaunchedEffect(
+        novel.id,
+        novel.thumbnailUrl,
+        novel.coverLastModified,
+    ) {
+        debugTitleCoverFlow(
+            scope = "novel-screen",
+            message = "id=${novel.id} coverLastModified=${novel.coverLastModified} thumbnail=${previewTitleCoverUrl(
+                novel.thumbnailUrl,
+            )}",
+        )
+    }
+    val globalSearchQuery = remember(novel.displayTitle) { normalizeAuroraGlobalSearchQuery(novel.displayTitle) }
     val posterLongPressModifier = onPosterLongClicked?.let { Modifier.auroraPosterLongPress(it) } ?: Modifier
     val chapters = state.processedChapters
     val readChapterCount = remember(state.chapters) { state.chapters.count { it.read } }
@@ -231,16 +254,20 @@ fun NovelScreenAuroraImpl(
     val auroraAdaptiveSpec = rememberAuroraAdaptiveSpec()
     val contentMaxWidthDp = auroraAdaptiveSpec.entryMaxWidthDp
     val useTwoPaneLayout = shouldUseNovelAuroraTwoPane(auroraAdaptiveSpec.deviceClass)
-    val auroraTranslationPreferences = remember { Injekt.get<UiPreferences>() }
-    val auroraEntryTranslationEnabled by auroraTranslationPreferences
+    val uiPreferences = remember { Injekt.get<UiPreferences>() }
+    val sourcePreferences = remember { Injekt.get<SourcePreferences>() }
+    val entrySuggestionsEnabled by sourcePreferences.entrySuggestionsEnabled().collectAsState()
+    val entrySuggestionsExpandInline by uiPreferences.entrySuggestionsExpandInline().collectAsState()
+    val entrySuggestionsInOverflow by uiPreferences.entrySuggestionsInOverflow().collectAsState()
+    val auroraEntryTranslationEnabled by uiPreferences
         .auroraEntryTranslationEnabled()
         .collectAsState()
-    val auroraEntryTranslationSourceLanguages by auroraTranslationPreferences
+    val auroraEntryTranslationSourceLanguages by uiPreferences
         .auroraEntryTranslationSourceLanguages()
         .collectAsState()
     val auroraEntryTranslation = rememberAuroraEntryTranslation(
-        title = novel.title,
-        description = normalizeNovelDescription(novel.description),
+        title = novel.displayTitle,
+        description = normalizeNovelDescription(novel.displayDescription),
         sourceLanguage = state.source.lang,
         enabled = auroraEntryTranslationEnabled,
         allowedSourceFamilies = auroraEntryTranslationSourceLanguages,
@@ -402,7 +429,7 @@ fun NovelScreenAuroraImpl(
                                     isReading = isReading,
                                     modifier = Modifier.fillMaxWidth(),
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(if (colors.isDark) 8.dp else 16.dp))
                                 NovelStatsCard(
                                     novel = novel,
                                     rating = state.rating,
@@ -412,7 +439,7 @@ fun NovelScreenAuroraImpl(
                                     sourceName = state.source.name,
                                     modifier = Modifier.fillMaxWidth(),
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(if (colors.isDark) 8.dp else 16.dp))
                                 NovelInfoCard(
                                     novel = novel,
                                     translation = auroraEntryTranslation,
@@ -424,7 +451,7 @@ fun NovelScreenAuroraImpl(
                                     modifier = Modifier.fillMaxWidth(),
                                 )
 
-                                Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(if (colors.isDark) 12.dp else 16.dp))
                                 NovelActionCard(
                                     novel = novel,
                                     trackingCount = trackingCount,
@@ -594,7 +621,7 @@ fun NovelScreenAuroraImpl(
                                                     downloading = chapter.id in state.downloadingChapterIds,
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                                                        .padding(horizontal = 16.dp, vertical = 2.dp),
                                                 )
                                             }
                                             is NovelChapterDisplayRow.ChapterGroup -> {
@@ -779,6 +806,15 @@ fun NovelScreenAuroraImpl(
                                         },
                                     )
                                 }
+                                if (entrySuggestionsEnabled && entrySuggestionsInOverflow) {
+                                    AuroraEntryDropdownMenuItem(
+                                        text = stringResource(MR.strings.pref_entry_suggestions),
+                                        onClick = {
+                                            onOpenSuggestions()
+                                            showMenu = false
+                                        },
+                                    )
+                                }
                                 if (isFromSource) {
                                     AuroraEntryDropdownMenuItem(
                                         text = stringResource(MR.strings.action_webview_refresh),
@@ -814,6 +850,15 @@ fun NovelScreenAuroraImpl(
                                             },
                                         )
                                     }
+                                    if (onClickEditInfo != null) {
+                                        AuroraEntryDropdownMenuItem(
+                                            text = stringResource(MR.strings.action_edit_info),
+                                            onClick = {
+                                                onClickEditInfo()
+                                                showMenu = false
+                                            },
+                                        )
+                                    }
                                 } else {
                                     AuroraEntryDropdownMenuItem(
                                         text = stringResource(MR.strings.action_webview_refresh),
@@ -845,6 +890,15 @@ fun NovelScreenAuroraImpl(
                                             text = stringResource(MR.strings.action_notes),
                                             onClick = {
                                                 onEditNotesClicked()
+                                                showMenu = false
+                                            },
+                                        )
+                                    }
+                                    if (onClickEditInfo != null) {
+                                        AuroraEntryDropdownMenuItem(
+                                            text = stringResource(MR.strings.action_edit_info),
+                                            onClick = {
+                                                onClickEditInfo()
                                                 showMenu = false
                                             },
                                         )
@@ -985,7 +1039,7 @@ fun NovelScreenAuroraImpl(
                                 sourceName = state.source.name,
                                 modifier = Modifier.fillMaxWidth(),
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(if (colors.isDark) 8.dp else 16.dp))
                             NovelInfoCard(
                                 novel = novel,
                                 translation = auroraEntryTranslation,
@@ -997,7 +1051,7 @@ fun NovelScreenAuroraImpl(
                                 modifier = Modifier.fillMaxWidth(),
                             )
 
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(if (colors.isDark) 12.dp else 16.dp))
                             NovelActionCard(
                                 novel = novel,
                                 trackingCount = trackingCount,
@@ -1009,6 +1063,62 @@ fun NovelScreenAuroraImpl(
                                 onExportEpubClicked = onOpenEpubExportDialog,
                                 modifier = Modifier.fillMaxWidth(),
                             )
+                        }
+                    }
+
+                    if (entrySuggestionsEnabled) {
+                        if (entrySuggestionsExpandInline) {
+                            item(key = "suggestions_row") {
+                                eu.kanade.presentation.entries.components.aurora.AuroraSuggestionsRow(
+                                    state = state.suggestions,
+                                    onSuggestionClick = { item ->
+                                        onSearch(
+                                            item.searchQueries.firstOrNull { it.isNotBlank() } ?: item.title,
+                                            true,
+                                        )
+                                    },
+                                    onOpenSuggestions = onOpenSuggestions,
+                                    onRetryClick = onRetrySuggestions,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .auroraCenteredMaxWidth(contentMaxWidthDp),
+                                )
+                            }
+                        } else if (!entrySuggestionsInOverflow) {
+                            item(key = "suggestions_button") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .auroraCenteredMaxWidth(contentMaxWidthDp)
+                                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                                        .background(
+                                            brush = Brush.linearGradient(
+                                                colors = if (colors.isDark) {
+                                                    listOf(
+                                                        Color.White.copy(alpha = 0.12f),
+                                                        Color.White.copy(alpha = 0.08f),
+                                                    )
+                                                } else {
+                                                    listOf(
+                                                        colors.accent.copy(alpha = 0.15f),
+                                                        colors.accent.copy(alpha = 0.10f),
+                                                    )
+                                                },
+                                            ),
+                                            shape = RoundedCornerShape(12.dp),
+                                        )
+                                        .auroraSpringClick(onClick = onOpenSuggestions)
+                                        .padding(vertical = 12.dp, horizontal = 16.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = stringResource(MR.strings.suggestions_similar_titles),
+                                        color = if (colors.isDark) Color.White else colors.accent,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp,
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -1119,7 +1229,7 @@ fun NovelScreenAuroraImpl(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .auroraCenteredMaxWidth(contentMaxWidthDp)
-                                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                                            .padding(horizontal = 16.dp, vertical = 2.dp),
                                     )
                                 }
                                 is NovelChapterDisplayRow.ChapterGroup -> {
@@ -1383,6 +1493,24 @@ fun NovelScreenAuroraImpl(
                                         },
                                     )
                                 }
+                                if (onEditNotesClicked != null) {
+                                    AuroraEntryDropdownMenuItem(
+                                        text = stringResource(MR.strings.action_notes),
+                                        onClick = {
+                                            onEditNotesClicked()
+                                            showMenu = false
+                                        },
+                                    )
+                                }
+                                if (onClickEditInfo != null) {
+                                    AuroraEntryDropdownMenuItem(
+                                        text = stringResource(MR.strings.action_edit_info),
+                                        onClick = {
+                                            onClickEditInfo()
+                                            showMenu = false
+                                        },
+                                    )
+                                }
                             } else {
                                 AuroraEntryDropdownMenuItem(
                                     text = stringResource(MR.strings.action_webview_refresh),
@@ -1414,6 +1542,15 @@ fun NovelScreenAuroraImpl(
                                         text = stringResource(MR.strings.action_notes),
                                         onClick = {
                                             onEditNotesClicked()
+                                            showMenu = false
+                                        },
+                                    )
+                                }
+                                if (onClickEditInfo != null) {
+                                    AuroraEntryDropdownMenuItem(
+                                        text = stringResource(MR.strings.action_edit_info),
+                                        onClick = {
+                                            onClickEditInfo()
                                             showMenu = false
                                         },
                                     )
@@ -1890,16 +2027,81 @@ private fun NovelAuroraChapterGroupCard(
 ) {
     val colors = AuroraTheme.colors
 
-    Card(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+    val shape = RoundedCornerShape(16.dp)
+    val cardModifier = if (!colors.isDark && !colors.isEInk) {
+        modifier
+            .drawBehind {
+                val radius = 16.dp.toPx()
+                val cornerRadiusPx = CornerRadius(radius, radius)
+
+                val neutralOffsetY = 3.dp.toPx()
+                val warmOffsetY = 5.dp.toPx()
+
+                val neutralInset = 1.dp.toPx()
+                val warmInset = 3.dp.toPx()
+
+                // 1. Нейтральная тень
+                drawRoundRect(
+                    color = Color.Black.copy(alpha = 0.035f),
+                    topLeft = Offset(x = neutralInset, y = neutralOffsetY),
+                    size = Size(width = size.width - neutralInset * 2, height = size.height),
+                    cornerRadius = cornerRadiusPx,
+                )
+
+                // 2. Акцентное свечение (под цвет темы)
+                drawRoundRect(
+                    color = colors.accent.copy(alpha = 0.025f),
+                    topLeft = Offset(x = warmInset, y = warmOffsetY),
+                    size = Size(width = size.width - warmInset * 2, height = size.height),
+                    cornerRadius = cornerRadiusPx,
+                )
+            }
+            .clip(shape)
+            .background(
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.78f),
+                        Color.White.copy(alpha = 0.68f),
+                        Color.White.copy(alpha = 0.60f),
+                    ),
+                ),
+                shape = shape,
+            )
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.75f),
+                        Color.White.copy(alpha = 0.28f),
+                        Color.White.copy(alpha = 0.12f),
+                    ),
+                ),
+                shape = shape,
+            )
+    } else {
+        val bgColors = resolveAuroraDetailCardBackgroundColors(colors)
+        val borderColors = resolveAuroraDetailCardBorderColors(colors)
+        val borderBrush = if (colors.isDark) {
+            auroraMenuRimLightBrush(colors)
+        } else {
+            Brush.linearGradient(colors = borderColors)
+        }
+        modifier
+            .clip(shape)
+            .background(brush = Brush.linearGradient(colors = bgColors))
+            .border(
+                width = 1.dp,
+                brush = borderBrush,
+                shape = shape,
+            )
+    }
+
+    Box(
+        modifier = cardModifier
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
             ),
-        colors = CardDefaults.cardColors(
-            containerColor = colors.surface.copy(alpha = 0.86f),
-        ),
     ) {
         Row(
             modifier = Modifier
@@ -1941,19 +2143,28 @@ private fun AuroraChapterListToggleButton(
     onClick: () -> Unit,
 ) {
     val colors = AuroraTheme.colors
+    val shape = RoundedCornerShape(16.dp)
 
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(shape)
             .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.12f),
-                        Color.White.copy(alpha = 0.08f),
-                    ),
+                brush = Brush.verticalGradient(
+                    colors = if (colors.isDark) {
+                        listOf(
+                            Color.White.copy(alpha = 0.12f),
+                            Color.White.copy(alpha = 0.08f),
+                        )
+                    } else {
+                        listOf(
+                            colors.surface.copy(alpha = 0.55f),
+                            colors.surface.copy(alpha = 0.30f),
+                        )
+                    },
                 ),
+                shape = shape,
             )
-            .clickable(onClick = onClick)
+            .auroraSpringClick(onClick = onClick)
             .padding(horizontal = 24.dp, vertical = 12.dp),
     ) {
         Text(

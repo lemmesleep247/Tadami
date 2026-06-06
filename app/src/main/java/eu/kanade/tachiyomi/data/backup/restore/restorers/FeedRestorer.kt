@@ -24,6 +24,7 @@ class FeedRestorer(
             existing.none { current ->
                 current.source == backup.source &&
                     current.sourceType == backup.sourceType &&
+                    current.listingType == backup.listingType &&
                     current.global == backup.global &&
                     current.savedSearchName == backup.savedSearchName &&
                     current.savedSearchQuery == backup.savedSearchQuery &&
@@ -57,7 +58,13 @@ class FeedRestorer(
                 } else {
                     null
                 }
-                db.feed_saved_searchQueries.insert(feed.source, sourceType.id, savedSearchId, feed.global)
+                db.feed_saved_searchQueries.insert(
+                    feed.source,
+                    sourceType.id,
+                    feed.listingType,
+                    savedSearchId,
+                    feed.global,
+                )
             }
         }
     }

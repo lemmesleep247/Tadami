@@ -2,10 +2,17 @@ package eu.kanade.tachiyomi.novelsource
 
 import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
 import eu.kanade.tachiyomi.novelsource.model.NovelsPage
+import eu.kanade.tachiyomi.novelsource.model.SNovel
 import rx.Observable
 import tachiyomi.core.common.util.lang.awaitSingle
 
 interface NovelCatalogueSource : NovelSource {
+
+    val supportsRelatedNovels: Boolean get() = false
+
+    suspend fun getRelatedNovels(novel: SNovel): List<SNovel> {
+        return emptyList()
+    }
 
     /**
      * An ISO 639-1 compliant language code (two letters in lower case).

@@ -67,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.components.EntryDownloadDropdownMenu
 import eu.kanade.presentation.entries.DownloadAction
@@ -78,6 +79,7 @@ import eu.kanade.presentation.entries.components.EntryBottomActionMenu
 import eu.kanade.presentation.entries.components.aurora.AuroraTitleHeroActionFab
 import eu.kanade.presentation.entries.components.aurora.AuroraZIndex
 import eu.kanade.presentation.entries.components.aurora.auroraPosterLongPress
+import eu.kanade.presentation.entries.components.aurora.auroraSpringClick
 import eu.kanade.presentation.entries.components.normalizeAuroraGlobalSearchQuery
 import eu.kanade.presentation.entries.components.resolveExternalMetadataCover
 import eu.kanade.presentation.entries.manga.components.ChapterDownloadAction
@@ -105,6 +107,8 @@ import eu.kanade.tachiyomi.source.manga.getNameForMangaInfo
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.ui.entries.manga.ChapterList
 import eu.kanade.tachiyomi.ui.entries.manga.MangaScreenModel
+import eu.kanade.tachiyomi.util.debugTitleCoverFlow
+import eu.kanade.tachiyomi.util.previewTitleCoverUrl
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -167,9 +171,17 @@ fun MangaScreenAuroraImpl(
     isAutoJumpToNextEnabled: Boolean,
     autoJumpToNextLabel: String,
     onToggleAutoJumpToNext: () -> Unit,
+    onClickEditInfo: (() -> Unit)? = null,
+    onRetrySuggestions: () -> Unit = {},
+    onOpenSuggestions: () -> Unit = {},
 ) {
     val manga = state.manga
-    val globalSearchQuery = remember(manga.title) { normalizeAuroraGlobalSearchQuery(manga.title) }
+    val sourcePreferences = remember { Injekt.get<SourcePreferences>() }
+    val uiPreferences = remember { Injekt.get<UiPreferences>() }
+    val entrySuggestionsEnabled by sourcePreferences.entrySuggestionsEnabled().collectAsState()
+    val entrySuggestionsExpandInline by uiPreferences.entrySuggestionsExpandInline().collectAsState()
+    val entrySuggestionsInOverflow by uiPreferences.entrySuggestionsInOverflow().collectAsState()
+    val globalSearchQuery = remember(manga.displayTitle) { normalizeAuroraGlobalSearchQuery(manga.displayTitle) }
     val chapters = state.chapterListItems
     val selectedChapters = remember(chapters) {
         chapters.filterIsInstance<ChapterList.Item>().filter { it.selected }
@@ -186,7 +198,6 @@ fun MangaScreenAuroraImpl(
     }
     val contentMaxWidthDp = auroraAdaptiveSpec.entryMaxWidthDp
     val useTwoPaneLayout = shouldUseMangaAuroraTwoPane(auroraAdaptiveSpec.deviceClass)
-    val uiPreferences = remember { Injekt.get<UiPreferences>() }
     val metadataSource: MetadataSource = remember { uiPreferences.metadataSource().get() }
     val resolvedCover = remember(
         manga,
@@ -205,6 +216,24 @@ fun MangaScreenAuroraImpl(
     }
     val refererUrl = remember(state.source) {
         (state.source as? HttpSource)?.baseUrl
+    }
+    LaunchedEffect(
+        manga.id,
+        state.isMetadataLoading,
+        state.metadataError,
+        resolvedCover.coverUrl,
+        resolvedCover.coverUrlFallback,
+    ) {
+        val debugMessage = "id=${manga.id} loading=${state.isMetadataLoading} " +
+            "error=${state.metadataError?.javaClass?.simpleName ?: "none"} " +
+            "base=${previewTitleCoverUrl(manga.thumbnailUrl)} " +
+            "resolved=${previewTitleCoverUrl(resolvedCover.coverUrl)} " +
+            "fallback=${previewTitleCoverUrl(resolvedCover.coverUrlFallback)} " +
+            "referer=${previewTitleCoverUrl(refererUrl)}"
+        debugTitleCoverFlow(
+            scope = "manga-screen",
+            message = debugMessage,
+        )
     }
     val chapterModels = remember(chapters) {
         chapters.mapNotNull { (it as? ChapterList.Item)?.chapter }
@@ -242,8 +271,8 @@ fun MangaScreenAuroraImpl(
         .auroraEntryTranslationSourceLanguages()
         .collectAsState()
     val auroraEntryTranslation = rememberAuroraEntryTranslation(
-        title = manga.title,
-        description = manga.description,
+        title = manga.displayTitle,
+        description = manga.displayDescription,
         sourceLanguage = state.source.lang,
         enabled = auroraEntryTranslationEnabled,
         allowedSourceFamilies = auroraEntryTranslationSourceLanguages,
@@ -431,12 +460,12 @@ fun MangaScreenAuroraImpl(
                                     hasProgress = detailsSnapshot.progress?.hasProgress == true,
                                     onContinueReading = onContinueReading,
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(if (colors.isDark) 8.dp else 16.dp))
                                 MangaStatsCard(
                                     detailsSnapshot = detailsSnapshot,
                                     modifier = Modifier.fillMaxWidth(),
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(if (colors.isDark) 8.dp else 16.dp))
                                 MangaInfoCard(
                                     manga = manga,
                                     translation = auroraEntryTranslation,
@@ -449,7 +478,7 @@ fun MangaScreenAuroraImpl(
                                     onToggleGenres = { genresExpanded = !genresExpanded },
                                     modifier = Modifier.fillMaxWidth(),
                                 )
-                                Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(if (colors.isDark) 12.dp else 16.dp))
                                 MangaActionCard(
                                     manga = manga,
                                     trackingCount = state.trackingCount,
@@ -578,7 +607,7 @@ fun MangaScreenAuroraImpl(
                                             onDownloadChapter = onDownloadChapter,
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                                .padding(horizontal = 16.dp, vertical = 4.dp),
                                         )
                                     }
                                 }
@@ -591,34 +620,17 @@ fun MangaScreenAuroraImpl(
                                                 .padding(16.dp),
                                             contentAlignment = Alignment.Center,
                                         ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(16.dp))
-                                                    .background(
-                                                        brush = Brush.linearGradient(
-                                                            colors = listOf(
-                                                                Color.White.copy(alpha = 0.12f),
-                                                                Color.White.copy(alpha = 0.08f),
-                                                            ),
-                                                        ),
+                                            AuroraChapterListToggleButton(
+                                                text = if (chaptersExpanded) {
+                                                    stringResource(AYMR.strings.action_show_less)
+                                                } else {
+                                                    stringResource(
+                                                        AYMR.strings.action_show_all_chapters,
+                                                        chapters.size,
                                                     )
-                                                    .clickable { chaptersExpanded = !chaptersExpanded }
-                                                    .padding(horizontal = 24.dp, vertical = 12.dp),
-                                            ) {
-                                                Text(
-                                                    text = if (chaptersExpanded) {
-                                                        stringResource(AYMR.strings.action_show_less)
-                                                    } else {
-                                                        stringResource(
-                                                            AYMR.strings.action_show_all_chapters,
-                                                            chapters.size,
-                                                        )
-                                                    },
-                                                    color = colors.accent,
-                                                    fontSize = 14.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                )
-                                            }
+                                                },
+                                                onClick = { chaptersExpanded = !chaptersExpanded },
+                                            )
                                         }
                                     }
                                 }
@@ -691,7 +703,7 @@ fun MangaScreenAuroraImpl(
                                     detailsSnapshot = detailsSnapshot,
                                     modifier = Modifier.fillMaxWidth(),
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(if (colors.isDark) 8.dp else 16.dp))
                                 MangaInfoCard(
                                     manga = manga,
                                     translation = auroraEntryTranslation,
@@ -703,7 +715,7 @@ fun MangaScreenAuroraImpl(
                                     modifier = Modifier.fillMaxWidth(),
                                 )
 
-                                Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(if (colors.isDark) 12.dp else 16.dp))
                                 MangaActionCard(
                                     manga = manga,
                                     trackingCount = state.trackingCount,
@@ -714,6 +726,62 @@ fun MangaScreenAuroraImpl(
                                     onShareClicked = onShareClicked,
                                     modifier = Modifier.fillMaxWidth(),
                                 )
+                            }
+                        }
+
+                        if (entrySuggestionsEnabled) {
+                            if (entrySuggestionsExpandInline) {
+                                item(key = "suggestions_row") {
+                                    eu.kanade.presentation.entries.components.aurora.AuroraSuggestionsRow(
+                                        state = state.suggestions,
+                                        onSuggestionClick = { item ->
+                                            onSearch(
+                                                item.searchQueries.firstOrNull { it.isNotBlank() } ?: item.title,
+                                                true,
+                                            )
+                                        },
+                                        onOpenSuggestions = onOpenSuggestions,
+                                        onRetryClick = onRetrySuggestions,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .auroraCenteredMaxWidth(contentMaxWidthDp),
+                                    )
+                                }
+                            } else if (!entrySuggestionsInOverflow) {
+                                item(key = "suggestions_button") {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .auroraCenteredMaxWidth(contentMaxWidthDp)
+                                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                                            .background(
+                                                brush = Brush.linearGradient(
+                                                    colors = if (colors.isDark) {
+                                                        listOf(
+                                                            Color.White.copy(alpha = 0.12f),
+                                                            Color.White.copy(alpha = 0.08f),
+                                                        )
+                                                    } else {
+                                                        listOf(
+                                                            colors.accent.copy(alpha = 0.15f),
+                                                            colors.accent.copy(alpha = 0.10f),
+                                                        )
+                                                    },
+                                                ),
+                                                shape = RoundedCornerShape(12.dp),
+                                            )
+                                            .auroraSpringClick(onClick = onOpenSuggestions)
+                                            .padding(vertical = 12.dp, horizontal = 16.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            text = stringResource(MR.strings.suggestions_similar_titles),
+                                            color = if (colors.isDark) Color.White else colors.accent,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 14.sp,
+                                        )
+                                    }
+                                }
                             }
                         }
 
@@ -816,7 +884,7 @@ fun MangaScreenAuroraImpl(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .auroraCenteredMaxWidth(contentMaxWidthDp)
-                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                        .padding(horizontal = 16.dp, vertical = 4.dp),
                                 )
                             }
                         }
@@ -831,31 +899,14 @@ fun MangaScreenAuroraImpl(
                                         .padding(16.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .background(
-                                                brush = Brush.linearGradient(
-                                                    colors = listOf(
-                                                        Color.White.copy(alpha = 0.12f),
-                                                        Color.White.copy(alpha = 0.08f),
-                                                    ),
-                                                ),
-                                            )
-                                            .clickable { chaptersExpanded = !chaptersExpanded }
-                                            .padding(horizontal = 24.dp, vertical = 12.dp),
-                                    ) {
-                                        Text(
-                                            text = if (chaptersExpanded) {
-                                                stringResource(AYMR.strings.action_show_less)
-                                            } else {
-                                                stringResource(AYMR.strings.action_show_all_chapters, chapters.size)
-                                            },
-                                            color = colors.accent,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                        )
-                                    }
+                                    AuroraChapterListToggleButton(
+                                        text = if (chaptersExpanded) {
+                                            stringResource(AYMR.strings.action_show_less)
+                                        } else {
+                                            stringResource(AYMR.strings.action_show_all_chapters, chapters.size)
+                                        },
+                                        onClick = { chaptersExpanded = !chaptersExpanded },
+                                    )
                                 }
                             }
                         }
@@ -995,7 +1046,9 @@ fun MangaScreenAuroraImpl(
                             hasShare = onShareClicked != null,
                             hasSettings = onSettingsClicked != null,
                             hasNotes = onEditNotesClicked != null,
+                            hasEditInfo = onClickEditInfo != null,
                             hasMigrate = onMigrateClicked != null,
+                            hasSuggestions = entrySuggestionsEnabled && entrySuggestionsInOverflow,
                         ).forEach { action ->
                             AuroraEntryDropdownMenuItem(
                                 text = when (action) {
@@ -1011,8 +1064,12 @@ fun MangaScreenAuroraImpl(
                                         stringResource(MR.strings.action_settings)
                                     AuroraMangaOverflowAction.Notes ->
                                         stringResource(MR.strings.action_notes)
+                                    AuroraMangaOverflowAction.EditInfo ->
+                                        stringResource(MR.strings.action_edit_info)
                                     AuroraMangaOverflowAction.Migrate ->
                                         stringResource(MR.strings.action_migrate)
+                                    AuroraMangaOverflowAction.Suggestions ->
+                                        stringResource(MR.strings.pref_entry_suggestions)
                                 },
                                 onClick = {
                                     when (action) {
@@ -1022,7 +1079,9 @@ fun MangaScreenAuroraImpl(
                                         AuroraMangaOverflowAction.Share -> onShareClicked!!()
                                         AuroraMangaOverflowAction.Settings -> onSettingsClicked!!()
                                         AuroraMangaOverflowAction.Notes -> onEditNotesClicked!!()
+                                        AuroraMangaOverflowAction.EditInfo -> onClickEditInfo!!()
                                         AuroraMangaOverflowAction.Migrate -> onMigrateClicked!!()
+                                        AuroraMangaOverflowAction.Suggestions -> onOpenSuggestions()
                                     }
                                     showMenu = false
                                 },
@@ -1129,7 +1188,9 @@ internal enum class AuroraMangaOverflowAction {
     Share,
     Settings,
     Notes,
+    EditInfo,
     Migrate,
+    Suggestions,
 }
 
 internal fun resolveMangaAuroraOverflowActions(
@@ -1137,7 +1198,9 @@ internal fun resolveMangaAuroraOverflowActions(
     hasShare: Boolean,
     hasSettings: Boolean,
     hasNotes: Boolean,
+    hasEditInfo: Boolean = false,
     hasMigrate: Boolean,
+    hasSuggestions: Boolean = false,
 ): List<AuroraMangaOverflowAction> {
     return buildList {
         add(AuroraMangaOverflowAction.Refresh)
@@ -1146,7 +1209,9 @@ internal fun resolveMangaAuroraOverflowActions(
         if (hasShare) add(AuroraMangaOverflowAction.Share)
         if (hasSettings) add(AuroraMangaOverflowAction.Settings)
         if (hasNotes) add(AuroraMangaOverflowAction.Notes)
+        if (hasEditInfo) add(AuroraMangaOverflowAction.EditInfo)
         if (hasMigrate) add(AuroraMangaOverflowAction.Migrate)
+        if (hasSuggestions) add(AuroraMangaOverflowAction.Suggestions)
     }
 }
 
@@ -1323,6 +1388,45 @@ private fun AuroraActionButton(
             contentDescription = contentDescription,
             tint = tint,
             modifier = Modifier.size(22.dp),
+        )
+    }
+}
+
+@Composable
+private fun AuroraChapterListToggleButton(
+    text: String,
+    onClick: () -> Unit,
+) {
+    val colors = AuroraTheme.colors
+    val shape = RoundedCornerShape(16.dp)
+
+    Box(
+        modifier = Modifier
+            .clip(shape)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = if (colors.isDark) {
+                        listOf(
+                            Color.White.copy(alpha = 0.12f),
+                            Color.White.copy(alpha = 0.08f),
+                        )
+                    } else {
+                        listOf(
+                            colors.surface.copy(alpha = 0.55f),
+                            colors.surface.copy(alpha = 0.30f),
+                        )
+                    },
+                ),
+                shape = shape,
+            )
+            .auroraSpringClick(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+    ) {
+        Text(
+            text = text,
+            color = colors.accent,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }

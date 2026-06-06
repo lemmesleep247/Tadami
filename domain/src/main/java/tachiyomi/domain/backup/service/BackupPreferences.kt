@@ -20,4 +20,6 @@ class BackupPreferences(
         key = Preference.appStateKey("cloud_backup_uri"),
         defaultValue = "",
     )
+
+    fun numberOfBackupsToKeep() = preferenceStore.getInt("number_of_backups_to_keep", 4)
 }

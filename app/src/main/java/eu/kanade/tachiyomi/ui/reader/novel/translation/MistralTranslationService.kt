@@ -6,10 +6,7 @@ import eu.kanade.tachiyomi.network.jsonMime
 import eu.kanade.tachiyomi.ui.reader.novel.setting.GeminiPromptMode
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -76,7 +73,7 @@ class MistralTranslationService(
             params.reasoningEffort?.let { effort ->
                 put("reasoning_effort", effort)
             }
-            put("max_tokens", computeTranslationMaxTokens(segments))
+            put("max_tokens", computeOpenAiStyleMaxTokens(segments))
             put("stream", false)
         }
 
@@ -132,7 +129,7 @@ class MistralTranslationService(
                             return null
                         }
 
-                    val candidateText = choice.extractAssistantContent().trim()
+                    val candidateText = choice.extractOpenAiStyleChoiceContent().trim()
                     if (candidateText.isBlank()) {
                         val finishReason = choice["finish_reason"].asStringOrNull()
                         if (!finishReason.isNullOrBlank()) {
@@ -258,113 +255,4 @@ private fun JsonObject.extractApiErrorMessage(): String? {
     }
 }
 
-private fun JsonObject.extractAssistantContent(): String {
-    val message = this["message"].asObjectOrNull()
-    message?.get("content")
-        .extractContentArrayTextCandidates()
-        .firstOrNull()
-        ?.let { return it }
-
-    val sources =
-        listOf(message?.get("content"), message?.get("text"), this["text"], this["output_text"], this["content"])
-    return sources.firstNotNullOfOrNull { it.extractTextCandidates(includeThinking = false).firstOrNull() }.orEmpty()
-}
-
-private fun JsonElement?.extractContentArrayTextCandidates(): List<String> {
-    val array = this as? JsonArray ?: return emptyList()
-    return array
-        .flatMap { entry ->
-            val obj = entry as? JsonObject ?: return@flatMap entry.extractTextCandidates(includeThinking = false)
-            if (obj["type"].asStringOrNull()?.equals("thinking", ignoreCase = true) == true) {
-                emptyList()
-            } else {
-                obj["text"].extractTextCandidates(includeThinking = false)
-            }
-        }
-        .distinct()
-}
-
-private fun JsonElement?.extractTextCandidates(includeThinking: Boolean): List<String> {
-    return when (this) {
-        is JsonPrimitive -> {
-            if (isString) {
-                content.trim().takeIf { it.isNotBlank() }?.let(::listOf).orEmpty()
-            } else {
-                emptyList()
-            }
-        }
-        is JsonArray -> flatMap { it.extractTextCandidates(includeThinking = includeThinking) }
-        is JsonObject -> {
-            val isThinking = this["type"].asStringOrNull()?.equals("thinking", ignoreCase = true) == true
-            if (isThinking && !includeThinking) return emptyList()
-            val direct = listOf("text", "content", "output_text")
-                .flatMap { key -> this[key].extractTextCandidates(includeThinking = includeThinking) }
-            val functionArgs = this["function"].asObjectOrNull()?.get("arguments")
-                .extractTextCandidates(includeThinking = includeThinking)
-            (direct + functionArgs).distinct()
-        }
-        else -> emptyList()
-    }
-}
-
-private fun JsonElement?.asObjectOrNull(): JsonObject? {
-    return this as? JsonObject
-}
-
-private fun JsonElement?.asArrayOrNull(): JsonArray? {
-    return this as? JsonArray
-}
-
-private fun JsonElement?.asStringOrNull(): String? {
-    val primitive = this as? JsonPrimitive ?: return null
-    return if (primitive.isString) primitive.content else null
-}
-
-private fun JsonElement?.asLooseStringOrNull(): String? {
-    val primitive = this as? JsonPrimitive ?: return null
-    return primitive.content.takeIf { it.isNotBlank() }
-}
-
-private val retryAfterSecondsRegex =
-    Regex("(?i)try\\s+again\\s+in\\s+([0-9]+(?:\\.[0-9]+)?)\\s*seconds?")
-
-private fun extractRetryAfterSeconds(raw: String): Double? {
-    val match = retryAfterSecondsRegex.find(raw) ?: return null
-    return match.groupValues.getOrNull(1)?.toDoubleOrNull()
-}
-
-private fun computeRateLimitDelayMs(
-    attempt: Int,
-    hintSeconds: Double?,
-): Long {
-    if (hintSeconds != null) {
-        val ms = ((hintSeconds + 0.3) * 1000.0).toLong()
-        return ms.coerceIn(1_200L, 120_000L)
-    }
-    return when (attempt) {
-        1 -> 2_000L
-        2 -> 5_000L
-        3 -> 15_000L
-        else -> 60_000L
-    }
-}
-
-private val xmlSegmentStartRegex =
-    Regex("(?i)<s\\s+i=['\"]\\d+['\"]>")
-private val xmlSegmentEndRegex =
-    Regex("(?i)</s>")
-
-private fun String.trimNonXmlTail(): String {
-    val source = trim()
-    val start = xmlSegmentStartRegex.find(source)?.range?.first ?: return source
-    val end = xmlSegmentEndRegex.findAll(source).lastOrNull()?.range?.last ?: return source
-    if (end < start) return source
-    return source.substring(start, end + 1).trim()
-}
-
 private const val MAX_ATTEMPTS = 3
-
-private fun computeTranslationMaxTokens(segments: List<String>): Int {
-    val estimated = segments.sumOf { (it.length / 2).coerceAtLeast(32) } + segments.size * 24
-    return estimated.coerceIn(4096, 8192)
-}
