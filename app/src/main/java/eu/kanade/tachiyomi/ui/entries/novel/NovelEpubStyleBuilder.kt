@@ -97,6 +97,7 @@ internal object NovelEpubStyleBuilder {
                 NovelReaderTheme.LIGHT -> "#FFFFFF"
                 NovelReaderTheme.DARK -> "#121212"
                 NovelReaderTheme.SYSTEM -> "#121212"
+                else -> "#121212"
             }
 
         val resolvedText = settings.textColor
@@ -105,6 +106,7 @@ internal object NovelEpubStyleBuilder {
                 NovelReaderTheme.LIGHT -> "#212121"
                 NovelReaderTheme.DARK -> "#EAEAEA"
                 NovelReaderTheme.SYSTEM -> "#EAEAEA"
+                else -> "#EAEAEA"
             }
 
         return ThemeColors(

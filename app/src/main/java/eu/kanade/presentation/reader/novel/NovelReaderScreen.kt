@@ -190,6 +190,7 @@ internal fun resolveNovelReaderBackdropColor(
         NovelReaderTheme.SYSTEM -> if (isSystemDark) Color(0xFF121212) else Color.White
         NovelReaderTheme.LIGHT -> Color.White
         NovelReaderTheme.DARK -> Color(0xFF121212)
+        else -> Color.White
     }
     val themeBackground = parseReaderColor(settings.backgroundColor)
         .takeIf { settings.backgroundColor?.isNotBlank() == true }
@@ -210,6 +211,7 @@ internal fun resolveNovelReaderBackdropColor(
                 ),
             )
         }
+        else -> themeBackground
     }
 }
 
@@ -620,6 +622,7 @@ fun NovelReaderScreen(
             NovelReaderTheme.SYSTEM -> MaterialTheme.colorScheme.background.luminance() < 0.5f
             NovelReaderTheme.DARK -> true
             NovelReaderTheme.LIGHT -> false
+            else -> MaterialTheme.colorScheme.background.luminance() < 0.5f
         }
     }
     val fallbackTextColor = if (isEInkMode) {

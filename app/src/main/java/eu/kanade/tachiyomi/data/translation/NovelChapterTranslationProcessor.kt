@@ -332,6 +332,7 @@ class NovelChapterTranslationProcessor(
                     onLog = onLog,
                 )
             }
+            else -> null
         }
     }
 
@@ -403,6 +404,7 @@ private fun NovelReaderSettings.translationPromptFamily(): NovelTranslationPromp
         NovelTranslationProvider.NVIDIA,
         NovelTranslationProvider.OLLAMA_CLOUD,
         -> resolveNovelTranslationPromptFamily(geminiTargetLang)
+        else -> resolveNovelTranslationPromptFamily(geminiTargetLang)
     }
 }
 
@@ -564,6 +566,7 @@ private fun NovelReaderSettings.hasConfiguredTranslationProvider(): Boolean {
                 ollamaCloudApiKey.isNotBlank() &&
                 ollamaCloudModel.isNotBlank()
         }
+        else -> false
     }
 }
 
@@ -664,6 +667,7 @@ private fun NovelReaderSettings.translationRequestConfigLog(): String {
             "baseUrl=${params.baseUrl.trim()}, temp=${params.temperature.toLogFloat()}, " +
                 "topP=${params.topP.toLogFloat()}, think=$reasoning, stream=false"
         }
+        else -> "provider=unknown"
     }
     return "$common, $sampling"
 }

@@ -584,6 +584,7 @@ class NovelReaderScreenModel(
             NovelTranslationProvider.MISTRAL -> refreshMistralModels()
             NovelTranslationProvider.NVIDIA -> refreshNvidiaModels()
             NovelTranslationProvider.OLLAMA_CLOUD -> refreshOllamaCloudModels()
+            else -> Unit
         }
     }
     fun loadFullChapterOrderList() {
@@ -3488,6 +3489,7 @@ class NovelReaderScreenModel(
             NovelTranslationProvider.NVIDIA,
             NovelTranslationProvider.OLLAMA_CLOUD,
             -> resolveNovelTranslationPromptFamily(geminiTargetLang)
+            else -> resolveNovelTranslationPromptFamily(geminiTargetLang)
         }
     }
 
@@ -3676,6 +3678,7 @@ class NovelReaderScreenModel(
                 "baseUrl=${params.baseUrl.trim()}, temp=${params.temperature.toLogFloat()}, " +
                     "topP=${params.topP.toLogFloat()}, think=$reasoning, stream=false"
             }
+            else -> "provider=unknown"
         }
         return "$common, $sampling"
     }
@@ -3735,6 +3738,7 @@ class NovelReaderScreenModel(
                     onLog = onLog,
                 )
             }
+            else -> null
         }
     }
     private fun NovelReaderSettings.hasConfiguredTranslationProvider(): Boolean {
@@ -3768,6 +3772,7 @@ class NovelReaderScreenModel(
                     ollamaCloudApiKey.isNotBlank() &&
                     ollamaCloudModel.isNotBlank()
             }
+            else -> false
         }
     }
     private fun NovelReaderSettings.translationConcurrencyLimit(): Int {
@@ -4837,6 +4842,7 @@ internal fun normalizeHtml(
         NovelReaderTheme.SYSTEM -> uy.kohesive.injekt.Injekt.get<android.app.Application>().isNightMode()
         NovelReaderTheme.DARK -> true
         NovelReaderTheme.LIGHT -> false
+        else -> uy.kohesive.injekt.Injekt.get<android.app.Application>().isNightMode()
     }
     val background = if (isDarkTheme) "#121212" else "#FFFFFF"
     val textColor = if (isDarkTheme) "#EDEDED" else "#1A1A1A"
