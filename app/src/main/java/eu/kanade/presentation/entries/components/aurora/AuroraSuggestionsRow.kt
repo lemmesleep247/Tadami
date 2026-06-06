@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,12 +22,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -72,129 +68,104 @@ fun AuroraSuggestionsRow(
 
     val colors = AuroraTheme.colors
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(
-                            color = if (colors.isDark) {
-                                Color.White.copy(alpha = 0.08f)
-                            } else {
-                                colors.accent
-                            },
-                            shape = CircleShape,
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = if (colors.isDark) colors.accent else Color.White,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
+    val scrimBrush = if (!colors.isDark) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color.White.copy(alpha = 0.08f),
+                Color.White.copy(alpha = 0.03f),
+                Color.Transparent,
+            ),
+        )
+    } else {
+        null
+    }
 
-                Text(
-                    text = stringResource(MR.strings.suggestions_similar_titles),
-                    color = colors.textPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(
+                if (scrimBrush != null) Modifier.background(scrimBrush) else Modifier,
+            ),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            AuroraCoverSectionHeader(
+                title = stringResource(MR.strings.suggestions_similar_titles),
+                icon = Icons.Default.AutoAwesome,
+                showChevron = true,
+                onChevronClick = onOpenSuggestions,
+                trailingContent = {
+                    if (state is SuggestionState.Error) {
+                        Text(
+                            text = stringResource(MR.strings.action_retry),
+                            color = colors.accent,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable(onClick = onRetryClick)
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .background(
+                                    if (colors.isDark) {
+                                        Color.White.copy(alpha = 0.1f)
+                                    } else {
+                                        colors.accent.copy(alpha = 0.15f)
+                                    },
+                                ),
+                        )
+                    }
+                },
+            )
+
+            when (state) {
+                is SuggestionState.Loading -> AuroraSuggestionsShimmer()
+                is SuggestionState.Success -> AuroraSuggestionsContent(
+                    items = state.items,
+                    onSuggestionClick = onSuggestionClick,
                 )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (state is SuggestionState.Error) {
-                    Text(
-                        text = stringResource(MR.strings.action_retry),
-                        color = colors.accent,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
+                is SuggestionState.Empty -> {
+                    Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable(onClick = onRetryClick)
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                             .background(
                                 if (colors.isDark) {
-                                    Color.White.copy(alpha = 0.1f)
+                                    Color.White.copy(alpha = 0.05f)
                                 } else {
-                                    colors.accent.copy(alpha = 0.15f)
+                                    Color.Black.copy(
+                                        alpha = 0.05f,
+                                    )
                                 },
-                            ),
-                    )
-                }
-                val buttonModifier = Modifier
-                    .auroraSpringClick(onClick = onOpenSuggestions)
-                    .padding(4.dp)
-                Box(
-                    modifier = buttonModifier,
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = stringResource(MR.strings.action_open_suggestions),
-                        tint = colors.accent,
-                    )
-                }
-            }
-        }
-
-        when (state) {
-            is SuggestionState.Loading -> AuroraSuggestionsShimmer()
-            is SuggestionState.Success -> AuroraSuggestionsContent(
-                items = state.items,
-                onSuggestionClick = onSuggestionClick,
-            )
-            is SuggestionState.Empty -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .background(
-                            if (colors.isDark) {
-                                Color.White.copy(
-                                    alpha = 0.05f,
-                                )
-                            } else {
-                                colors.textSecondary.copy(alpha = 0.08f)
-                            },
-                            RoundedCornerShape(8.dp),
+                                RoundedCornerShape(8.dp),
+                            )
+                            .padding(12.dp),
+                    ) {
+                        Text(
+                            text = state.message ?: stringResource(MR.strings.suggestions_empty_state),
+                            color = if (colors.isDark) Color.White.copy(alpha = 0.6f) else colors.textSecondary,
+                            fontSize = 13.sp,
                         )
-                        .padding(12.dp),
-                ) {
-                    Text(
-                        text = state.message ?: stringResource(MR.strings.suggestions_empty_state),
-                        color = if (colors.isDark) Color.White.copy(alpha = 0.6f) else colors.textSecondary,
-                        fontSize = 13.sp,
-                    )
+                    }
                 }
-            }
-            is SuggestionState.Error -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .background(Color.Red.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
-                        .padding(12.dp),
-                ) {
-                    Text(
-                        text = state.message,
-                        color = if (colors.isDark) Color.White.copy(alpha = 0.8f) else colors.textPrimary,
-                        fontSize = 13.sp,
-                    )
+                is SuggestionState.Error -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .background(Color.Red.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                            .padding(12.dp),
+                    ) {
+                        Text(
+                            text = state.message,
+                            color = if (colors.isDark) Color.White.copy(alpha = 0.8f) else colors.textPrimary,
+                            fontSize = 13.sp,
+                        )
+                    }
                 }
+                else -> Unit
             }
-            else -> Unit
-        }
 
-        Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(4.dp))
+        }
     }
 }
 

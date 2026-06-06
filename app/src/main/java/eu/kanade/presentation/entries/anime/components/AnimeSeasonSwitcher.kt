@@ -2,7 +2,6 @@ package eu.kanade.presentation.entries.anime.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -23,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import aniyomi.domain.anime.SeasonAnime
+import eu.kanade.presentation.entries.components.aurora.auroraSpringClick
 import eu.kanade.presentation.theme.AuroraTheme
 
 data class AnimeSeasonSwitcherItem(
@@ -113,14 +113,14 @@ fun AnimeSeasonSwitcherAurora(
 
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(100.dp))
                     .background(brush = Brush.linearGradient(colors = currentBgColors))
                     .border(
                         width = 1.dp,
                         color = currentBorderColor,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(100.dp),
                     )
-                    .clickable { onSeasonClicked(item.seasonAnime) }
+                    .auroraSpringClick { onSeasonClicked(item.seasonAnime) }
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 Text(

@@ -718,6 +718,17 @@ fun AnimeScreenAuroraImpl(
                                 }
 
                                 item {
+                                    EpisodesHeader(
+                                        itemCount = if (state.anime.fetchType == FetchType.Seasons) {
+                                            seasons.size
+                                        } else {
+                                            filteredEpisodes.size
+                                        },
+                                        fetchType = state.anime.fetchType,
+                                    )
+                                }
+
+                                item {
                                     if (seasonSwitcherItems.size > 1) {
                                         AnimeSeasonSwitcherAurora(
                                             items = seasonSwitcherItems,
@@ -740,17 +751,6 @@ fun AnimeScreenAuroraImpl(
                                                 .padding(horizontal = 16.dp, vertical = 6.dp),
                                         )
                                     }
-                                }
-
-                                item {
-                                    EpisodesHeader(
-                                        itemCount = if (state.anime.fetchType == FetchType.Seasons) {
-                                            seasons.size
-                                        } else {
-                                            filteredEpisodes.size
-                                        },
-                                        fetchType = state.anime.fetchType,
-                                    )
                                 }
 
                                 if (state.anime.fetchType == FetchType.Seasons) {
@@ -987,37 +987,6 @@ fun AnimeScreenAuroraImpl(
                             }
                         }
 
-                        item(
-                            key = "anime-aurora-seasons-switcher",
-                            contentType = "anime-aurora-seasons-switcher",
-                        ) {
-                            if (seasonSwitcherItems.size > 1) {
-                                AnimeSeasonSwitcherAurora(
-                                    items = seasonSwitcherItems,
-                                    onSeasonClicked = { onSeasonClicked?.invoke(it) },
-                                    modifier = Modifier
-                                        .auroraCenteredMaxWidth(contentMaxWidthDp)
-                                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                                )
-                            }
-                        }
-
-                        item(
-                            key = "anime-aurora-virtual-seasons-switcher",
-                            contentType = "anime-aurora-virtual-seasons-switcher",
-                        ) {
-                            if (distinctVirtualSeasons.size > 1) {
-                                VirtualSeasonSwitcherAurora(
-                                    seasons = distinctVirtualSeasons,
-                                    selectedSeason = selectedVirtualSeason,
-                                    onSeasonClicked = { selectedVirtualSeason = it },
-                                    modifier = Modifier
-                                        .auroraCenteredMaxWidth(contentMaxWidthDp)
-                                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                                )
-                            }
-                        }
-
                         if (entrySuggestionsEnabled) {
                             if (entrySuggestionsExpandInline) {
                                 item(key = "suggestions_row") {
@@ -1088,6 +1057,37 @@ fun AnimeScreenAuroraImpl(
                                 fetchType = state.anime.fetchType,
                                 modifier = Modifier.auroraCenteredMaxWidth(contentMaxWidthDp),
                             )
+                        }
+
+                        item(
+                            key = "anime-aurora-seasons-switcher",
+                            contentType = "anime-aurora-seasons-switcher",
+                        ) {
+                            if (seasonSwitcherItems.size > 1) {
+                                AnimeSeasonSwitcherAurora(
+                                    items = seasonSwitcherItems,
+                                    onSeasonClicked = { onSeasonClicked?.invoke(it) },
+                                    modifier = Modifier
+                                        .auroraCenteredMaxWidth(contentMaxWidthDp)
+                                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                                )
+                            }
+                        }
+
+                        item(
+                            key = "anime-aurora-virtual-seasons-switcher",
+                            contentType = "anime-aurora-virtual-seasons-switcher",
+                        ) {
+                            if (distinctVirtualSeasons.size > 1) {
+                                VirtualSeasonSwitcherAurora(
+                                    seasons = distinctVirtualSeasons,
+                                    selectedSeason = selectedVirtualSeason,
+                                    onSeasonClicked = { selectedVirtualSeason = it },
+                                    modifier = Modifier
+                                        .auroraCenteredMaxWidth(contentMaxWidthDp)
+                                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                                )
+                            }
                         }
 
                         if (state.anime.fetchType == FetchType.Seasons) {
@@ -1831,14 +1831,14 @@ fun VirtualSeasonSwitcherAurora(
 
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(100.dp))
                     .background(brush = Brush.linearGradient(colors = currentBgColors))
                     .border(
                         width = 1.dp,
                         color = currentBorderColor,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(100.dp),
                     )
-                    .clickable { onSeasonClicked(season) }
+                    .auroraSpringClick { onSeasonClicked(season) }
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 Text(
