@@ -97,8 +97,14 @@ internal object MangaExtensionLoader {
             }
         }
 
+        val privateExtensionDir = getPrivateExtensionDir(context)
+        if (!privateExtensionDir.exists() && !privateExtensionDir.mkdirs()) {
+            logcat(LogPriority.ERROR) { "Failed to create private extension directory." }
+            return false
+        }
+
         val target = File(
-            getPrivateExtensionDir(context),
+            privateExtensionDir,
             "${extension.packageName}.$PRIVATE_EXTENSION_EXTENSION",
         )
         return try {

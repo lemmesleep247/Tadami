@@ -308,12 +308,12 @@
         <service
             android:name="eu.kanade.tachiyomi.extension.manga.util.MangaExtensionInstallService"
             android:exported="false"
-            android:foregroundServiceType="shortService" />
+            android:foregroundServiceType="dataSync" />
 
         <service
             android:name="eu.kanade.tachiyomi.extension.anime.util.AnimeExtensionInstallService"
             android:exported="false"
-            android:foregroundServiceType="shortService" />
+            android:foregroundServiceType="dataSync" />
 
         <service
             android:name="eu.kanade.tachiyomi.ui.reader.novel.tts.NovelTtsPlaybackService"
