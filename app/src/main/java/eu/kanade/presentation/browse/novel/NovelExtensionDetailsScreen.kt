@@ -181,7 +181,7 @@ private fun DetailsHeader(
                 .clickable {
                     val debugInfo = buildString {
                         append("Plugin name: ${extension.name} (lang: ${extension.lang}; id: ${extension.id})\n")
-                        append("Version: ${extension.version}\n")
+                        append("Version: ${extension.versionName} (${extension.versionCode})\n")
                         append("Site: ${extension.site}\n")
                         append("Repo: ${extension.repoUrl}\n")
                         append("Has settings: ${extension.hasSettings}\n")
@@ -214,7 +214,7 @@ private fun DetailsHeader(
         ) {
             InfoText(
                 modifier = Modifier.weight(1f),
-                primaryText = extension.version.toString(),
+                primaryText = extension.versionName,
                 secondaryText = stringResource(MR.strings.ext_info_version),
             )
             InfoText(

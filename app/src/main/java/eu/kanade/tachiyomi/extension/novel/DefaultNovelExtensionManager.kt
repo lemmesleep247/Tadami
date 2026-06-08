@@ -94,10 +94,10 @@ class DefaultNovelExtensionManager(
     private fun updatePendingUpdates() {
         val bestAvailableByIdVersion = availablePlugins.value
             .groupBy { it.id }
-            .mapValues { (_, plugins) -> plugins.maxByOrNull { it.version } }
+            .mapValues { (_, plugins) -> plugins.maxByOrNull { it.versionCode } }
         updates.value = installedPlugins.value.filter { installed ->
             val best = bestAvailableByIdVersion[installed.id] ?: return@filter false
-            best.version > installed.version
+            best.versionCode > installed.versionCode
         }
     }
 }

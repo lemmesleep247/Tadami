@@ -71,8 +71,11 @@ class NovelExtensionsScreenModel(
             ) { enabledLanguages, input ->
                 val variantsMap = input.available.groupBy { it.id }
                 allPluginVariants.value = variantsMap
+                val repoCounts = variantsMap.mapValues { (_, plugins) ->
+                    plugins.map { it.repoUrl }.distinct().size
+                }
                 val available = variantsMap.mapNotNull { (_, plugins) ->
-                    plugins.maxByOrNull { it.version }
+                    plugins.maxByOrNull { it.versionCode }
                 }
                 availablePlugins.value = available
                 val installedSettingsPluginIds = input.installedSources
@@ -112,6 +115,7 @@ class NovelExtensionsScreenModel(
                                 status = NovelExtensionItem.Status.UpdateAvailable,
                                 installStep = input.downloads[plugin.id] ?: InstallStep.Idle,
                                 hasSettings = plugin.hasSettings || plugin.id in installedSettingsPluginIds,
+                                repoSourceCount = repoCounts[plugin.id] ?: 1,
                             ),
                         )
                     }
@@ -122,6 +126,7 @@ class NovelExtensionsScreenModel(
                                 status = NovelExtensionItem.Status.Installed,
                                 installStep = input.downloads[plugin.id] ?: InstallStep.Idle,
                                 hasSettings = plugin.hasSettings || plugin.id in installedSettingsPluginIds,
+                                repoSourceCount = repoCounts[plugin.id] ?: 1,
                             ),
                         )
                     }
@@ -132,6 +137,7 @@ class NovelExtensionsScreenModel(
                                 status = NovelExtensionItem.Status.Available,
                                 installStep = input.downloads[plugin.id] ?: InstallStep.Idle,
                                 hasSettings = plugin.hasSettings,
+                                repoSourceCount = repoCounts[plugin.id] ?: 1,
                             ),
                         )
                     }
@@ -194,7 +200,7 @@ class NovelExtensionsScreenModel(
                 mutableState.update {
                     it.copy(
                         repoPickerPluginId = plugin.id,
-                        repoPickerOptions = variants.sortedByDescending { v -> v.version },
+                        repoPickerOptions = variants.sortedByDescending { v -> v.versionCode },
                     )
                 }
             } else {
@@ -228,7 +234,7 @@ class NovelExtensionsScreenModel(
                 mutableState.update {
                     it.copy(
                         repoPickerPluginId = plugin.id,
-                        repoPickerOptions = variants.sortedByDescending { v -> v.version },
+                        repoPickerOptions = variants.sortedByDescending { v -> v.versionCode },
                     )
                 }
             } else {
@@ -312,6 +318,7 @@ data class NovelExtensionItem(
     val status: Status,
     val installStep: InstallStep,
     val hasSettings: Boolean,
+    val repoSourceCount: Int = 1,
 ) {
     sealed interface Status {
         data object UpdateAvailable : Status

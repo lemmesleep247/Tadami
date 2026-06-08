@@ -386,9 +386,19 @@ private fun NovelExtensionItemRow(
                 )
                 Row(modifier = Modifier.padding(start = 8.dp)) {
                     Text(
-                        text = "v${plugin.version}",
+                        text = "v${plugin.versionName}",
                         style = MaterialTheme.typography.bodySmall,
                     )
+                }
+                plugin.repoDisplayName(item.repoSourceCount)?.let { repoName ->
+                    Row(modifier = Modifier.padding(start = 8.dp)) {
+                        Text(
+                            text = "· $repoName",
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
 
@@ -408,4 +418,59 @@ private fun NovelExtensionItemRow(
             }
         }
     }
+}
+
+private fun NovelPlugin.repoDisplayName(repoSourceCount: Int): String? {
+    if (this is NovelPlugin.Available && repoSourceCount > 1) {
+        return "$repoSourceCount repos"
+    }
+
+    val rawName = when (this) {
+        is NovelPlugin.Available -> repoName.ifBlank { repoUrl.shortRepoName() }
+        is NovelPlugin.Installed -> repoName?.takeIf { it.isNotBlank() } ?: repoUrl.shortRepoName()
+    }
+
+    return rawName.oneWordRepoName()
+}
+
+private fun String.shortRepoName(): String {
+    val withoutScheme = substringAfter("://", this)
+    val host = withoutScheme.substringBefore('/').removePrefix("www.")
+    if (host.equals("github.com", ignoreCase = true) || host.equals("raw.githubusercontent.com", ignoreCase = true)) {
+        val owner = withoutScheme.substringAfter('/', "").substringBefore('/')
+        if (owner.isNotBlank()) return owner
+    }
+    return host.ifBlank { this }
+}
+
+private fun String.oneWordRepoName(maxLength: Int = 14): String {
+    val commonWords = setOf(
+        "novel",
+        "anime",
+        "manga",
+        "extension",
+        "extensions",
+        "plugin",
+        "plugins",
+        "repo",
+        "repos",
+        "repository",
+        "repositories",
+        "source",
+        "sources",
+    )
+    val normalized = trim()
+        .removePrefix("http://")
+        .removePrefix("https://")
+        .substringBefore('/')
+        .removePrefix("www.")
+        .replace('-', ' ')
+        .replace('_', ' ')
+        .replace('.', ' ')
+    val word = normalized
+        .split(' ')
+        .firstOrNull { it.isNotBlank() && it.lowercase() !in commonWords }
+        ?: trim()
+
+    return if (word.length <= maxLength) word else word.take(maxLength - 1).trimEnd() + "…"
 }
