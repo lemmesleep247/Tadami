@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.data.backup.restore.BackupRestorer
 import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import eu.kanade.tachiyomi.data.sync.service.GoogleDriveSyncService
 import eu.kanade.tachiyomi.util.system.createFileInCacheDir
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.protobuf.ProtoBuf
@@ -54,7 +55,10 @@ class SyncManager(
     /**
      * Syncs data with the configured sync service.
      */
-    suspend fun syncData() = syncMutex.withLock {
+    suspend fun syncData(
+        showUserNotification: Boolean = true,
+        rethrowErrors: Boolean = false,
+    ) = syncMutex.withLock {
         logcat { "Starting sync" }
 
         // Handle sync based on the selected service.
@@ -64,7 +68,12 @@ class SyncManager(
             }
             SyncService.NONE -> {
                 logcat { "No sync service configured" }
-                notifier.showSyncError("No sync service configured")
+                if (showUserNotification) {
+                    notifier.showSyncError("No sync service configured")
+                }
+                if (rethrowErrors) {
+                    throw IllegalStateException("No sync service configured")
+                }
                 return@withLock
             }
         }
@@ -72,7 +81,12 @@ class SyncManager(
         try {
             val localBackup = createLocalBackup()
             if (localBackup == null) {
-                notifier.showSyncError("Failed to create local backup for sync")
+                if (showUserNotification) {
+                    notifier.showSyncError("Failed to create local backup for sync")
+                }
+                if (rethrowErrors) {
+                    throw IllegalStateException("Failed to create local backup for sync")
+                }
                 return@withLock
             }
 
@@ -85,7 +99,12 @@ class SyncManager(
 
             if (syncedBackup == null) {
                 logcat { "Sync failed - skipping restore" }
-                notifier.showSyncError("Sync failed. Check your connection and try again.")
+                if (showUserNotification) {
+                    notifier.showSyncError("Sync failed. Check your connection and try again.")
+                }
+                if (rethrowErrors) {
+                    throw Exception("Sync failed. Check your connection and try again.")
+                }
                 return@withLock
             }
 
@@ -97,10 +116,20 @@ class SyncManager(
 
             // Update sync timestamp.
             syncPreferences.lastSyncTimestamp().set(Date().time)
-            notifier.showSyncSuccess("Sync completed successfully")
+            if (showUserNotification) {
+                notifier.showSyncSuccess("Sync completed successfully")
+            }
+        } catch (e: CancellationException) {
+            logcat { "Sync was cancelled" }
+            throw e
         } catch (e: Exception) {
             this.logcat(LogPriority.ERROR, e) { "Sync error" }
-            notifier.showSyncError("Sync error: ${e.message}")
+            if (showUserNotification) {
+                notifier.showSyncError("Sync error: ${e.message}")
+            }
+            if (rethrowErrors) {
+                throw e
+            }
         }
     }
 
