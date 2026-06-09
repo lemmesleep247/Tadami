@@ -20,15 +20,15 @@ internal object OnyxGoldColorScheme : BaseColorScheme() {
         onPrimaryContainer = Color(0xFFFFE8B3),
         inversePrimary = Color(0xFF8E6500),
 
-        secondary = Color(0xFFE8C77A),
+        secondary = Color(0xFFC49A3A),
         onSecondary = Color(0xFF211700),
         secondaryContainer = Color(0xFF3C2D0C),
         onSecondaryContainer = Color(0xFFFFE6A8),
 
-        tertiary = Color(0xFFFF8F8F),
-        onTertiary = Color(0xFF360006),
-        tertiaryContainer = Color(0xFF6D1D22),
-        onTertiaryContainer = Color(0xFFFFDAD8),
+        tertiary = Color(0xFFFFE0A3),
+        onTertiary = Color(0xFF362100),
+        tertiaryContainer = Color(0xFF523D14),
+        onTertiaryContainer = Color(0xFFFFE8C8),
 
         background = Color(0xFF060607),
         onBackground = Color(0xFFF4E9D0),
@@ -66,15 +66,15 @@ internal object OnyxGoldColorScheme : BaseColorScheme() {
         onPrimaryContainer = Color(0xFF271900),
         inversePrimary = Color(0xFFFFD36E),
 
-        secondary = Color(0xFF6F5A24),
+        secondary = Color(0xFF7C5824),
         onSecondary = Color(0xFFFFFFFF),
         secondaryContainer = Color(0xFFF7DEA0),
         onSecondaryContainer = Color(0xFF241A03),
 
-        tertiary = Color(0xFF92434A),
+        tertiary = Color(0xFF7A6533),
         onTertiary = Color(0xFFFFFFFF),
-        tertiaryContainer = Color(0xFFFFDADB),
-        onTertiaryContainer = Color(0xFF3B0710),
+        tertiaryContainer = Color(0xFFFFE8C8),
+        onTertiaryContainer = Color(0xFF261900),
 
         background = Color(0xFFFFFBF3),
         onBackground = Color(0xFF211A10),

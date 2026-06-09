@@ -20,15 +20,15 @@ internal object NebulaTideColorScheme : BaseColorScheme() {
         onPrimaryContainer = Color(0xFFB8F8FF),
         inversePrimary = Color(0xFF007586),
 
-        secondary = Color(0xFFB39BFF),
+        secondary = Color(0xFF8F7CFF),
         onSecondary = Color(0xFF21005D),
         secondaryContainer = Color(0xFF49328F),
         onSecondaryContainer = Color(0xFFE9DDFF),
 
-        tertiary = Color(0xFFA7FF6E),
-        onTertiary = Color(0xFF113800),
-        tertiaryContainer = Color(0xFF2D5B12),
-        onTertiaryContainer = Color(0xFFD8FFC1),
+        tertiary = Color(0xFF7DF7E8),
+        onTertiary = Color(0xFF003832),
+        tertiaryContainer = Color(0xFF005150),
+        onTertiaryContainer = Color(0xFFA8F8F0),
 
         background = Color(0xFF030812),
         onBackground = Color(0xFFEAF2FF),
@@ -66,15 +66,15 @@ internal object NebulaTideColorScheme : BaseColorScheme() {
         onPrimaryContainer = Color(0xFF001F26),
         inversePrimary = Color(0xFF46F4FF),
 
-        secondary = Color(0xFF6250B5),
+        secondary = Color(0xFF5A41B5),
         onSecondary = Color(0xFFFFFFFF),
         secondaryContainer = Color(0xFFE9DDFF),
         onSecondaryContainer = Color(0xFF1D0061),
 
-        tertiary = Color(0xFF3D6F19),
+        tertiary = Color(0xFF007070),
         onTertiary = Color(0xFFFFFFFF),
-        tertiaryContainer = Color(0xFFD8FFC1),
-        onTertiaryContainer = Color(0xFF0B2100),
+        tertiaryContainer = Color(0xFFA8F8F0),
+        onTertiaryContainer = Color(0xFF002020),
 
         background = Color(0xFFF6FAFF),
         onBackground = Color(0xFF182334),

@@ -654,6 +654,7 @@ private fun HomeHubProfileHeaderCanvas(
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
+                                .clipToBounds()
                                 .clickable(onClick = onAvatarClick),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -661,7 +662,7 @@ private fun HomeHubProfileHeaderCanvas(
                                 .fillMaxSize()
                                 .then(
                                     if (avatarFrameStyleKey != "none") {
-                                        Modifier.padding(2.dp)
+                                        Modifier.padding(3.dp)
                                     } else {
                                         Modifier
                                     },

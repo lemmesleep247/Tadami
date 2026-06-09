@@ -20,15 +20,15 @@ internal object SakuraNoirColorScheme : BaseColorScheme() {
         onPrimaryContainer = Color(0xFFFFD8E8),
         inversePrimary = Color(0xFFAA2B66),
 
-        secondary = Color(0xFFD9A8FF),
+        secondary = Color(0xFFC774FF),
         onSecondary = Color(0xFF280045),
         secondaryContainer = Color(0xFF51305F),
         onSecondaryContainer = Color(0xFFF4DAFF),
 
-        tertiary = Color(0xFF6EF2C2),
-        onTertiary = Color(0xFF003826),
-        tertiaryContainer = Color(0xFF0B5A44),
-        onTertiaryContainer = Color(0xFFA8FDDC),
+        tertiary = Color(0xFFFFB3D1),
+        onTertiary = Color(0xFF360022),
+        tertiaryContainer = Color(0xFF601B3A),
+        onTertiaryContainer = Color(0xFFFFD8E8),
 
         background = Color(0xFF09050A),
         onBackground = Color(0xFFF8E8F0),
@@ -66,15 +66,15 @@ internal object SakuraNoirColorScheme : BaseColorScheme() {
         onPrimaryContainer = Color(0xFF3E0020),
         inversePrimary = Color(0xFFFF78B7),
 
-        secondary = Color(0xFF6F4186),
+        secondary = Color(0xFF8A47A8),
         onSecondary = Color(0xFFFFFFFF),
         secondaryContainer = Color(0xFFF4DAFF),
         onSecondaryContainer = Color(0xFF280045),
 
-        tertiary = Color(0xFF00785A),
+        tertiary = Color(0xFFAA3D72),
         onTertiary = Color(0xFFFFFFFF),
-        tertiaryContainer = Color(0xFFA8FDDC),
-        onTertiaryContainer = Color(0xFF002116),
+        tertiaryContainer = Color(0xFFFFD8E8),
+        onTertiaryContainer = Color(0xFF3E0020),
 
         background = Color(0xFFFFF7FA),
         onBackground = Color(0xFF27161F),
