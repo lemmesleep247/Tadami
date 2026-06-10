@@ -151,6 +151,7 @@ fun MangaScreenAuroraImpl(
     onRefresh: () -> Unit,
     onContinueReading: () -> Unit,
     onSearch: (query: String, global: Boolean) -> Unit,
+    onSuggestionClick: (eu.kanade.tachiyomi.data.suggestions.SuggestionItem) -> Unit,
     onCoverClicked: () -> Unit,
     onPosterLongClicked: (() -> Unit)? = onCoverClicked,
     onShareClicked: (() -> Unit)?,
@@ -734,12 +735,7 @@ fun MangaScreenAuroraImpl(
                                 item(key = "suggestions_row") {
                                     eu.kanade.presentation.entries.components.aurora.AuroraSuggestionsRow(
                                         state = state.suggestions,
-                                        onSuggestionClick = { item ->
-                                            onSearch(
-                                                item.searchQueries.firstOrNull { it.isNotBlank() } ?: item.title,
-                                                true,
-                                            )
-                                        },
+                                        onSuggestionClick = onSuggestionClick,
                                         onOpenSuggestions = onOpenSuggestions,
                                         onRetryClick = onRetrySuggestions,
                                         modifier = Modifier

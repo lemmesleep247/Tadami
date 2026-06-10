@@ -27,6 +27,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,6 +72,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import tachiyomi.domain.source.manga.service.MangaSourceManager
@@ -94,6 +96,7 @@ class EntrySuggestionsScreen(
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
+        val scope = rememberCoroutineScope()
 
         val screenModel = rememberScreenModel {
             EntrySuggestionsScreenModel(
@@ -109,11 +112,8 @@ class EntrySuggestionsScreen(
             primaryTitle = seed.primaryTitle,
             navigateUp = navigator::pop,
             onSuggestionClick = { item ->
-                val query = item.searchQueries.firstOrNull { it.isNotBlank() } ?: item.title
-                when (item.mediaType) {
-                    SuggestionMediaType.ANIME -> navigator.push(GlobalAnimeSearchScreen(query))
-                    SuggestionMediaType.MANGA -> navigator.push(GlobalMangaSearchScreen(query))
-                    SuggestionMediaType.NOVEL -> navigator.push(GlobalNovelSearchScreen(query))
+                scope.launch {
+                    navigator.push(item.toDirectEntryScreenOrNull() ?: item.toGlobalSearchScreen())
                 }
             },
             onRetryClick = screenModel::fetchSuggestions,

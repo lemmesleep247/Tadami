@@ -110,6 +110,8 @@ import eu.kanade.tachiyomi.ui.browse.novel.source.browse.BrowseNovelSourceScreen
 import eu.kanade.tachiyomi.ui.browse.novel.source.globalsearch.GlobalNovelSearchScreen
 import eu.kanade.tachiyomi.ui.category.CategoriesTab
 import eu.kanade.tachiyomi.ui.entries.manga.track.MangaTrackInfoDialogHomeScreen
+import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
+import eu.kanade.tachiyomi.ui.entries.suggestions.toGlobalSearchScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.library.novel.NovelLibraryTab
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
@@ -399,6 +401,11 @@ class NovelScreen(
                         query = query,
                         global = global,
                     )
+                }
+            },
+            onSuggestionClick = { item ->
+                coroutineScope.launch {
+                    navigator.push(item.toDirectEntryScreenOrNull() ?: item.toGlobalSearchScreen())
                 }
             },
             onPosterLongClicked = screenModel::showCoverDialog,

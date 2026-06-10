@@ -59,6 +59,8 @@ import eu.kanade.tachiyomi.ui.browse.anime.source.browse.BrowseAnimeSourceScreen
 import eu.kanade.tachiyomi.ui.browse.anime.source.globalsearch.GlobalAnimeSearchScreen
 import eu.kanade.tachiyomi.ui.category.CategoriesTab
 import eu.kanade.tachiyomi.ui.entries.anime.track.AnimeTrackInfoDialogHomeScreen
+import eu.kanade.tachiyomi.ui.entries.suggestions.toDirectEntryScreenOrNull
+import eu.kanade.tachiyomi.ui.entries.suggestions.toGlobalSearchScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.library.anime.AnimeLibraryTab
 import eu.kanade.tachiyomi.ui.main.MainActivity
@@ -190,6 +192,11 @@ class AnimeScreen(
                 }
             },
             onSearch = { query, global -> scope.launch { performSearch(navigator, query, global) } },
+            onSuggestionClick = { item ->
+                scope.launch {
+                    navigator.push(item.toDirectEntryScreenOrNull() ?: item.toGlobalSearchScreen())
+                }
+            },
             onCoverClicked = screenModel::showImagesDialog,
             onShareClicked = {
                 shareAnime(

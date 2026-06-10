@@ -142,6 +142,7 @@ fun NovelScreenAuroraImpl(
     onEditNotesClicked: (() -> Unit)? = null,
     onRefresh: () -> Unit,
     onSearch: (query: String, global: Boolean) -> Unit,
+    onSuggestionClick: (eu.kanade.tachiyomi.data.suggestions.SuggestionItem) -> Unit,
     onPosterLongClicked: (() -> Unit)? = null,
     onShare: (() -> Unit)?,
     onWebView: (() -> Unit)?,
@@ -1071,12 +1072,7 @@ fun NovelScreenAuroraImpl(
                             item(key = "suggestions_row") {
                                 eu.kanade.presentation.entries.components.aurora.AuroraSuggestionsRow(
                                     state = state.suggestions,
-                                    onSuggestionClick = { item ->
-                                        onSearch(
-                                            item.searchQueries.firstOrNull { it.isNotBlank() } ?: item.title,
-                                            true,
-                                        )
-                                    },
+                                    onSuggestionClick = onSuggestionClick,
                                     onOpenSuggestions = onOpenSuggestions,
                                     onRetryClick = onRetrySuggestions,
                                     modifier = Modifier
