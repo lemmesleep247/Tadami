@@ -328,7 +328,7 @@ class ReaderViewModel @JvmOverloads constructor(
         progress: WebtoonScrollProgress,
         flushImmediately: Boolean = false,
     ) {
-        if (!shouldHandleLongPageProgress()) return
+        if (!shouldTrackWebtoonChapterProgress()) return
 
         val currentChapter = getCurrentChapter() ?: return
         val chapterId = currentChapter.chapter.id ?: return
@@ -343,6 +343,7 @@ class ReaderViewModel @JvmOverloads constructor(
             index = pageIndex,
             offsetPx = offsetPx,
             pageHeightPx = progress.pageHeightPx,
+            totalPages = pages.size,
         )
         val decodedProgress = decodeStoredChapterProgress(encodedProgress, restoreOffset = true)
 
@@ -351,10 +352,13 @@ class ReaderViewModel @JvmOverloads constructor(
         currentChapter.requestedPageOffsetRatioPpm = decodedProgress.offsetRatioPpm
         chapterPageIndex = pageIndex
 
+        currentChapter.chapter.last_page_read = encodedProgress
+
         pendingWebtoonProgress = PendingWebtoonProgress(
             chapterId = chapterId,
             chapterKey = chapterKey,
             encodedProgress = encodedProgress,
+            read = currentChapter.chapter.read,
         )
 
         if (flushImmediately) {
@@ -377,15 +381,27 @@ class ReaderViewModel @JvmOverloads constructor(
         val pending = pendingWebtoonProgress ?: return
         pendingWebtoonProgress = null
 
-        val saved = readerPreferences.getLongPageProgressForChapter(
-            chapterId = pending.chapterId,
-            chapterKey = pending.chapterKey,
-        )
-        if (saved != pending.encodedProgress) {
-            readerPreferences.putLongPageProgressForChapter(
+        if (readerPreferences.saveLongPagePosition().get()) {
+            val saved = readerPreferences.getLongPageProgressForChapter(
                 chapterId = pending.chapterId,
-                encodedProgress = pending.encodedProgress,
                 chapterKey = pending.chapterKey,
+            )
+            if (saved != pending.encodedProgress) {
+                readerPreferences.putLongPageProgressForChapter(
+                    chapterId = pending.chapterId,
+                    encodedProgress = pending.encodedProgress,
+                    chapterKey = pending.chapterKey,
+                )
+            }
+        }
+
+        viewModelScope.launchIO {
+            updateChapter.await(
+                ChapterUpdate(
+                    id = pending.chapterId,
+                    read = pending.read,
+                    lastPageRead = pending.encodedProgress,
+                ),
             )
         }
     }
@@ -668,6 +684,7 @@ class ReaderViewModel @JvmOverloads constructor(
      */
     private suspend fun updateChapterProgress(readerChapter: ReaderChapter, page: Page) {
         val pageIndex = page.index
+        val totalPages = readerChapter.pages?.size ?: 0
 
         mutableState.update {
             it.copy(currentPage = pageIndex + 1)
@@ -678,7 +695,14 @@ class ReaderViewModel @JvmOverloads constructor(
         chapterPageIndex = pageIndex
 
         if (!incognitoMode && page.status != Page.State.ERROR) {
-            readerChapter.chapter.last_page_read = pageIndex.toLong()
+            readerChapter.chapter.last_page_read = if (shouldHandleLongPageProgress() || totalPages <= 0) {
+                pageIndex.toLong()
+            } else {
+                encodePagedChapterProgress(
+                    index = pageIndex,
+                    totalPages = totalPages,
+                )
+            }
 
             if (readerChapter.pages?.lastIndex == pageIndex) {
                 updateChapterProgressOnComplete(readerChapter)
@@ -1189,7 +1213,12 @@ class ReaderViewModel @JvmOverloads constructor(
     }
 
     private fun shouldHandleLongPageProgress(): Boolean {
-        if (incognitoMode || !readerPreferences.saveLongPagePosition().get()) return false
+        if (!readerPreferences.saveLongPagePosition().get()) return false
+        return shouldTrackWebtoonChapterProgress()
+    }
+
+    private fun shouldTrackWebtoonChapterProgress(): Boolean {
+        if (incognitoMode) return false
         return when (ReadingMode.fromPreference(getMangaReadingMode())) {
             ReadingMode.WEBTOON,
             ReadingMode.CONTINUOUS_VERTICAL,
@@ -1409,6 +1438,7 @@ class ReaderViewModel @JvmOverloads constructor(
         val chapterId: Long,
         val chapterKey: String?,
         val encodedProgress: Long,
+        val read: Boolean,
     )
 }
 

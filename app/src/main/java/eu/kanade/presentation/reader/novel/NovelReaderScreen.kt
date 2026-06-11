@@ -1904,6 +1904,7 @@ fun NovelReaderScreen(
                                 encodeNativeScrollProgress(
                                     index = textListState.firstVisibleItemIndex,
                                     offsetPx = textListState.firstVisibleItemScrollOffset,
+                                    totalItems = nativeScrollItemsCount,
                                 ),
                             )
                         }
@@ -1920,6 +1921,7 @@ fun NovelReaderScreen(
                                     encodeNativeScrollProgress(
                                         index = textListState.firstVisibleItemIndex,
                                         offsetPx = textListState.firstVisibleItemScrollOffset,
+                                        totalItems = nativeScrollItemsCount,
                                     ),
                                     flashDisplay = true,
                                 )
