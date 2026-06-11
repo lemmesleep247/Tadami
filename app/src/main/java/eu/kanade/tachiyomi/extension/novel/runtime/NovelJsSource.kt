@@ -984,11 +984,15 @@ class NovelJsSource internal constructor(
 
         var cycles = 0
         while (cycles < maxCycles) {
-            runtime.evaluate(
-                "if (typeof __drainJobs === 'function') __drainJobs(1000)",
-                "novel-plugin-drain.js",
-            )
-            val done = runtime.evaluate("globalThis.__d_$token") as? Boolean ?: false
+            val done = runtime.evaluate(
+                """
+                (function() {
+                    if (typeof __drainJobs === 'function') __drainJobs(1000);
+                    return !!globalThis.__d_$token;
+                })();
+                """.trimIndent(),
+                "novel-plugin-drain-check.js",
+            ) as? Boolean ?: false
             if (done) break
             cycles++
             if (cycles < maxCycles && cycles >= FAST_POLL_SPIN_CYCLES) {
@@ -996,22 +1000,30 @@ class NovelJsSource internal constructor(
             }
         }
 
-        val error = runtime.evaluate("globalThis.__e_$token") as? String
-        val jsonResult = runtime.evaluate("globalThis.__r_$token") as? String
-
-        runtime.evaluate(
+        val resultPayload = runtime.evaluate(
             """
-            delete globalThis.__r_$token;
-            delete globalThis.__e_$token;
-            delete globalThis.__d_$token;
+            (function() {
+                var payload = JSON.stringify({
+                    error: globalThis.__e_$token == null ? null : String(globalThis.__e_$token),
+                    result: globalThis.__r_$token == null ? null : String(globalThis.__r_$token)
+                });
+                delete globalThis.__r_$token;
+                delete globalThis.__e_$token;
+                delete globalThis.__d_$token;
+                return payload;
+            })();
             """.trimIndent(),
-            "novel-plugin-cleanup.js",
-        )
+            "novel-plugin-result-cleanup.js",
+        ) as? String
 
+        val callResult = runCatching {
+            json.decodeFromString<PluginCallPollingResult>(resultPayload.orEmpty())
+        }.getOrDefault(PluginCallPollingResult())
+        val error = callResult.error
         if (!error.isNullOrEmpty() && error != "null") {
             throw RuntimeException("Plugin error in $functionName: $error")
         }
-        return jsonResult ?: ""
+        return callResult.result ?: ""
     }
 
     private fun parseNovelItems(payload: String): List<PluginNovelItem> {
@@ -1867,6 +1879,12 @@ class NovelJsSource internal constructor(
         val name: String,
         val path: String,
         val cover: String? = null,
+    )
+
+    @Serializable
+    private data class PluginCallPollingResult(
+        val error: String? = null,
+        val result: String? = null,
     )
 
     companion object {

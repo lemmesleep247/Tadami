@@ -25,6 +25,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.extension.novel.NovelPluginKeyValueStore
 import uy.kohesive.injekt.Injekt
