@@ -49,6 +49,7 @@ class DefaultNovelExtensionManager(
 
     @Volatile
     private var installedJsPluginsSnapshot: List<NovelPlugin.Installed> = emptyList()
+
     @Volatile
     private var installedKotlinExtensionsSnapshot: List<KotlinNovelExtensionLoadResult> = emptyList()
 
@@ -87,9 +88,10 @@ class DefaultNovelExtensionManager(
                         return
                     }
                     val pkgName = intent?.data?.encodedSchemeSpecificPart
-                    val knownInstalled = pkgName != null && installedKotlinExtensionsSnapshot.any {
-                        it.plugin.pkgName == pkgName || it.plugin.id == pkgName
-                    }
+                    val knownInstalled = pkgName != null &&
+                        installedKotlinExtensionsSnapshot.any {
+                            it.plugin.pkgName == pkgName || it.plugin.id == pkgName
+                        }
                     scope.launch {
                         val shouldReload = when {
                             pkgName == null -> true

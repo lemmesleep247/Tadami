@@ -2318,4 +2318,34 @@
     <string name="novel_download_throttle_limits">Pause: %1$d–%2$d ms. Timeout: %3$d–%4$d ms. Recommended: 1200–3000 ms pause, 300–1000 ms jitter.</string>
     <string name="novel_download_throttle_save">Save</string>
     <string name="novel_download_throttle_cancel">Cancel</string>
+    <!-- Subtitle translation -->
+    <string name="player_sheets_translate_subtitles">Translate subtitles</string>
+    <string name="player_subtitle_translation_added">Translated subtitles added</string>
+    <string name="player_subtitle_translation_disabled">Subtitle translation is disabled</string>
+    <string name="player_subtitle_translation_no_external_track">No external subtitle track available to translate</string>
+    <string name="player_subtitle_translation_ai_requires_opt_in">AI subtitle translation requires explicit opt-in</string>
+    <string name="player_subtitle_translation_failed">Subtitle translation failed</string>
+    <string name="pref_player_subtitle_translation">Subtitle translation</string>
+    <string name="pref_player_subtitle_translation_summary">Translate subtitle tracks and add the result as a new subtitle track in the player. External tracks are supported; embedded tracks are supported for local/downloaded videos.</string>
+    <string name="pref_player_subtitle_translation_provider">Translation provider</string>
+    <string name="pref_player_subtitle_translation_provider_summary">Choose Google for quick translation, or AI to use the Novel AI translation provider configured in the reader settings.</string>
+    <string name="pref_player_subtitle_translation_google_info">Google: fastest setup. Uses the built-in unofficial Google translator and does not require AI keys.</string>
+    <string name="pref_player_subtitle_translation_ai_info">AI: uses the Novel AI translation provider and its API key/model settings. Enable AI subtitle translation only if you accept privacy and cost implications.</string>
+    <string name="pref_player_subtitle_translation_source_lang">Source language</string>
+    <string name="pref_player_subtitle_translation_source_lang_summary">Use auto for automatic detection.</string>
+    <string name="pref_player_subtitle_translation_target_lang">Target language</string>
+    <string name="pref_player_subtitle_translation_target_lang_summary">Language code for translated subtitles, for example en, ru, es, ja.</string>
+    <string name="pref_player_subtitle_translation_allow_ai">Allow AI subtitle translation</string>
+    <string name="pref_player_subtitle_translation_allow_ai_summary">Allows sending subtitle text to the configured Novel AI translation provider. Check API keys, model, cost, and privacy before using it.</string>
+    <string name="pref_player_subtitle_translation_cache">Cache translated subtitles</string>
+
+    <string name="player_subtitle_translation_select_track">Select subtitle track</string>
+    <string name="player_subtitle_translation_start">Start translation</string>
+    <string name="player_subtitle_translation_cancel">Cancel translation</string>
+    <string name="player_subtitle_translation_provider_google">Google</string>
+    <string name="player_subtitle_translation_provider_ai">AI</string>
+    <string name="player_subtitle_translation_embedded_unavailable">Embedded subtitle translation is available only for local or downloaded videos when a subtitle stream can be matched.</string>
+    <string name="player_subtitle_translation_progress">%1$d%%, %2$d/%3$d cues</string>
+    <string name="player_subtitle_translation_from_to">%1$s → %2$s</string>
+
 </resources>

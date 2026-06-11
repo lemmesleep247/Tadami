@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
@@ -11,13 +12,12 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
-import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import dalvik.system.PathClassLoader
 import androidx.core.content.ContextCompat
 import androidx.core.content.pm.PackageInfoCompat
+import dalvik.system.PathClassLoader
 import eu.kanade.domain.extension.novel.interactor.TrustNovelExtension
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.network.GET
@@ -33,7 +33,6 @@ import eu.kanade.tachiyomi.novelsource.model.SNovelChapter
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.MangaSource
 import eu.kanade.tachiyomi.source.SourceFactory
-import eu.kanade.tachiyomi.source.Source as TachiyomiSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -57,6 +56,7 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.extension.novel.model.NovelPlugin
 import uy.kohesive.injekt.injectLazy
 import java.io.File
+import eu.kanade.tachiyomi.source.Source as TachiyomiSource
 
 private const val APK_MIME = "application/vnd.android.package-archive"
 private const val INSTALL_TIMEOUT_MS = 5 * 60 * 1000L
@@ -224,7 +224,10 @@ object KotlinNovelExtensionLoader {
         val extPkgs = (sharedExtPkgs.toList() + privateExtPkgs)
             .distinctBy { it.packageInfo.packageName }
             .mapNotNull { sharedPkg ->
-                val privatePkg = privateExtPkgs.singleOrNull { it.packageInfo.packageName == sharedPkg.packageInfo.packageName }
+                val privatePkg = privateExtPkgs.singleOrNull {
+                    it.packageInfo.packageName ==
+                        sharedPkg.packageInfo.packageName
+                }
                 selectExtensionPackage(sharedPkg, privatePkg)
             }
 
@@ -290,7 +293,10 @@ object KotlinNovelExtensionLoader {
                     if (it.startsWith(".")) pkgName + it else it
                 }
             }
-            .flatMap { className -> instantiateSources(classLoader, appInfo.sourceDir, className, extName) ?: return null }
+            .flatMap { className ->
+                instantiateSources(classLoader, appInfo.sourceDir, className, extName)
+                    ?: return null
+            }
             .mapNotNull { it.asNovelSource() }
 
         if (sources.isEmpty()) {
@@ -359,7 +365,10 @@ object KotlinNovelExtensionLoader {
             instantiateSourceWith(classLoader, className)
         } catch (e: LinkageError) {
             runCatching {
-                instantiateSourceWith(PathClassLoader(sourceDir, null, KotlinNovelExtensionLoader::class.java.classLoader), className)
+                instantiateSourceWith(
+                    PathClassLoader(sourceDir, null, KotlinNovelExtensionLoader::class.java.classLoader),
+                    className,
+                )
             }.getOrElse { error ->
                 logcat(LogPriority.ERROR, error) { "Kotlin novel extension fallback load error: $extName ($className)" }
                 null

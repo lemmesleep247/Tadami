@@ -2356,4 +2356,33 @@
     <string name="novel_download_throttle_save">Сохранить</string>
     <string name="novel_download_throttle_cancel">Отмена</string>
 
+    <!-- Subtitle translation -->
+    <string name="player_sheets_translate_subtitles">Перевести субтитры</string>
+    <string name="player_subtitle_translation_added">Переведённые субтитры добавлены</string>
+    <string name="player_subtitle_translation_disabled">Перевод субтитров отключён</string>
+    <string name="player_subtitle_translation_no_external_track">Нет доступной дорожки субтитров для перевода</string>
+    <string name="player_subtitle_translation_ai_requires_opt_in">Для AI-перевода субтитров нужно явно включить разрешение</string>
+    <string name="player_subtitle_translation_failed">Не удалось перевести субтитры</string>
+    <string name="pref_player_subtitle_translation">Перевод субтитров</string>
+    <string name="pref_player_subtitle_translation_summary">Переводит дорожки субтитров и добавляет результат как новую дорожку в проигрыватель. Внешние дорожки поддерживаются сразу; встроенные поддерживаются для локальных/загруженных видео, если поток субтитров удалось сопоставить.</string>
+    <string name="pref_player_subtitle_translation_provider">Переводчик</string>
+    <string name="pref_player_subtitle_translation_provider_summary">Выберите Google для быстрого перевода или AI, чтобы использовать провайдер AI-перевода из настроек читалки новелл.</string>
+    <string name="pref_player_subtitle_translation_google_info">Google: самый простой вариант. Использует встроенный неофициальный переводчик Google и не требует AI-ключей.</string>
+    <string name="pref_player_subtitle_translation_ai_info">AI: использует провайдер AI-перевода новелл и его настройки API-ключа/модели. Включайте только если понимаете риски приватности и возможные расходы.</string>
+    <string name="pref_player_subtitle_translation_source_lang">Исходный язык</string>
+    <string name="pref_player_subtitle_translation_source_lang_summary">Используйте auto для автоматического определения.</string>
+    <string name="pref_player_subtitle_translation_target_lang">Язык перевода</string>
+    <string name="pref_player_subtitle_translation_target_lang_summary">Код языка для переведённых субтитров, например en, ru, es, ja.</string>
+    <string name="pref_player_subtitle_translation_allow_ai">Разрешить AI-перевод субтитров</string>
+    <string name="pref_player_subtitle_translation_allow_ai_summary">Разрешает отправлять текст субтитров выбранному AI-провайдеру перевода новелл. Перед использованием проверьте API-ключи, модель, стоимость и приватность.</string>
+    <string name="pref_player_subtitle_translation_cache">Кэшировать переведённые субтитры</string>
+    <string name="player_subtitle_translation_select_track">Выберите дорожку субтитров</string>
+    <string name="player_subtitle_translation_start">Начать перевод</string>
+    <string name="player_subtitle_translation_cancel">Отменить перевод</string>
+    <string name="player_subtitle_translation_provider_google">Google</string>
+    <string name="player_subtitle_translation_provider_ai">AI</string>
+    <string name="player_subtitle_translation_embedded_unavailable">Перевод встроенных субтитров доступен только для локальных или загруженных видео, если поток субтитров удалось сопоставить.</string>
+    <string name="player_subtitle_translation_progress">%1$d%%, %2$d/%3$d реплик</string>
+    <string name="player_subtitle_translation_from_to">%1$s → %2$s</string>
+
 </resources>
