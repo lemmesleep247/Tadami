@@ -16,6 +16,8 @@ import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.update
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
@@ -32,7 +34,7 @@ class MigrationListScreenModel(
     mangaIds: Collection<Long>,
     private val sourceIds: Collection<Long>,
     private val extraSearchQuery: String?,
-    private val sourcePreferences: SourcePreferences = Injekt.get(),
+    val sourcePreferences: SourcePreferences = Injekt.get(),
     private val sourceManager: MangaSourceManager = Injekt.get(),
     private val getManga: GetManga = Injekt.get(),
     private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get(),
@@ -48,6 +50,9 @@ class MigrationListScreenModel(
     }
 
     private var migrateJob: Job? = null
+    private var searchJob: Job? = null
+    private var allItems: List<MigratingManga> = emptyList()
+    private val cancelledSearchIds = mutableSetOf<Long>()
 
     init {
         screenModelScope.launchIO {
@@ -67,11 +72,12 @@ class MigrationListScreenModel(
                 .awaitAll()
                 .filterNotNull()
 
+            allItems = items
             mutableState.update { it.copy(items = items.toImmutableList()) }
 
             mutableState.update { it.copy(isLoading = false) }
 
-            runSearches(items)
+            startSearches(resetResults = false)
         }
     }
 
@@ -102,6 +108,31 @@ class MigrationListScreenModel(
         }
     }
 
+    private fun startSearches(resetResults: Boolean) {
+        searchJob?.cancel()
+        cancelledSearchIds.clear()
+        val searchItems = if (resetResults) {
+            allItems.map { it.copy(searchResult = SearchResult.Searching) }
+        } else {
+            allItems
+        }
+        allItems = searchItems
+        mutableState.update {
+            it.copy(
+                items = searchItems.toImmutableList(),
+                finishedCount = searchItems.count { item -> item.searchResult != SearchResult.Searching },
+                migrationComplete = isMigrationSearchComplete(searchItems),
+            )
+        }
+        searchJob = screenModelScope.launchIO {
+            try {
+                runSearches(searchItems)
+            } finally {
+                searchJob = null
+            }
+        }
+    }
+
     private suspend fun runSearches(items: List<MigratingManga>) {
         val sources = getEnabledSources()
         val strategy = sourcePreferences.migrationStrategy()
@@ -112,16 +143,51 @@ class MigrationListScreenModel(
 
         var currentItems = items
         items.forEach { item ->
+            if (item.manga.id in cancelledSearchIds) {
+                currentItems = currentItems.map { current ->
+                    if (current.manga.id == item.manga.id) {
+                        current.copy(searchResult = SearchResult.NotFound, searchLabel = null)
+                    } else {
+                        current
+                    }
+                }
+                publishSearchItems(currentItems, hideNotFound, onlyNewChapters)
+                return@forEach
+            }
+
             val result = searchSource(
                 manga = item.manga,
                 sources = sources,
                 strategy = strategy,
                 useDeepSearch = useDeepSearch,
                 useAutoMetadata = useAutoMetadata,
+                onProgress = { label ->
+                    currentItems = currentItems.map { current ->
+                        if (current.manga.id == item.manga.id) {
+                            current.copy(searchLabel = label)
+                        } else {
+                            current
+                        }
+                    }
+                    publishSearchItems(currentItems, hideNotFound, onlyNewChapters)
+                },
             )
+            if (item.manga.id in cancelledSearchIds) {
+                currentItems = currentItems.map { current ->
+                    if (current.manga.id == item.manga.id) {
+                        current.copy(searchResult = SearchResult.NotFound, searchLabel = null)
+                    } else {
+                        current
+                    }
+                }
+                publishSearchItems(currentItems, hideNotFound, onlyNewChapters)
+                return@forEach
+            }
+
             val updatedItem = when (result) {
-                null -> item.copy(searchResult = SearchResult.NotFound)
+                null -> item.copy(searchResult = SearchResult.NotFound, searchLabel = null)
                 else -> item.copy(
+                    searchLabel = null,
                     searchResult = SearchResult.Success(
                         manga = result.manga,
                         source = result.source.name,
@@ -135,19 +201,30 @@ class MigrationListScreenModel(
                 if (current.manga.id == item.manga.id) updatedItem else current
             }
 
-            val visibleItems = currentItems
-                .filter { shouldIncludeMigrationEntry(it, hideNotFound, onlyNewChapters) }
-                .toImmutableList()
-            val finishedCount = visibleItems.count { it.searchResult != SearchResult.Searching }
-            val migrationComplete = isMigrationSearchComplete(visibleItems)
+            publishSearchItems(currentItems, hideNotFound, onlyNewChapters)
+        }
+    }
 
-            mutableState.update { state ->
-                state.copy(
-                    items = visibleItems,
-                    finishedCount = finishedCount,
-                    migrationComplete = migrationComplete,
-                )
-            }
+    private fun publishSearchItems(
+        items: List<MigratingManga>,
+        hideNotFound: Boolean,
+        onlyNewChapters: Boolean,
+    ) {
+        allItems = items
+        val visibleItems = visibleMigrationItems(
+            items = items,
+            hideNotFound = hideNotFound,
+            onlyNewChapters = onlyNewChapters,
+        ).toImmutableList()
+        val finishedCount = visibleItems.count { it.searchResult != SearchResult.Searching }
+        val migrationComplete = isMigrationSearchComplete(visibleItems)
+
+        mutableState.update { state ->
+            state.copy(
+                items = visibleItems,
+                finishedCount = finishedCount,
+                migrationComplete = migrationComplete,
+            )
         }
     }
 
@@ -157,6 +234,7 @@ class MigrationListScreenModel(
         strategy: SourcePreferences.MigrationStrategy,
         useDeepSearch: Boolean,
         useAutoMetadata: Boolean,
+        onProgress: (String?) -> Unit,
     ): MigrationSearchCandidate? {
         val searchParams = buildMigrationSearchParams(
             manga = manga,
@@ -172,6 +250,7 @@ class MigrationListScreenModel(
                     sources = sources,
                     searchEngine = searchEngine,
                     useDeepSearch = useDeepSearch,
+                    onProgress = onProgress,
                 )
             }
             SourcePreferences.MigrationStrategy.MOST_CHAPTERS -> {
@@ -180,6 +259,7 @@ class MigrationListScreenModel(
                     sources = sources,
                     searchEngine = searchEngine,
                     useDeepSearch = useDeepSearch,
+                    onProgress = onProgress,
                 )
             }
         }
@@ -190,8 +270,11 @@ class MigrationListScreenModel(
         sources: List<CatalogueSource>,
         searchEngine: SmartSourceSearchEngine,
         useDeepSearch: Boolean,
+        onProgress: (String?) -> Unit,
     ): MigrationSearchCandidate? {
         for ((index, source) in sources.withIndex()) {
+            currentCoroutineContext().ensureActive()
+            onProgress(source.name)
             val result = searchSourceInCatalogue(
                 manga = manga,
                 source = source,
@@ -210,9 +293,12 @@ class MigrationListScreenModel(
         sources: List<CatalogueSource>,
         searchEngine: SmartSourceSearchEngine,
         useDeepSearch: Boolean,
+        onProgress: (String?) -> Unit,
     ): MigrationSearchCandidate? = kotlinx.coroutines.supervisorScope {
+        onProgress("${sources.size} sources")
         val candidates = sources.mapIndexed { index, source ->
             async {
+                currentCoroutineContext().ensureActive()
                 searchSourceInCatalogue(
                     manga = manga,
                     source = source,
@@ -236,12 +322,15 @@ class MigrationListScreenModel(
         searchEngine: SmartSourceSearchEngine,
         useDeepSearch: Boolean,
     ): MigrationSearchCandidate? {
+        currentCoroutineContext().ensureActive()
         val result = searchEngine.regularSearch(source, manga.title)
             ?: if (useDeepSearch) searchEngine.deepSearch(source, manga.title) else null
+        currentCoroutineContext().ensureActive()
         if (result == null) return null
         if (result.url == manga.url && result.source == manga.source) return null
 
         val chapterInfo = getChapterInfo(source, result)
+        currentCoroutineContext().ensureActive()
         return MigrationSearchCandidate(
             sourceIndex = sourceIndex,
             source = source,
@@ -278,6 +367,35 @@ class MigrationListScreenModel(
         migrateMangas(replace = false)
     }
 
+    fun showMigrateDialog(copy: Boolean) {
+        mutableState.update { state ->
+            state.copy(
+                dialog = Dialog.Migrate(
+                    copy = copy,
+                    totalCount = state.items.size,
+                    skippedCount = migrationSkippedCount(state.items),
+                ),
+            )
+        }
+    }
+
+    fun showExitDialog() {
+        mutableState.update { it.copy(dialog = Dialog.Exit) }
+    }
+
+    fun openOptionsDialog() {
+        mutableState.update { it.copy(dialog = Dialog.Options) }
+    }
+
+    fun dismissDialog() {
+        mutableState.update { it.copy(dialog = null) }
+    }
+
+    fun onMigrationOptionsUpdated() {
+        dismissDialog()
+        startSearches(resetResults = true)
+    }
+
     fun migrateNow(mangaId: Long, replace: Boolean) {
         screenModelScope.launchIO {
             val item = items.find { it.manga.id == mangaId } ?: return@launchIO
@@ -293,6 +411,52 @@ class MigrationListScreenModel(
         }
     }
 
+    fun useMangaForMigration(current: Long, target: Long) {
+        screenModelScope.launchIO {
+            cancelledSearchIds += current
+            if (allItems.none { it.manga.id == current }) return@launchIO
+            val targetManga = getManga.await(target) ?: return@launchIO
+            val source = sourceManager.get(targetManga.source) as? CatalogueSource ?: return@launchIO
+            val chapterInfo = getChapterInfo(source, targetManga)
+            val updatedItems = allItems.map { item ->
+                if (item.manga.id == current) {
+                    item.copy(
+                        searchLabel = null,
+                        searchResult = SearchResult.Success(
+                            manga = targetManga,
+                            source = source.name,
+                            chapterCount = chapterInfo.chapterCount,
+                            latestChapter = chapterInfo.latestChapter,
+                        ),
+                    )
+                } else {
+                    item
+                }
+            }
+            publishSearchItems(
+                items = updatedItems,
+                hideNotFound = sourcePreferences.migrationHideNotFound().get(),
+                onlyNewChapters = sourcePreferences.migrationOnlyNewChapters().get(),
+            )
+        }
+    }
+
+    fun cancelSearch(mangaId: Long) {
+        cancelledSearchIds += mangaId
+        val updatedItems = allItems.map { item ->
+            if (item.manga.id == mangaId && item.searchResult == SearchResult.Searching) {
+                item.copy(searchResult = SearchResult.NotFound, searchLabel = null)
+            } else {
+                item
+            }
+        }
+        publishSearchItems(
+            items = updatedItems,
+            hideNotFound = sourcePreferences.migrationHideNotFound().get(),
+            onlyNewChapters = sourcePreferences.migrationOnlyNewChapters().get(),
+        )
+    }
+
     fun removeManga(mangaId: Long) {
         screenModelScope.launchIO {
             val item = items.find { it.manga.id == mangaId } ?: return@launchIO
@@ -303,7 +467,7 @@ class MigrationListScreenModel(
     private fun migrateMangas(replace: Boolean) {
         migrateJob = screenModelScope.launchIO {
             val items = state.value.items
-            mutableState.update { it.copy(isMigrating = true, migrationProgress = 0f) }
+            mutableState.update { it.copy(isMigrating = true, migrationProgress = 0f, dialog = null) }
 
             try {
                 items.forEachIndexed { index, item ->
@@ -320,7 +484,7 @@ class MigrationListScreenModel(
                     }
                 }
             } finally {
-                mutableState.update { it.copy(isMigrating = false) }
+                mutableState.update { it.copy(isMigrating = false, dialog = null) }
                 migrateJob = null
             }
         }
@@ -333,6 +497,7 @@ class MigrationListScreenModel(
     }
 
     private fun removeManga(item: MigratingManga) {
+        allItems = allItems.filterNot { it.manga.id == item.manga.id }
         mutableState.update { state ->
             val updatedItems = state.items.toPersistentList().remove(item)
             val finishedCount = updatedItems.count { it.searchResult != SearchResult.Searching }
@@ -342,6 +507,12 @@ class MigrationListScreenModel(
                 migrationComplete = isMigrationSearchComplete(updatedItems),
             )
         }
+    }
+
+    override fun onDispose() {
+        searchJob?.cancel()
+        migrateJob?.cancel()
+        super.onDispose()
     }
 
     @Immutable
@@ -357,6 +528,7 @@ class MigrationListScreenModel(
         val latestChapter: Double?,
         val source: String,
         val searchResult: SearchResult = SearchResult.Searching,
+        val searchLabel: String? = null,
     )
 
     sealed interface SearchResult {
@@ -370,6 +542,17 @@ class MigrationListScreenModel(
         ) : SearchResult
     }
 
+    sealed interface Dialog {
+        data class Migrate(
+            val copy: Boolean,
+            val totalCount: Int,
+            val skippedCount: Int,
+        ) : Dialog
+
+        data object Exit : Dialog
+        data object Options : Dialog
+    }
+
     @Immutable
     data class State(
         val isLoading: Boolean = true,
@@ -378,5 +561,6 @@ class MigrationListScreenModel(
         val migrationComplete: Boolean = false,
         val isMigrating: Boolean = false,
         val migrationProgress: Float = 0f,
+        val dialog: Dialog? = null,
     )
 }

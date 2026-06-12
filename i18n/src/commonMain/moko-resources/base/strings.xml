@@ -989,6 +989,22 @@
     <string name="migration_deep_search_mode">Deep search mode</string>
     <string name="migration_prioritize_by_chapters">Prioritize by chapters</string>
     <string name="migration_advanced_options_warning">Advanced options may reduce search quality.</string>
+    <string name="migration_latest_chapter">Latest chapter: %1$s</string>
+    <string name="migration_unknown_latest_chapter">Unknown</string>
+    <string name="migration_no_match_found">No match found</string>
+    <string name="migration_checking_source">Checking %1$s</string>
+    <string name="migration_search_manually">Search manually</string>
+    <string name="migration_skip_entry">Skip</string>
+    <string name="migration_migrate_now">Migrate now</string>
+    <string name="migration_copy_now">Copy now</string>
+    <string name="migration_confirm_migrate_title">Migrate entries?</string>
+    <string name="migration_confirm_copy_title">Copy entries?</string>
+    <string name="migration_confirm_body">%1$d of %2$d entries are ready. %3$d will be skipped.</string>
+    <string name="migration_exit_title">Exit migration?</string>
+    <string name="migration_exit_body">Migration results on this screen will be lost.</string>
+    <string name="migration_exit_body_migrating">Current migration will be cancelled and this screen will close.</string>
+    <string name="migration_progress_title">Migrating entries</string>
+    <string name="migration_progress_body">Progress: %1$d%%</string>
     <string name="migrate">Migrate</string>
     <!-- Make a copy (noun) when migrating. Don't use for copying to clipboard. -->
     <string name="copy">Copy</string>
