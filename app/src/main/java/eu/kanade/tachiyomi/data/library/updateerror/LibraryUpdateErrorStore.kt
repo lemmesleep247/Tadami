@@ -39,8 +39,18 @@ object LibraryUpdateErrorStore {
     private const val MAX_ERRORS_PER_MEDIA = 500
     private const val PREFS_NAME = "library_update_errors"
     private const val KEY_ERRORS = "errors"
+    private const val KEY_LAST_TAB = "last_tab"
 
     private val ids = AtomicLong(0L)
+
+    fun getLastSelectedTab(): LibraryUpdateErrorMedia {
+        val name = prefs().getString(KEY_LAST_TAB, null) ?: return LibraryUpdateErrorMedia.Novel
+        return runCatching { LibraryUpdateErrorMedia.valueOf(name) }.getOrDefault(LibraryUpdateErrorMedia.Novel)
+    }
+
+    fun setLastSelectedTab(media: LibraryUpdateErrorMedia) {
+        prefs().edit().putString(KEY_LAST_TAB, media.name).apply()
+    }
     private val _errors = MutableStateFlow(loadPersistedErrors())
     val errors: StateFlow<List<LibraryUpdateErrorRecord>> = _errors.asStateFlow()
 

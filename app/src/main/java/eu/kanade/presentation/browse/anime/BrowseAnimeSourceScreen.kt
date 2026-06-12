@@ -24,8 +24,8 @@ import eu.kanade.presentation.util.formattedMessage
 import eu.kanade.tachiyomi.animesource.AnimeSource
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.core.common.i18n.stringResource
-import tachiyomi.domain.items.episode.model.NoEpisodesException
 import tachiyomi.domain.entries.anime.model.Anime
+import tachiyomi.domain.items.episode.model.NoEpisodesException
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.source.anime.model.StubAnimeSource
 import tachiyomi.i18n.MR

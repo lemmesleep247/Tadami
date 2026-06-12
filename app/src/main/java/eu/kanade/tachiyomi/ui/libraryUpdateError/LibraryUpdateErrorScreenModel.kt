@@ -17,7 +17,9 @@ import tachiyomi.core.common.util.lang.launchIO
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class LibraryUpdateErrorScreenModel : StateScreenModel<LibraryUpdateErrorScreenState>(LibraryUpdateErrorScreenState()) {
+class LibraryUpdateErrorScreenModel : StateScreenModel<LibraryUpdateErrorScreenState>(
+    LibraryUpdateErrorScreenState(selectedMedia = LibraryUpdateErrorStore.getLastSelectedTab()),
+) {
 
     private val selectedErrorIds: HashSet<Long> = HashSet()
 
@@ -41,6 +43,7 @@ class LibraryUpdateErrorScreenModel : StateScreenModel<LibraryUpdateErrorScreenS
 
     fun setSelectedTab(media: LibraryUpdateErrorMedia) {
         selectedErrorIds.clear()
+        LibraryUpdateErrorStore.setLastSelectedTab(media)
         mutableState.update { state ->
             state.copy(
                 selectedMedia = media,
@@ -91,7 +94,6 @@ class LibraryUpdateErrorScreenModel : StateScreenModel<LibraryUpdateErrorScreenS
             )
         }
     }
-
 
     fun retryVisibleErrors() {
         val visibleItems = state.value.visibleItems

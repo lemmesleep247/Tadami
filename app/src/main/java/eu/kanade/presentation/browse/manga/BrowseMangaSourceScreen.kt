@@ -24,8 +24,8 @@ import eu.kanade.presentation.util.formattedMessage
 import eu.kanade.tachiyomi.source.MangaSource
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.core.common.i18n.stringResource
-import tachiyomi.domain.items.chapter.model.NoChaptersException
 import tachiyomi.domain.entries.manga.model.Manga
+import tachiyomi.domain.items.chapter.model.NoChaptersException
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.source.manga.model.StubMangaSource
 import tachiyomi.i18n.MR

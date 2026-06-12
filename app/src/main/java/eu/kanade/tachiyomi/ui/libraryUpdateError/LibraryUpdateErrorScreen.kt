@@ -57,7 +57,6 @@ class LibraryUpdateErrorScreen : Screen() {
     }
 }
 
-
 private fun LibraryUpdateErrorScreenState.resolveMigrationAction(
     clearSelection: () -> Unit,
     navigateToAnimeMigration: (Long) -> Unit,

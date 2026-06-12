@@ -38,9 +38,9 @@ import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.source.novel.NovelPluginImageWarmupEffect
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.core.common.i18n.stringResource
-import tachiyomi.domain.items.chapter.model.NoChaptersException
 import tachiyomi.domain.entries.novel.model.Novel
 import tachiyomi.domain.entries.novel.model.NovelCover
+import tachiyomi.domain.items.chapter.model.NoChaptersException
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.source.novel.model.StubNovelSource
 import tachiyomi.i18n.MR

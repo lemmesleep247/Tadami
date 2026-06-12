@@ -91,7 +91,7 @@ private class AndroidNovelTtsPlatformEngine(
             tts = localInstance
             continuation.invokeOnCancellation {
                 if (requestGeneration == generation.get()) {
-                    runCatching { localInstance?.shutdown() }
+                    runCatching { localInstance.shutdown() }
                     if (tts === localInstance) tts = null
                 }
             }
