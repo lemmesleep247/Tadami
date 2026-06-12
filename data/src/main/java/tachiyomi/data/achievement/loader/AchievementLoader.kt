@@ -34,6 +34,8 @@ class AchievementLoader(
         private const val PREFS_NAME = "achievement_loader"
         private const val KEY_VERSION = "json_version"
         private const val KEY_CALCULATION_VERSION = "calculation_version"
+        private const val KEY_TREASURY_RECONCILIATION_VERSION = "treasury_reconciliation_version"
+        private const val CURRENT_TREASURY_RECONCILIATION_VERSION = 1
         private const val KEY_LOCALE_TAG = "locale_tag"
     }
 
@@ -83,6 +85,7 @@ class AchievementLoader(
                         // without invalidating other persisted state like user progress.
                         saveVersion(0)
                     } else {
+                        runTreasuryReconciliationIfNeeded()
                         return Result.success(0)
                     }
                 } else {
@@ -120,6 +123,7 @@ class AchievementLoader(
                     val result = it.calculateInitialProgress()
                     if (result.success) {
                         saveCalculationVersion(definitions.version)
+                        saveTreasuryReconciliationVersion(CURRENT_TREASURY_RECONCILIATION_VERSION)
                         logcat(LogPriority.INFO) {
                             "[ACHIEVEMENTS] Retroactive calculation completed: ${result.achievementsUnlocked} achievements unlocked"
                         }
@@ -134,6 +138,34 @@ class AchievementLoader(
             logcat(LogPriority.ERROR) { "[ACHIEVEMENTS] Failed to load achievements from JSON: ${e.message}" }
             Result.failure(e)
         }
+    }
+
+    private suspend fun runTreasuryReconciliationIfNeeded() {
+        if (getTreasuryReconciliationVersion() >= CURRENT_TREASURY_RECONCILIATION_VERSION) return
+        calculator?.let {
+            logcat(LogPriority.INFO) {
+                "[ACHIEVEMENTS] Running one-time Treasury reward reconciliation..."
+            }
+            val result = it.calculateInitialProgress()
+            if (result.success) {
+                saveTreasuryReconciliationVersion(CURRENT_TREASURY_RECONCILIATION_VERSION)
+                logcat(LogPriority.INFO) {
+                    "[ACHIEVEMENTS] Treasury reward reconciliation completed"
+                }
+            } else {
+                logcat(LogPriority.ERROR) {
+                    "[ACHIEVEMENTS] Treasury reward reconciliation failed: ${result.error}"
+                }
+            }
+        }
+    }
+
+    private fun getTreasuryReconciliationVersion(): Int {
+        return getPreferences().getInt(KEY_TREASURY_RECONCILIATION_VERSION, 0)
+    }
+
+    private fun saveTreasuryReconciliationVersion(version: Int) {
+        getPreferences().edit().putInt(KEY_TREASURY_RECONCILIATION_VERSION, version).apply()
     }
 
     private suspend fun loadJsonFromAssets(): AchievementDefinitions = withContext(Dispatchers.IO) {

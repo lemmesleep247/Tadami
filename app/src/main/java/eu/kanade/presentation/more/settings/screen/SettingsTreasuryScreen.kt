@@ -743,17 +743,29 @@ object SettingsTreasuryScreen : SearchableSettings {
             },
         )
 
-        val totalTreasuryRewards = remember(
+        val treasuryProgress = remember(
             titlePresets,
             profileEffectPresets,
             avatarFramePresets,
             homePresets,
             specialBackgroundPresets,
+            unlockedUnlockables,
         ) {
-            titlePresets.size + profileEffectPresets.size + avatarFramePresets.size + homePresets.size +
-                specialBackgroundPresets.size + allAuraPalettes().size + AppTheme.entries.count(AppTheme::isHidden)
+            calculateTreasuryRewardProgress(
+                unlockedUnlockables = unlockedUnlockables,
+                presetIds = buildList {
+                    addAll(titlePresets.map { it.unlockableId })
+                    addAll(profileEffectPresets.map { it.unlockableId })
+                    addAll(avatarFramePresets.map { it.unlockableId })
+                    addAll(homePresets.map { it.unlockableId })
+                    addAll(specialBackgroundPresets.map { it.unlockableId })
+                },
+                auraIds = allAuraPalettes().map { it.id },
+                hiddenThemes = AppTheme.entries.filter(AppTheme::isHidden),
+            )
         }
-        val unlockedTreasuryRewards = unlockedUnlockables.size.coerceAtMost(totalTreasuryRewards)
+        val totalTreasuryRewards = treasuryProgress.total
+        val unlockedTreasuryRewards = treasuryProgress.unlocked
 
         preferences.add(
             Preference.PreferenceItem.CustomPreference(
@@ -2322,6 +2334,34 @@ private fun TreasurySectionStage(
         }
         content()
     }
+}
+
+
+internal data class TreasuryRewardProgress(
+    val unlocked: Int,
+    val total: Int,
+)
+
+internal fun calculateTreasuryRewardProgress(
+    unlockedUnlockables: Set<String>,
+    presetIds: List<String>,
+    auraIds: List<String>,
+    hiddenThemes: List<AppTheme>,
+): TreasuryRewardProgress {
+    val distinctPresetIds = presetIds.distinct()
+    val distinctAuraIds = auraIds.distinct()
+    val distinctHiddenThemes = hiddenThemes.distinct()
+
+    val unlockedPresets = distinctPresetIds.count(unlockedUnlockables::contains)
+    val unlockedAuras = distinctAuraIds.count(unlockedUnlockables::contains)
+    val unlockedThemes = distinctHiddenThemes.count { theme ->
+        isThemePreviewUnlocked(theme, unlockedUnlockables)
+    }
+
+    return TreasuryRewardProgress(
+        unlocked = unlockedPresets + unlockedAuras + unlockedThemes,
+        total = distinctPresetIds.size + distinctAuraIds.size + distinctHiddenThemes.size,
+    )
 }
 
 private fun getRewardIconResourceId(rewardId: String, context: android.content.Context): Int {
