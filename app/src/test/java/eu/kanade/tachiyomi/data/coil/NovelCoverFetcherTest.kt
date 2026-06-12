@@ -87,6 +87,58 @@ class NovelCoverFetcherTest {
     }
 
     @Test
+    fun `fetch uses custom cover even when remote url is missing`() {
+        runTest {
+            val context = mockk<android.content.Context>(relaxed = true)
+            val imageLoader = mockk<ImageLoader>(relaxed = true)
+            val customCoverFile = tempDir.resolve("custom_cover_no_remote.jpg").toFile()
+            customCoverFile.writeText("custom-cover")
+            val data = NovelCover(
+                novelId = 9L,
+                sourceId = 77L,
+                isNovelFavorite = true,
+                url = null,
+                lastModified = 1234L,
+            )
+            val options = Options(
+                context = context,
+                size = Size.ORIGINAL,
+                scale = Scale.FIT,
+                precision = Precision.EXACT,
+                diskCacheKey = "novel-custom-cover-test",
+                fileSystem = FileSystem.SYSTEM,
+                memoryCachePolicy = CachePolicy.ENABLED,
+                diskCachePolicy = CachePolicy.ENABLED,
+                networkCachePolicy = CachePolicy.ENABLED,
+                extras = Extras.EMPTY,
+            )
+
+            val result = NovelCoverFetcher(
+                data = data,
+                options = options,
+                sourceSiteUrlLazy = lazy { "https://example.org" },
+                coverFileLazy = lazy { error("library cover cache should not be queried before custom cover") },
+                customCoverFileLazy = lazy { customCoverFile },
+                diskCacheKeyLazy = lazy { "novel-custom-cover-test" },
+                pluginHeadersProvider = { emptyMap() },
+                callFactoryLazy = lazy {
+                    object : Call.Factory {
+                        override fun newCall(request: Request): Call {
+                            error("network should not be called when custom cover exists")
+                        }
+                    }
+                },
+                imageLoader = imageLoader,
+            ).fetch()
+
+            assertTrue(result is SourceFetchResult)
+            result as SourceFetchResult
+            assertEquals(DataSource.DISK, result.dataSource)
+            assertEquals(customCoverFile.toOkioPath(), result.source.file())
+        }
+    }
+
+    @Test
     fun `fetch prefers dedicated library cover cache for favorite novels before network`() {
         runTest {
             val context = mockk<android.content.Context>(relaxed = true)

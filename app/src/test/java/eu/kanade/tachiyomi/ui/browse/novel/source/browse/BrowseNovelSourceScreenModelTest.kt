@@ -625,6 +625,13 @@ class BrowseNovelSourceScreenModelTest {
         method.invoke(screenModel, novel)
     }
 
+    private fun browseCoverUpdates(screenModel: BrowseNovelSourceScreenModel): Map<Long, Any> {
+        val field = screenModel.javaClass.getDeclaredField("browseNovelCoverUpdates")
+        field.isAccessible = true
+        val state = field.get(screenModel) as MutableStateFlow<Map<Long, Any>>
+        return state.value
+    }
+
     @Test
     fun `novelSourcePreferencesScreenOrNull returns null for source without settings`() {
         val result = novelSourcePreferencesScreenOrNull(sourceId = 1L, isSourceConfigurable = false)
@@ -688,6 +695,8 @@ class BrowseNovelSourceScreenModelTest {
             novelRepository.lastNovelUpdate?.id shouldBe 101L
             novelRepository.lastNovelUpdate?.thumbnailUrl shouldBe "https://cdn.example/novel-cover.jpg"
             novelRepository.lastNovelUpdate?.initialized shouldBe true
+            browseCoverUpdates(screenModel)[101L].toString() shouldBe
+                "BrowseNovelCoverUpdate(thumbnailUrl=https://cdn.example/novel-cover.jpg)"
         }
     }
 

@@ -26,6 +26,7 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
@@ -88,6 +89,7 @@ class BrowseNovelSourceScreenModel(
     var displayMode by sourcePreferences.sourceDisplayMode().asState(screenModelScope)
     private val novelDetailsInFlight = ConcurrentHashMap.newKeySet<Long>()
     private val novelDetailsDispatcher = kotlinx.coroutines.Dispatchers.IO.limitedParallelism(3)
+    private val browseNovelCoverUpdates = MutableStateFlow<Map<Long, BrowseNovelCoverUpdate>>(emptyMap())
 
     val source = sourceManager.getOrStub(sourceId)
 
@@ -283,6 +285,13 @@ class BrowseNovelSourceScreenModel(
                         }
                         .filter { !hideInLibraryItems || !it.favorite }
                 }
+                .combine(browseNovelCoverUpdates) { pagingData, coverUpdates ->
+                    if (coverUpdates.isEmpty()) {
+                        pagingData
+                    } else {
+                        pagingData.map { novel -> coverUpdates[novel.id]?.applyTo(novel) ?: novel }
+                    }
+                }
                 .cachedIn(ioCoroutineScope)
         }
         .stateIn(ioCoroutineScope, SharingStarted.Lazily, emptyFlow())
@@ -297,9 +306,15 @@ class BrowseNovelSourceScreenModel(
         screenModelScope.launch(novelDetailsDispatcher) {
             try {
                 val networkNovel = source.getNovelDetails(novel.toSNovel())
+                val resolvedThumbnailUrl = networkNovel.thumbnail_url?.takeIf { it.isNotBlank() }
+                if (resolvedThumbnailUrl != null) {
+                    browseNovelCoverUpdates.update { updates ->
+                        updates + (novel.id to BrowseNovelCoverUpdate(thumbnailUrl = resolvedThumbnailUrl))
+                    }
+                }
                 val updatePayload = NovelUpdate(
                     id = novel.id,
-                    thumbnailUrl = networkNovel.thumbnail_url?.takeIf { it.isNotBlank() } ?: novel.thumbnailUrl,
+                    thumbnailUrl = resolvedThumbnailUrl ?: novel.thumbnailUrl,
                     initialized = true,
                 )
                 resolveUpdateNovel()?.await(updatePayload)
@@ -653,4 +668,16 @@ class BrowseNovelSourceScreenModel(
         val filterVersion: Int,
         val filters: NovelFilterList,
     )
+
+    private data class BrowseNovelCoverUpdate(
+        val thumbnailUrl: String,
+    ) {
+        fun applyTo(novel: Novel): Novel {
+            return if (novel.thumbnailUrl == thumbnailUrl) {
+                novel
+            } else {
+                novel.copy(thumbnailUrl = thumbnailUrl)
+            }
+        }
+    }
 }

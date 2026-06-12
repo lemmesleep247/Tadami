@@ -55,8 +55,6 @@ class NovelCoverFetcher(
         get() = diskCacheKeyLazy.value
 
     override suspend fun fetch(): FetchResult {
-        val rawUrl = data.url?.takeIf { it.isNotBlank() }
-            ?: throw IOException("No cover URL specified for novel ${data.novelId}")
         val customCoverFile = customCoverFileLazy.value
         if (customCoverFile.exists()) {
             debugTitleCoverFlow(
@@ -65,6 +63,8 @@ class NovelCoverFetcher(
             )
             return fileLoader(customCoverFile)
         }
+        val rawUrl = data.url?.takeIf { it.isNotBlank() }
+            ?: throw IOException("No cover URL specified for novel ${data.novelId}")
         debugTitleCoverFlow(
             scope = "novel-fetcher",
             message = "fetch url=${previewTitleCoverUrl(
@@ -333,9 +333,9 @@ class NovelCoverFetcher(
         private val sourceManager: NovelSourceManager by injectLazy()
 
         override fun create(data: NovelCover, options: Options, imageLoader: ImageLoader): Fetcher? {
-            // Return null when there is no URL — Coil will fall back to the placeholder/error
-            // drawable instead of invoking the fetcher and crashing on a null URL.
-            if (data.url.isNullOrBlank()) return null
+            // Return null for non-library entries without a URL. Library entries may still
+            // have a custom local cover, so keep the fetcher available for them.
+            if (data.url.isNullOrBlank() && !data.isNovelFavorite) return null
             return NovelCoverFetcher(
                 data = data,
                 options = options,
