@@ -22,6 +22,7 @@ import eu.kanade.domain.extension.novel.interactor.TrustNovelExtension
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.novelsource.ConfigurableNovelSource
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.novelsource.NovelSourceFactory
@@ -31,13 +32,16 @@ import eu.kanade.tachiyomi.novelsource.model.NovelsPage
 import eu.kanade.tachiyomi.novelsource.model.SNovel
 import eu.kanade.tachiyomi.novelsource.model.SNovelChapter
 import eu.kanade.tachiyomi.source.CatalogueSource
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.MangaSource
 import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.novel.NovelSiteSource
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.lang.Hash
 import eu.kanade.tachiyomi.util.storage.getUriCompat
@@ -50,6 +54,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import logcat.LogPriority
+import androidx.preference.PreferenceScreen
 import okhttp3.OkHttpClient
 import rx.Observable
 import tachiyomi.core.common.util.system.logcat
@@ -315,10 +320,14 @@ object KotlinNovelExtensionLoader {
         val iconUrl = runCatching { saveIcon(context, pkgName, appInfo.loadIcon(pkgManager)) }
             .onFailure { logcat(LogPriority.WARN, it) { "Failed to save Kotlin novel extension icon for $pkgName" } }
             .getOrNull()
+        val pluginSite = sources.asSequence()
+            .mapNotNull { (it as? NovelSiteSource)?.siteUrl }
+            .firstOrNull { it.isNotBlank() }
+            .orEmpty()
         val plugin = NovelPlugin.Installed(
             id = pkgName,
             name = extName,
-            site = "",
+            site = pluginSite,
             lang = lang,
             versionCode = versionCode,
             versionName = versionName,
@@ -326,7 +335,7 @@ object KotlinNovelExtensionLoader {
             iconUrl = iconUrl,
             customJs = null,
             customCss = null,
-            hasSettings = appInfo.metaData?.containsKey(METADATA_SOURCE_FACTORY) == true,
+            hasSettings = sources.any { it is ConfigurableNovelSource },
             sha256 = "",
             repoUrl = "",
             pkgName = pkgName,
@@ -394,8 +403,16 @@ object KotlinNovelExtensionLoader {
     private fun Any.asNovelSource(): NovelSource? {
         return when (this) {
             is NovelSource -> this
-            is CatalogueSource -> KotlinCatalogueNovelSourceAdapter(this)
-            is TachiyomiSource -> KotlinMangaNovelSourceAdapter(this)
+            is CatalogueSource -> if (this is ConfigurableSource) {
+                KotlinConfigurableCatalogueNovelSourceAdapter(this, this)
+            } else {
+                KotlinCatalogueNovelSourceAdapter(this)
+            }
+            is TachiyomiSource -> if (this is ConfigurableSource) {
+                KotlinConfigurableMangaNovelSourceAdapter(this)
+            } else {
+                KotlinMangaNovelSourceAdapter(this)
+            }
             else -> null
         }
     }
@@ -464,17 +481,18 @@ object KotlinNovelExtensionLoader {
 
 private open class KotlinMangaNovelSourceAdapter(
     protected val source: TachiyomiSource,
-) : NovelSource {
+) : NovelSource, NovelSiteSource {
     override val id: Long = source.id
     override val name: String = source.name
     override val lang: String = source.lang
+    override val siteUrl: String? = (source as? HttpSource)?.baseUrl
 
     override suspend fun getNovelDetails(novel: SNovel): SNovel {
-        return source.getMangaDetails(novel.toManga()).toNovel()
+        return source.getMangaDetails(novel.toManga()).toNovel(source)
     }
 
     override suspend fun getChapterList(novel: SNovel): List<SNovelChapter> {
-        return source.getChapterList(novel.toManga()).map { it.toNovelChapter() }
+        return source.getChapterList(novel.toManga()).map { it.toNovelChapter(source) }
     }
 
     override suspend fun getChapterText(chapter: SNovelChapter): String {
@@ -485,7 +503,17 @@ private open class KotlinMangaNovelSourceAdapter(
     }
 }
 
-private class KotlinCatalogueNovelSourceAdapter(
+private open class KotlinConfigurableMangaNovelSourceAdapter(
+    source: ConfigurableSource,
+) : KotlinMangaNovelSourceAdapter(source), ConfigurableNovelSource {
+    private val configurableSource: ConfigurableSource = source
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        configurableSource.setupPreferenceScreen(screen)
+    }
+}
+
+private open class KotlinCatalogueNovelSourceAdapter(
     source: CatalogueSource,
 ) : KotlinMangaNovelSourceAdapter(source), NovelCatalogueSource {
     private val catalogueSource: CatalogueSource = source
@@ -493,19 +521,19 @@ private class KotlinCatalogueNovelSourceAdapter(
     override val supportsLatest: Boolean = catalogueSource.supportsLatest
 
     override suspend fun getPopularNovels(page: Int): NovelsPage {
-        return catalogueSource.getPopularManga(page).toNovelsPage()
+        return catalogueSource.getPopularManga(page).toNovelsPage(source)
     }
 
     override suspend fun getPopularNovels(page: Int, filters: NovelFilterList): NovelsPage {
-        return catalogueSource.getPopularManga(page).toNovelsPage()
+        return catalogueSource.getPopularManga(page).toNovelsPage(source)
     }
 
     override suspend fun getSearchNovels(page: Int, query: String, filters: NovelFilterList): NovelsPage {
-        return catalogueSource.getSearchManga(page, query, filters.toMangaFilterList()).toNovelsPage()
+        return catalogueSource.getSearchManga(page, query, filters.toMangaFilterList()).toNovelsPage(source)
     }
 
     override suspend fun getLatestUpdates(page: Int): NovelsPage {
-        return catalogueSource.getLatestUpdates(page).toNovelsPage()
+        return catalogueSource.getLatestUpdates(page).toNovelsPage(source)
     }
 
     override suspend fun getLatestUpdates(page: Int, filters: NovelFilterList): NovelsPage {
@@ -517,19 +545,29 @@ private class KotlinCatalogueNovelSourceAdapter(
     @Deprecated("Use the non-RxJava API instead.")
     @Suppress("DEPRECATION")
     override fun fetchPopularNovels(page: Int): Observable<NovelsPage> {
-        return catalogueSource.fetchPopularManga(page).map { it.toNovelsPage() }
+        return catalogueSource.fetchPopularManga(page).map { it.toNovelsPage(source) }
     }
 
     @Deprecated("Use the non-RxJava API instead.")
     @Suppress("DEPRECATION")
     override fun fetchSearchNovels(page: Int, query: String, filters: NovelFilterList): Observable<NovelsPage> {
-        return catalogueSource.fetchSearchManga(page, query, filters.toMangaFilterList()).map { it.toNovelsPage() }
+        return catalogueSource.fetchSearchManga(page, query, filters.toMangaFilterList()).map { it.toNovelsPage(source) }
     }
 
     @Deprecated("Use the non-RxJava API instead.")
     @Suppress("DEPRECATION")
     override fun fetchLatestUpdates(page: Int): Observable<NovelsPage> {
-        return catalogueSource.fetchLatestUpdates(page).map { it.toNovelsPage() }
+        return catalogueSource.fetchLatestUpdates(page).map { it.toNovelsPage(source) }
+    }
+}
+
+private class KotlinConfigurableCatalogueNovelSourceAdapter(
+    source: CatalogueSource,
+    private val configurableSource: ConfigurableSource,
+) : KotlinCatalogueNovelSourceAdapter(source), ConfigurableNovelSource {
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        configurableSource.setupPreferenceScreen(screen)
     }
 }
 
@@ -586,11 +624,11 @@ private fun NovelFilter<*>.toMangaFilter(): Filter<*> {
     }
 }
 
-private fun MangasPage.toNovelsPage(): NovelsPage {
-    return NovelsPage(mangas.map { it.toNovel() }, hasNextPage)
+private fun MangasPage.toNovelsPage(source: TachiyomiSource): NovelsPage {
+    return NovelsPage(mangas.map { it.toNovel(source) }, hasNextPage)
 }
 
-private fun SManga.toNovel(): SNovel {
+private fun SManga.toNovel(source: TachiyomiSource): SNovel {
     val safeTitle = safeTitle().ifBlank { safeUrl() }
     return SNovel.create().also {
         it.url = safeUrl().ifBlank { safeTitle }
@@ -621,7 +659,7 @@ private fun SNovel.toManga(): SManga {
     }
 }
 
-private fun SChapter.toNovelChapter(): SNovelChapter {
+private fun SChapter.toNovelChapter(source: TachiyomiSource): SNovelChapter {
     val safeName = safeName().ifBlank { safeUrl() }
     return SNovelChapter.create().also {
         it.url = safeUrl().ifBlank { safeName }
@@ -641,6 +679,20 @@ private fun SNovelChapter.toChapter(): SChapter {
         it.date_upload = runCatching { date_upload }.getOrDefault(0L)
         it.chapter_number = runCatching { chapter_number }.getOrDefault(-1f)
         it.scanlator = runCatching { scanlator }.getOrNull()
+    }
+}
+
+private fun resolveSourceUrl(source: TachiyomiSource, url: String): String {
+    val raw = url.trim()
+    if (raw.isBlank()) return raw
+    if (raw.startsWith("http://", ignoreCase = true) || raw.startsWith("https://", ignoreCase = true)) {
+        return raw
+    }
+    val baseUrl = (source as? HttpSource)?.baseUrl?.trimEnd('/') ?: return raw
+    return if (raw.startsWith('/')) {
+        "$baseUrl$raw"
+    } else {
+        "$baseUrl/$raw"
     }
 }
 

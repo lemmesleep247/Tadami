@@ -16,6 +16,7 @@ import eu.kanade.domain.entries.novel.model.toDomainNovel
 import eu.kanade.domain.entries.novel.model.toSNovel
 import eu.kanade.presentation.util.ioCoroutineScope
 import eu.kanade.tachiyomi.extension.novel.runtime.hasVisiblePluginSettingsByDiscovery
+import eu.kanade.tachiyomi.novelsource.ConfigurableNovelSource
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
 import eu.kanade.tachiyomi.novelsource.model.SNovel
@@ -145,7 +146,7 @@ class BrowseNovelSourceScreenModel(
 
         screenModelScope.launch {
             val isConfigurable = withContext(ioCoroutineScope.coroutineContext) {
-                source.hasVisiblePluginSettingsByDiscovery()
+                source is ConfigurableNovelSource || source.hasVisiblePluginSettingsByDiscovery()
             }
             mutableState.update { it.copy(isSourceConfigurable = isConfigurable) }
         }
