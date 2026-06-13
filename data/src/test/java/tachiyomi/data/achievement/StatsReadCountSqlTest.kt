@@ -15,9 +15,9 @@ import org.junit.jupiter.api.Test
 import tachiyomi.data.DateColumnAdapter
 import tachiyomi.data.MangaUpdateStrategyColumnAdapter
 import tachiyomi.data.StringListColumnAdapter
-import tachiyomi.data.Database as MangaDatabase
 import tachiyomi.mi.data.AnimeDatabase
 import tachiyomi.novel.data.NovelDatabase
+import tachiyomi.data.Database as MangaDatabase
 
 class StatsReadCountSqlTest {
 

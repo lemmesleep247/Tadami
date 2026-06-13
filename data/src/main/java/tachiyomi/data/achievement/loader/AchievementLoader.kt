@@ -294,7 +294,6 @@ internal fun shouldBackfillRewards(
     }
 }
 
-
 internal fun shouldRecalculateAchievementProgress(
     calculationVersion: Int,
     jsonVersion: Int,

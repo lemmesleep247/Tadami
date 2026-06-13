@@ -34,6 +34,7 @@ import eu.kanade.tachiyomi.util.system.createFileInCacheDir
 import eu.kanade.tachiyomi.util.system.isCharging
 import eu.kanade.tachiyomi.util.system.isConnectedToWifi
 import eu.kanade.tachiyomi.util.system.isRunning
+import eu.kanade.tachiyomi.util.system.isRunningOrEnqueued
 import eu.kanade.tachiyomi.util.system.workManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -277,7 +278,9 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                 }
         }
 
-        val restrictions = libraryPreferences.autoUpdateItemRestrictions().get().takeIf { targetEntryIds == null }.orEmpty()
+        val restrictions = libraryPreferences.autoUpdateItemRestrictions().get().takeIf {
+            targetEntryIds == null
+        }.orEmpty()
         val skippedUpdates = mutableListOf<Pair<Manga, String?>>()
         val (_, fetchWindowUpperBound) = mangaFetchInterval.getWindow(ZonedDateTime.now())
 
@@ -505,17 +508,18 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             mangaToUpdate.size,
         )
 
-        block()
-
-        ensureActive()
-
-        updatingManga.remove(manga)
-        completed.getAndIncrement()
-        notifier.showProgressNotification(
-            updatingManga,
-            completed.get(),
-            mangaToUpdate.size,
-        )
+        try {
+            block()
+            ensureActive()
+        } finally {
+            updatingManga.remove(manga)
+            completed.getAndIncrement()
+            notifier.showProgressNotification(
+                updatingManga,
+                completed.get(),
+                mangaToUpdate.size,
+            )
+        }
     }
 
     /**
@@ -524,7 +528,7 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
     private fun writeErrorFile(errors: List<LibraryUpdateFailure>): File {
         try {
             if (errors.isNotEmpty()) {
-                val file = context.createFileInCacheDir("tadami_update_errors.txt")
+                val file = context.createFileInCacheDir("tadami_manga_update_errors.txt")
                 file.bufferedWriter().use { out ->
                     out.write(
                         context.stringResource(MR.strings.library_errors_help, ERROR_LOG_HELP_URL) + "\n\n",
@@ -559,8 +563,6 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         private const val WORK_NAME_MANUAL = "LibraryUpdate-manual"
 
         private const val ERROR_LOG_HELP_URL = "https://t.me/TadamiSupport"
-        private const val MANGA_PER_SOURCE_QUEUE_WARNING_THRESHOLD = 60
-
         /**
          * Key for category to update.
          */
@@ -601,7 +603,7 @@ class MangaLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             inputData: Data,
         ): Boolean {
             val wm = context.workManager
-            if (wm.isRunning(TAG)) {
+            if (wm.isRunning(TAG) || wm.isRunningOrEnqueued(WORK_NAME_MANUAL)) {
                 // Already running either as a scheduled or manual job
                 return false
             }

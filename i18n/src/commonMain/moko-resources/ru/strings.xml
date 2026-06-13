@@ -257,6 +257,12 @@
     <string name="label_extensions">Расширения</string>
     <string name="label_extension_info">Информация о расширении</string>
     <string name="ext_update">Обновить</string>
+    <string name="ext_repo_update_short">Другой репозиторий</string>
+    <string name="ext_repo_update_required">Требуется переустановка</string>
+    <string name="ext_repo_update_dialog_title">Переустановить из другого репозитория</string>
+    <string name="ext_repo_update_dialog_message">Новая версия "%s" найдена в другом репозитории. Текущий плагин будет удалён перед установкой этой версии. Если установка не удастся, его нужно будет установить заново вручную.</string>
+    <string name="ext_repo_update_action">Удалить и установить из %s</string>
+    <string name="ext_repo_update_empty">Варианты для переустановки не найдены. Обновите репозитории и попробуйте снова.</string>
     <string name="ext_install">Установить</string>
     <string name="ext_pending">Ожидается</string>
     <string name="ext_downloading">Загружается</string>

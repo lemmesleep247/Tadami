@@ -32,6 +32,7 @@ import eu.kanade.tachiyomi.util.system.createFileInCacheDir
 import eu.kanade.tachiyomi.util.system.isCharging
 import eu.kanade.tachiyomi.util.system.isConnectedToWifi
 import eu.kanade.tachiyomi.util.system.isRunning
+import eu.kanade.tachiyomi.util.system.isRunningOrEnqueued
 import eu.kanade.tachiyomi.util.system.workManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -267,7 +268,9 @@ class NovelLibraryUpdateJob(
             .groupBy { it.novel.id }
             .mapValues { (_, entries) -> entries.map { it.category }.toSet() }
 
-        val restrictions = libraryPreferences.autoUpdateItemRestrictions().get().takeIf { targetEntryIds == null }.orEmpty()
+        val restrictions = libraryPreferences.autoUpdateItemRestrictions().get().takeIf {
+            targetEntryIds == null
+        }.orEmpty()
         val (_, fetchWindowUpperBound) = getNovelFetchWindow(ZonedDateTime.now())
         val skippedUpdates = mutableListOf<Pair<Novel, String?>>()
 
@@ -472,7 +475,7 @@ class NovelLibraryUpdateJob(
     private fun writeErrorFile(errors: List<LibraryUpdateFailure>): File {
         try {
             if (errors.isNotEmpty()) {
-                val file = context.createFileInCacheDir("tadami_update_errors.txt")
+                val file = context.createFileInCacheDir("tadami_novel_update_errors.txt")
                 file.bufferedWriter().use { out ->
                     out.write(
                         context.stringResource(MR.strings.library_errors_help, ERROR_LOG_HELP_URL) + "\n\n",
@@ -516,19 +519,20 @@ class NovelLibraryUpdateJob(
             failed = failed.get(),
         )
 
-        block()
-
-        ensureActive()
-
-        updatingNovel.remove(novel)
-        completed.getAndIncrement()
-        notifier.showProgressNotification(
-            novels = updatingNovel,
-            current = completed.get(),
-            total = novelToUpdate.size,
-            updated = updated.get(),
-            failed = failed.get(),
-        )
+        try {
+            block()
+            ensureActive()
+        } finally {
+            updatingNovel.remove(novel)
+            completed.getAndIncrement()
+            notifier.showProgressNotification(
+                novels = updatingNovel,
+                current = completed.get(),
+                total = novelToUpdate.size,
+                updated = updated.get(),
+                failed = failed.get(),
+            )
+        }
     }
 
     companion object {
@@ -562,7 +566,7 @@ class NovelLibraryUpdateJob(
 
         private fun enqueueManualUpdate(context: Context, inputData: Data): Boolean {
             val wm = context.workManager
-            if (wm.isRunning(TAG)) {
+            if (wm.isRunning(TAG) || wm.isRunningOrEnqueued(WORK_NAME_MANUAL)) {
                 return false
             }
 

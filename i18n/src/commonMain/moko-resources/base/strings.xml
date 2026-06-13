@@ -381,6 +381,12 @@
     <string name="ext_reinstall_required">Reinstall required</string>
     <string name="ext_reinstall_required_hint">A newer plugin was found in another repository. Reinstall is required.</string>
     <string name="ext_obsolete">Obsolete</string>
+    <string name="ext_repo_update_short">Different repository</string>
+    <string name="ext_repo_update_required">Reinstall required</string>
+    <string name="ext_repo_update_dialog_title">Reinstall from another repository</string>
+    <string name="ext_repo_update_dialog_message">A newer version of "%s" was found in another repository. The current plugin will be removed before installing this version. If installation fails, you will need to install it again manually.</string>
+    <string name="ext_repo_update_action">Remove and install from %s</string>
+    <string name="ext_repo_update_empty">No reinstall candidates found. Refresh repositories and try again.</string>
     <string name="ext_install">Install</string>
     <string name="ext_pending">Pending</string>
     <string name="ext_downloading">Downloading</string>

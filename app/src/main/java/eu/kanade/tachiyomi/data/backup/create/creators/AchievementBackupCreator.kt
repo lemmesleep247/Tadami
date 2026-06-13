@@ -343,7 +343,6 @@ class AchievementBackupCreator(
         }
     }
 
-
     private fun getMangaGlobalUpdateItemCount(libraryManga: List<LibraryManga>): Int {
         val includedCategories = preferences.mangaUpdateCategories().get().map { it.toLong() }
         val includedManga = if (includedCategories.isNotEmpty()) {
@@ -366,9 +365,11 @@ class AchievementBackupCreator(
             .filterNot { it.manga.id in excludedMangaIds }
             .distinctBy { it.manga.id }
             .count {
-                !((ENTRY_NON_COMPLETED in updateRestrictions && it.manga.status.toInt() == SManga.COMPLETED) ||
-                    (ENTRY_HAS_UNVIEWED in updateRestrictions && it.unreadCount != 0L) ||
-                    (ENTRY_NON_VIEWED in updateRestrictions && it.totalChapters > 0 && !it.hasStarted))
+                !(
+                    (ENTRY_NON_COMPLETED in updateRestrictions && it.manga.status.toInt() == SManga.COMPLETED) ||
+                        (ENTRY_HAS_UNVIEWED in updateRestrictions && it.unreadCount != 0L) ||
+                        (ENTRY_NON_VIEWED in updateRestrictions && it.totalChapters > 0 && !it.hasStarted)
+                    )
             }
     }
 
@@ -394,9 +395,11 @@ class AchievementBackupCreator(
             .filterNot { it.anime.id in excludedAnimeIds }
             .distinctBy { it.anime.id }
             .count {
-                !((ENTRY_NON_COMPLETED in updateRestrictions && it.anime.status.toInt() == AnimeStatus.COMPLETED) ||
-                    (ENTRY_HAS_UNVIEWED in updateRestrictions && it.unseenCount != 0L) ||
-                    (ENTRY_NON_VIEWED in updateRestrictions && it.totalCount > 0 && !it.hasStarted))
+                !(
+                    (ENTRY_NON_COMPLETED in updateRestrictions && it.anime.status.toInt() == AnimeStatus.COMPLETED) ||
+                        (ENTRY_HAS_UNVIEWED in updateRestrictions && it.unseenCount != 0L) ||
+                        (ENTRY_NON_VIEWED in updateRestrictions && it.totalCount > 0 && !it.hasStarted)
+                    )
             }
     }
 

@@ -18,6 +18,21 @@ import tachiyomi.domain.extension.novel.repository.NovelPluginRepository
 class DefaultNovelExtensionManagerTest {
 
     @Test
+    fun `remove saved repo entries removes both pkg and id keys`() {
+        val entries = setOf(
+            "pkg.name|https://old.example|Old Repo",
+            "plugin.id|https://old.example|Old Repo",
+            "other.id|https://other.example|Other Repo",
+        )
+
+        removeNovelInstalledRepoEntries(
+            entries = entries,
+            key = "pkg.name",
+            alternateKey = "plugin.id",
+        ) shouldBe setOf("other.id|https://other.example|Other Repo")
+    }
+
+    @Test
     fun `refreshAvailablePlugins updates available flow`() = runTest {
         val repo = FakePluginRepository()
         val api = FakePluginApi(

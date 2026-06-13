@@ -43,7 +43,8 @@ class RuleContextImpl(
             AchievementCategory.BOTH, AchievementCategory.SECRET -> {
                 val manga = mangaHandler.awaitOneOrNull { db -> db.chaptersQueries.getTotalReadChapterCount() } ?: 0L
                 val anime = animeHandler.awaitOneOrNull { db -> db.episodesQueries.getTotalSeenEpisodeCount() } ?: 0L
-                val novel = novelHandler.awaitOneOrNull { db -> db.novel_chaptersQueries.getTotalReadChapterCount() } ?: 0L
+                val novel =
+                    novelHandler.awaitOneOrNull { db -> db.novel_chaptersQueries.getTotalReadChapterCount() } ?: 0L
                 (manga + anime + novel).toInt()
             }
         }

@@ -23,7 +23,6 @@ class StatsCalculationsTest {
         StatsCalculations.isCompletedStatus(status = 1, completedStatus = 2) shouldBe false
     }
 
-
     @Test
     fun `manual completed status counts title as completed even when earlier content is not marked read`() {
         StatsCalculations.isCompletedByUserConsumption(

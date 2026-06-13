@@ -1,6 +1,5 @@
 package eu.kanade.presentation.browse.anime
 
-import android.widget.Toast
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -84,6 +83,7 @@ fun AnimeExtensionScreen(
     onInstallExtension: (AnimeExtension.Available) -> Unit,
     onUninstallExtension: (AnimeExtension) -> Unit,
     onUpdateExtension: (AnimeExtension.Installed) -> Unit,
+    onReinstallExtension: (AnimeExtension.Installed) -> Unit,
     onTrustExtension: (AnimeExtension.Untrusted) -> Unit,
     onOpenExtension: (AnimeExtension.Installed) -> Unit,
     onClickUpdateAll: () -> Unit,
@@ -127,6 +127,7 @@ fun AnimeExtensionScreen(
                     onInstallExtension = onInstallExtension,
                     onUninstallExtension = onUninstallExtension,
                     onUpdateExtension = onUpdateExtension,
+                    onReinstallExtension = onReinstallExtension,
                     onTrustExtension = onTrustExtension,
                     onOpenExtension = onOpenExtension,
                     onClickUpdateAll = onClickUpdateAll,
@@ -147,13 +148,13 @@ private fun AnimeExtensionContent(
     onInstallExtension: (AnimeExtension.Available) -> Unit,
     onUninstallExtension: (AnimeExtension) -> Unit,
     onUpdateExtension: (AnimeExtension.Installed) -> Unit,
+    onReinstallExtension: (AnimeExtension.Installed) -> Unit,
     onTrustExtension: (AnimeExtension.Untrusted) -> Unit,
     onOpenExtension: (AnimeExtension.Installed) -> Unit,
     onClickUpdateAll: () -> Unit,
     onToggleSection: (AnimeExtensionUiModel.Header.Text) -> Unit,
 ) {
     val context = LocalContext.current
-    val reinstallRequiredHint = stringResource(MR.strings.ext_reinstall_required_hint)
     var trustState by remember { mutableStateOf<AnimeExtension.Untrusted?>(null) }
     val installGranted = rememberRequestPackageInstallsPermissionState(initialValue = true)
 
@@ -179,7 +180,14 @@ private fun AnimeExtensionContent(
                 when (header) {
                     is AnimeExtensionUiModel.Header.Resource -> {
                         val action: @Composable RowScope.() -> Unit =
-                            if (header.textRes == MR.strings.ext_updates_pending) {
+                            if (header.textRes == MR.strings.ext_updates_pending &&
+                                items.any { item ->
+                                    val extension = item.extension
+                                    extension is AnimeExtension.Installed &&
+                                        extension.hasUpdate &&
+                                        !extension.needsReinstall
+                                }
+                            ) {
                                 {
                                     Button(onClick = { onClickUpdateAll() }) {
                                         Text(
@@ -255,11 +263,7 @@ private fun AnimeExtensionContent(
                                 is AnimeExtension.Available -> onInstallExtension(it)
                                 is AnimeExtension.Installed -> {
                                     if (it.needsReinstall) {
-                                        Toast.makeText(
-                                            context,
-                                            reinstallRequiredHint,
-                                            Toast.LENGTH_LONG,
-                                        ).show()
+                                        onReinstallExtension(it)
                                     } else if (it.hasUpdate) {
                                         onUpdateExtension(it)
                                     } else {
@@ -353,6 +357,7 @@ private fun AnimeExtensionItem(
             extension = extension,
             installStep = installStep,
             repoSourceCount = repoSourceCount,
+            repoDisplayName = item.repoDisplayName,
             modifier = Modifier.weight(1f),
         )
     }
@@ -363,6 +368,7 @@ private fun AnimeExtensionItemContent(
     extension: AnimeExtension,
     installStep: InstallStep,
     repoSourceCount: Int,
+    repoDisplayName: String?,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -395,10 +401,12 @@ private fun AnimeExtensionItemContent(
                     )
                 }
 
-                val repoName = if (extension is AnimeExtension.Available && repoSourceCount > 1) {
-                    pluralStringResource(MR.plurals.num_repos, count = repoSourceCount, repoSourceCount)
-                } else {
-                    extension.repoDisplayName(repoSourceCount)
+                val repoName = when {
+                    extension is AnimeExtension.Available && repoSourceCount > 1 -> {
+                        pluralStringResource(MR.plurals.num_repos, count = repoSourceCount, repoSourceCount)
+                    }
+                    repoDisplayName != null -> repoDisplayName.oneWordRepoName()
+                    else -> extension.repoDisplayName(repoSourceCount)
                 }
                 repoName?.let { name ->
                     Text(

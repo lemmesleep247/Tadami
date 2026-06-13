@@ -217,7 +217,10 @@ private fun MigrationProgressDialog(
         text = {
             Column {
                 Text(
-                    text = stringResource(MR.strings.migration_progress_body, (progress.coerceIn(0f, 1f) * 100).toInt()),
+                    text = stringResource(
+                        MR.strings.migration_progress_body,
+                        (progress.coerceIn(0f, 1f) * 100).toInt(),
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 LinearProgressIndicator(

@@ -27,14 +27,17 @@ import eu.kanade.tachiyomi.data.cache.AnimeCoverCache
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
 import eu.kanade.tachiyomi.data.library.LibraryUpdateFailure
 import eu.kanade.tachiyomi.data.library.LibraryUpdatePacingPolicy
+import eu.kanade.tachiyomi.data.library.shouldRetryLegacyAutoUpdateRun
 import eu.kanade.tachiyomi.data.library.updateerror.LibraryUpdateErrorMedia
 import eu.kanade.tachiyomi.data.library.updateerror.LibraryUpdateErrorRunType
 import eu.kanade.tachiyomi.data.library.updateerror.LibraryUpdateErrorStore
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.util.storage.getUriCompat
 import eu.kanade.tachiyomi.util.system.createFileInCacheDir
+import eu.kanade.tachiyomi.util.system.isCharging
 import eu.kanade.tachiyomi.util.system.isConnectedToWifi
 import eu.kanade.tachiyomi.util.system.isRunning
+import eu.kanade.tachiyomi.util.system.isRunningOrEnqueued
 import eu.kanade.tachiyomi.util.system.workManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -60,7 +63,6 @@ import tachiyomi.domain.items.episode.model.NoEpisodesException
 import tachiyomi.domain.items.season.interactor.GetAnimeSeasonsByParentId
 import tachiyomi.domain.library.anime.LibraryAnime
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_ONLY_ON_WIFI
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.ENTRY_HAS_UNVIEWED
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.ENTRY_NON_COMPLETED
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.ENTRY_NON_VIEWED
@@ -114,10 +116,19 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         }
 
         if (tags.contains(WORK_NAME_AUTO)) {
+            if (context.workManager.isRunning(WORK_NAME_MANUAL)) {
+                return Result.retry()
+            }
+
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
                 val preferences = Injekt.get<LibraryPreferences>()
                 val restrictions = preferences.autoUpdateDeviceRestrictions().get()
-                if ((DEVICE_ONLY_ON_WIFI in restrictions) && !context.isConnectedToWifi()) {
+                if (shouldRetryLegacyAutoUpdateRun(
+                        restrictions = restrictions,
+                        isConnectedToWifi = context.isConnectedToWifi(),
+                        isCharging = context.isCharging(),
+                    )
+                ) {
                     return Result.retry()
                 }
             }
@@ -292,7 +303,9 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             }
         }
 
-        val restrictions = libraryPreferences.autoUpdateItemRestrictions().get().takeIf { targetEntryIds == null }.orEmpty()
+        val restrictions = libraryPreferences.autoUpdateItemRestrictions().get().takeIf {
+            targetEntryIds == null
+        }.orEmpty()
         val skippedUpdates = mutableListOf<Pair<Anime, String?>>()
         val (_, fetchWindowUpperBound) = animeFetchInterval.getWindow(ZonedDateTime.now())
 
@@ -400,6 +413,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                             val episodesToDownload = filterEpisodesForDownload.await(anime, newEpisodes)
 
                                             if (episodesToDownload.isNotEmpty()) {
+                                                downloadEpisodes(anime, episodesToDownload)
                                                 hasDownloads.set(true)
                                             }
 
@@ -525,17 +539,18 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             animeToUpdate.size,
         )
 
-        block()
-
-        ensureActive()
-
-        updatingAnime.remove(anime)
-        completed.getAndIncrement()
-        notifier.showProgressNotification(
-            updatingAnime,
-            completed.get(),
-            animeToUpdate.size,
-        )
+        try {
+            block()
+            ensureActive()
+        } finally {
+            updatingAnime.remove(anime)
+            completed.getAndIncrement()
+            notifier.showProgressNotification(
+                updatingAnime,
+                completed.get(),
+                animeToUpdate.size,
+            )
+        }
     }
 
     /**
@@ -544,7 +559,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
     private fun writeErrorFile(errors: List<LibraryUpdateFailure>): File {
         try {
             if (errors.isNotEmpty()) {
-                val file = context.createFileInCacheDir("tadami_update_errors.txt")
+                val file = context.createFileInCacheDir("tadami_anime_update_errors.txt")
                 file.bufferedWriter().use { out ->
                     out.write(
                         context.stringResource(MR.strings.library_errors_help, ERROR_LOG_HELP_URL) + "\n\n",
@@ -579,8 +594,6 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         private const val WORK_NAME_MANUAL = "AnimeLibraryUpdate-manual"
 
         private const val ERROR_LOG_HELP_URL = "https://t.me/TadamiSupport"
-
-        private const val ANIME_PER_SOURCE_QUEUE_WARNING_THRESHOLD = 60
 
         /**
          * Key for category to update.
@@ -621,7 +634,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
             inputData: Data,
         ): Boolean {
             val wm = context.workManager
-            if (wm.isRunning(TAG)) {
+            if (wm.isRunning(TAG) || wm.isRunningOrEnqueued(WORK_NAME_MANUAL)) {
                 // Already running either as a scheduled or manual job
                 return false
             }

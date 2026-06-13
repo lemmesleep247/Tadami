@@ -49,8 +49,8 @@ import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.more.stats.components.StatsAuroraProgressData
 import eu.kanade.presentation.more.stats.components.StatsAuroraStatItem
 import eu.kanade.presentation.theme.AuroraTheme
-import eu.kanade.tachiyomi.ui.stats.StatsCalculations
 import eu.kanade.presentation.util.toDurationString
+import eu.kanade.tachiyomi.ui.stats.StatsCalculations
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.aniyomi.AYMR
 import tachiyomi.presentation.core.i18n.stringResource
