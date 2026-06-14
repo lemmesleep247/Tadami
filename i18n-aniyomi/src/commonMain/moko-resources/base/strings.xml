@@ -1870,6 +1870,9 @@
     <string name="treasury_toggle_active">Active</string>
     <string name="treasury_toggle_inactive">Inactive</string>
     <string name="treasury_toggle_locked">Locked</string>
+    <string name="treasury_toggle_available">Available</string>
+    <string name="treasury_toggle_locked_with_desc">Locked, %1$s</string>
+    <string name="treasury_vault_progress_description">Treasury progress: %1$d%%</string>
     <string name="treasury_reward_aurora_crown_description">Royal nickname styling with a bright gold crown accent.</string>
     <string name="treasury_reward_glitch_rune_description">Corrupted rune nickname effect with a synthetic glitch pulse.</string>
     <string name="treasury_reward_cipher_description">Cipher-style nickname effect with bracketed secret energy.</string>

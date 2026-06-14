@@ -2230,6 +2230,9 @@
     <string name="treasury_toggle_active">Активно</string>
     <string name="treasury_toggle_inactive">Неактивно</string>
     <string name="treasury_toggle_locked">Заблокировано</string>
+    <string name="treasury_toggle_available">Доступно</string>
+    <string name="treasury_toggle_locked_with_desc">Заблокировано, %1$s</string>
+    <string name="treasury_vault_progress_description">Прогресс сокровищницы: %1$d%%</string>
     <string name="treasury_reward_aurora_crown_description">Роскошный эффект ника с золотой короной и мягким сиянием.</string>
     <string name="treasury_reward_glitch_rune_description">Эффект никнейма с искажённой руной и синтетическим глитч-пульсом.</string>
     <string name="treasury_reward_cipher_description">Шифровой эффект никнейма со скобками и секретной энергией.</string>

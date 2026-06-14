@@ -1413,8 +1413,11 @@
     <string name="unlockable_display_list_compact">Компактный список</string>
     <string name="unlockable_display_grid_extra_large">Очень большая сетка</string>
     <string name="unlockable_aura_harem">Аура гарема</string>
+    <string name="unlockable_aura_harem_desc">Розовое свечение вокруг карточек контента</string>
     <string name="unlockable_aura_level_up">Аура мастера достижений</string>
+    <string name="unlockable_aura_level_up_desc">Золотое сияние за прогресс по достижениям</string>
     <string name="unlockable_aura_matrix">Цифровой дождь</string>
+    <string name="unlockable_aura_matrix_desc">Неоновое зеленое свечение с цифровым настроением</string>
     <string name="unlockable_profile_nickname_effect_aurora_crown">Эффект ника «Корона Авроры»</string>
     <string name="unlockable_profile_nickname_effect_glitch_rune">Эффект ника «Глитч-руна»</string>
     <string name="unlockable_profile_nickname_effect_cipher">Эффект ника «Печать шифра»</string>
@@ -1427,7 +1430,11 @@
     <string name="unlockable_special_background_petal_storm">Фон «Шторм лепестков»</string>
     <string name="unlockable_special_background_neon_orbit">Фон «Неоновая орбита»</string>
     <string name="unlockable_aura_trinity_orbit">Аура «Орбита Триединства»</string>
+    <string name="unlockable_aura_trinity_orbit_desc">Три орбиты манги, аниме и ранобэ вокруг карточек</string>
     <string name="unlockable_aura_deep_focus">Аура «Глубокий фокус»</string>
+    <string name="unlockable_aura_deep_focus_desc">Спокойное сине-бирюзовое свечение для длинных сессий</string>
     <string name="unlockable_aura_shadow_monarch">Аура «Теневой монарх»</string>
+    <string name="unlockable_aura_shadow_monarch_desc">Фиолетово-чёрная мифическая тень</string>
     <string name="unlockable_aura_ascendant_gold">Аура «Восходящее золото»</string>
+    <string name="unlockable_aura_ascendant_gold_desc">Белое золото для рангового престижа</string>
 </resources>
