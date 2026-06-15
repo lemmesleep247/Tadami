@@ -238,42 +238,44 @@ fun NovelScreenAuroraImpl(
             chapterGroups.mapTo(mutableSetOf()) { it.groupKey }
         }
     }
-    val initialExpandedGroupKeys = remember(chapters, selectedScanlator, state.targetChapterIndex, volumeGroups, groupedByVolume) {
-        when {
-            groupedByVolume -> {
-                val targetChapterId = chapters.getOrNull(state.targetChapterIndex)?.id
-                volumeGroups.firstOrNull { group -> group.chapters.any { it.id == targetChapterId } }
-                    ?.groupKey
-                    ?.let(::setOf)
-                    .orEmpty()
+    val initialExpandedGroupKeys =
+        remember(chapters, selectedScanlator, state.targetChapterIndex, volumeGroups, groupedByVolume) {
+            when {
+                groupedByVolume -> {
+                    val targetChapterId = chapters.getOrNull(state.targetChapterIndex)?.id
+                    volumeGroups.firstOrNull { group -> group.chapters.any { it.id == targetChapterId } }
+                        ?.groupKey
+                        ?.let(::setOf)
+                        .orEmpty()
+                }
+                groupedByChapter -> {
+                    chapters.getOrNull(state.targetChapterIndex)
+                        ?.chapterNumber
+                        ?.toBits()
+                        ?.let(::setOf)
+                        .orEmpty()
+                }
+                else -> emptySet()
             }
-            groupedByChapter -> {
-                chapters.getOrNull(state.targetChapterIndex)
-                    ?.chapterNumber
-                    ?.toBits()
-                    ?.let(::setOf)
-                    .orEmpty()
-            }
-            else -> emptySet()
         }
-    }
     var expandedGroupKeys by remember(chapters, selectedScanlator, groupedByVolume) {
         mutableStateOf(initialExpandedGroupKeys)
     }
-    val chapterDisplayData = remember(chapters, selectedScanlator, expandedGroupKeys, groupedByChapter, groupedByVolume) {
-        if (groupedByVolume) {
-            resolveNovelVolumeChapterDisplayData(
-                chapters = chapters,
-                expandedVolumeKeys = expandedGroupKeys,
-            )
-        } else {
-            resolveNovelChapterDisplayData(
-                chapters = chapters,
-                groupedByChapter = groupedByChapter,
-                expandedGroupKeys = expandedGroupKeys,
-            )
+    val chapterDisplayData =
+        remember(chapters, selectedScanlator, expandedGroupKeys, groupedByChapter, groupedByVolume) {
+            if (groupedByVolume) {
+                resolveNovelVolumeChapterDisplayData(
+                    chapters = chapters,
+                    expandedVolumeKeys = expandedGroupKeys,
+                )
+            } else {
+                resolveNovelChapterDisplayData(
+                    chapters = chapters,
+                    groupedByChapter = groupedByChapter,
+                    expandedGroupKeys = expandedGroupKeys,
+                )
+            }
         }
-    }
     val displayRows = chapterDisplayData.displayRows
     val listChapterCount = when {
         groupedByVolume -> volumeGroups.size
@@ -614,7 +616,8 @@ fun NovelScreenAuroraImpl(
                                                 is NovelChapterDisplayRow.ChapterGroup -> "group-${row.groupKey}"
                                                 is NovelChapterDisplayRow.ChapterVariant -> "variant-${row.chapter.id}"
                                                 is NovelChapterDisplayRow.VolumeGroup -> "volume-${row.groupKey}"
-                                                is NovelChapterDisplayRow.VolumeChapter -> "volume-chapter-${row.chapter.id}"
+                                                is NovelChapterDisplayRow.VolumeChapter ->
+                                                    "volume-chapter-${row.chapter.id}"
                                             }
                                         },
                                         contentType = { row ->
@@ -784,9 +787,15 @@ fun NovelScreenAuroraImpl(
                                                     onLongClick = { onChapterLongClick(chapter.id) },
                                                     onTranslateClick = { onChapterTranslateClick(chapter.id) },
                                                     onTranslateLongClick = { onChapterTranslateLongClick(chapter.id) },
-                                                    onTranslatedDownloadClick = { onChapterTranslatedDownloadClick(chapter.id) },
-                                                    onTranslatedDownloadLongClick = { onChapterTranslatedDownloadLongClick(chapter.id) },
-                                                    onTranslatedDownloadOpenFolder = { onChapterTranslatedDownloadOpenFolder(chapter.id) },
+                                                    onTranslatedDownloadClick = {
+                                                        onChapterTranslatedDownloadClick(chapter.id)
+                                                    },
+                                                    onTranslatedDownloadLongClick = {
+                                                        onChapterTranslatedDownloadLongClick(chapter.id)
+                                                    },
+                                                    onTranslatedDownloadOpenFolder = {
+                                                        onChapterTranslatedDownloadOpenFolder(chapter.id)
+                                                    },
                                                     onToggleBookmark = { onChapterBookmarkToggle(chapter.id) },
                                                     onToggleRead = { onChapterReadToggle(chapter.id) },
                                                     onToggleDownload = { onChapterDownloadToggle(chapter.id) },

@@ -47,7 +47,6 @@ import eu.kanade.tachiyomi.extension.novel.NovelPluginSourceFactory
 import eu.kanade.tachiyomi.extension.novel.api.NetworkNovelPluginIndexFetcher
 import eu.kanade.tachiyomi.extension.novel.api.NovelPluginApi
 import eu.kanade.tachiyomi.extension.novel.api.NovelPluginApiFacade
-import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.extension.novel.api.NovelPluginIndexFetcher
 import eu.kanade.tachiyomi.extension.novel.api.NovelPluginIndexParser
 import eu.kanade.tachiyomi.extension.novel.api.NovelPluginRepoProvider
@@ -75,6 +74,7 @@ import eu.kanade.tachiyomi.ui.player.subtitle.translation.NovelReaderAiSubtitleT
 import eu.kanade.tachiyomi.ui.player.subtitle.translation.SubtitleTranslationCoordinator
 import eu.kanade.tachiyomi.ui.player.subtitle.translation.SubtitleTranslationDiskCache
 import eu.kanade.tachiyomi.ui.player.subtitle.translation.SubtitleTranslationProviderId
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import io.requery.android.database.sqlite.RequerySQLiteOpenHelperFactory
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf

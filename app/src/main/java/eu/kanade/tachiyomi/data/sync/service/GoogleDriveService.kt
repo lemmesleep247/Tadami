@@ -211,7 +211,8 @@ class GoogleDriveService(private val context: Context) {
                 val expectedState = syncPreferences.googleDriveOAuthState().get()
                 val codeVerifier = syncPreferences.googleDriveOAuthCodeVerifier().get()
 
-                if (expectedState.isBlank() || authorizationState.isNullOrBlank() ||
+                if (expectedState.isBlank() ||
+                    authorizationState.isNullOrBlank() ||
                     authorizationState != expectedState
                 ) {
                     throw SecurityException("Invalid Google Drive OAuth state. Please try signing in again.")

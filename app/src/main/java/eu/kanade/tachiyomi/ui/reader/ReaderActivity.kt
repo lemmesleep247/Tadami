@@ -489,7 +489,6 @@ class ReaderActivity : BaseActivity() {
                         bottomBarButtonsOrder.split(",").filter { it.isNotBlank() }
                     }
 
-
                     val showAutoScrollFloatingButton by
                         readerPreferences.showAutoScrollFloatingButton().collectAsStateWithLifecycle()
                     val pageActionButtonColorPref = remember { readerPreferences.pageActionButtonColor() }

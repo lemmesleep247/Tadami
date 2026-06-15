@@ -43,7 +43,10 @@ class ReaderPreferences(
     fun showBottomBarSettings() = preferenceStore.getBoolean("pref_bottom_bar_settings", true)
 
     // ponytail: comma-separated string is simpler than JSON serialization for 5 items
-    fun bottomBarButtonsOrder() = preferenceStore.getString("pref_bottom_bar_buttons_order", "reading_mode,orientation,crop_borders,chapter_list,settings")
+    fun bottomBarButtonsOrder() = preferenceStore.getString(
+        "pref_bottom_bar_buttons_order",
+        "reading_mode,orientation,crop_borders,chapter_list,settings",
+    )
 
     // endregion
 
