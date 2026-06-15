@@ -1,8 +1,9 @@
-package eu.kanade.presentation.entries.manga.components.aurora
+package eu.kanade.presentation.entries.components.aurora
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,7 +28,7 @@ import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.theme.AuroraTheme
 
 @Composable
-internal fun QuietMetricTile(
+fun QuietMetricTile(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
@@ -99,7 +100,7 @@ internal fun QuietMetricTile(
 }
 
 @Composable
-internal fun QuietMetadataRow(
+fun QuietMetadataRow(
     icon: ImageVector,
     label: String,
     value: String,
@@ -147,7 +148,7 @@ internal fun QuietMetadataRow(
 }
 
 @Composable
-internal fun QuietSectionDivider() {
+fun QuietSectionDivider() {
     val colors = AuroraTheme.colors
 
     HorizontalDivider(
@@ -171,7 +172,7 @@ private fun BoxBadge(
     val colors = AuroraTheme.colors
     val shape = RoundedCornerShape(10.dp)
 
-    androidx.compose.foundation.layout.Box(
+    Box(
         modifier = modifier
             .background(colors.accent.copy(alpha = 0.12f), shape)
             .border(1.dp, colors.accent.copy(alpha = 0.18f), shape)

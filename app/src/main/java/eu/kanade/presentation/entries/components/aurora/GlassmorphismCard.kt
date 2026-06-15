@@ -1,4 +1,4 @@
-package eu.kanade.presentation.entries.manga.components.aurora
+package eu.kanade.presentation.entries.components.aurora
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,8 +18,6 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.components.auroraMenuRimLightBrush
-import eu.kanade.presentation.entries.components.aurora.resolveAuroraDetailCardBackgroundColors
-import eu.kanade.presentation.entries.components.aurora.resolveAuroraDetailCardBorderColors
 import eu.kanade.presentation.theme.AuroraTheme
 
 @Composable
