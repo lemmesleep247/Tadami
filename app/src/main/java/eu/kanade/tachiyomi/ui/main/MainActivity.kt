@@ -33,10 +33,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -77,6 +74,7 @@ import eu.kanade.presentation.components.AppStateBanners
 import eu.kanade.presentation.components.DownloadedOnlyBannerBackgroundColor
 import eu.kanade.presentation.components.IncognitoModeBannerBackgroundColor
 import eu.kanade.presentation.components.IndexingBannerBackgroundColor
+import eu.kanade.presentation.more.UpdatedChangelogScreen
 import eu.kanade.presentation.more.settings.screen.browse.AnimeExtensionReposScreen
 import eu.kanade.presentation.more.settings.screen.browse.MangaExtensionReposScreen
 import eu.kanade.presentation.more.settings.screen.data.RestoreBackupScreen
@@ -92,6 +90,7 @@ import eu.kanade.tachiyomi.data.download.manga.MangaDownloadCache
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.updater.AppUpdateChecker
 import eu.kanade.tachiyomi.data.updater.AppUpdateJob
+import eu.kanade.tachiyomi.data.updater.GITHUB_REPO
 import eu.kanade.tachiyomi.data.updater.RELEASE_URL
 import eu.kanade.tachiyomi.extension.anime.api.AnimeExtensionApi
 import eu.kanade.tachiyomi.extension.manga.api.MangaExtensionApi
@@ -115,6 +114,7 @@ import eu.kanade.tachiyomi.ui.player.PlayerActivity
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderScreen
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.system.isNavigationBarNeedsScrim
+import eu.kanade.tachiyomi.util.system.isPreviewBuildType
 import eu.kanade.tachiyomi.util.system.openInBrowser
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.system.updaterEnabled
@@ -133,7 +133,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import logcat.LogPriority
 import mihon.core.migration.Migrator
-import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
@@ -141,8 +140,8 @@ import tachiyomi.domain.achievement.model.Achievement
 import tachiyomi.domain.achievement.repository.ActivityDataRepository
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.release.interactor.GetApplicationRelease
+import tachiyomi.domain.release.model.Release
 import tachiyomi.domain.release.service.AppUpdatePreferences
-import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.util.AppHapticsProvider
 import tachiyomi.presentation.core.util.collectAsStateWithLifecycle
@@ -426,29 +425,33 @@ class MainActivity : BaseActivity() {
             }
 
             var showChangelog by remember { mutableStateOf(false) }
+            var installedRelease by remember { mutableStateOf<Release?>(null) }
             LaunchedEffect(migrationReady.value) {
                 if (migrationReady.value && didMigration.value && !BuildConfig.DEBUG) {
+                    installedRelease = withContext(Dispatchers.IO) {
+                        runCatching {
+                            Injekt.get<GetApplicationRelease>().awaitCurrent(
+                                GetApplicationRelease.Arguments(
+                                    isPreview = isPreviewBuildType,
+                                    commitCount = BuildConfig.COMMIT_COUNT.toInt(),
+                                    versionName = BuildConfig.VERSION_NAME,
+                                    repository = GITHUB_REPO,
+                                    forceCheck = true,
+                                ),
+                            )
+                        }.getOrNull()
+                    }
                     showChangelog = true
                 }
             }
             if (showChangelog) {
-                AlertDialog(
-                    onDismissRequest = { showChangelog = false },
-                    title = {
-                        Text(
-                            text = stringResource(MR.strings.updated_version, BuildConfig.VERSION_NAME),
-                        )
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { openInBrowser(RELEASE_URL) }) {
-                            Text(text = stringResource(MR.strings.whats_new))
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showChangelog = false }) {
-                            Text(text = stringResource(MR.strings.action_ok))
-                        }
-                    },
+                val release = installedRelease
+                UpdatedChangelogScreen(
+                    versionName = release?.version ?: "v${BuildConfig.VERSION_NAME}",
+                    releaseDate = release?.releaseDate.orEmpty(),
+                    changelogInfo = release?.info.orEmpty(),
+                    onOpenInBrowser = { openInBrowser(release?.releaseLink ?: RELEASE_URL) },
+                    onDismiss = { showChangelog = false },
                 )
             }
         }

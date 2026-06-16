@@ -33,6 +33,7 @@ import eu.kanade.tachiyomi.ui.category.CategoriesTab
 import eu.kanade.tachiyomi.ui.download.DownloadsTab
 import eu.kanade.tachiyomi.ui.libraryUpdateError.LibraryUpdateErrorScreen
 import eu.kanade.tachiyomi.ui.more.DebugAppUpdatePreviewScreen
+import eu.kanade.tachiyomi.ui.more.DebugUpdatedChangelogPreviewScreen
 import eu.kanade.tachiyomi.ui.setting.PlayerSettingsScreen
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.ui.stats.StatsTab
@@ -102,6 +103,7 @@ data object MoreTab : Tab {
                 onAboutClick = { navigator.push(AboutScreen) },
                 onHelpClick = { navigator.push(HelpScreen) },
                 onDebugAppUpdatePreviewClick = { navigator.push(DebugAppUpdatePreviewScreen()) },
+                onDebugUpdatedChangelogPreviewClick = { navigator.push(DebugUpdatedChangelogPreviewScreen()) },
                 onStatsClick = { navigator.push(StatsTab) },
                 onLibraryUpdateErrorsClick = { navigator.push(LibraryUpdateErrorScreen()) },
                 onAchievementsClick = { navigator.push(AchievementScreenVoyager) },
@@ -129,6 +131,7 @@ data object MoreTab : Tab {
                 onClickAbout = { navigator.push(AboutScreen) },
                 onClickHelp = { navigator.push(HelpScreen) },
                 onClickDebugAppUpdatePreview = { navigator.push(DebugAppUpdatePreviewScreen()) },
+                onClickDebugUpdatedChangelogPreview = { navigator.push(DebugUpdatedChangelogPreviewScreen()) },
             )
         }
     }

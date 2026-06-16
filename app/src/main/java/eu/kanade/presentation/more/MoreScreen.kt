@@ -55,6 +55,7 @@ fun MoreScreen(
     onClickAbout: () -> Unit,
     onClickHelp: () -> Unit,
     onClickDebugAppUpdatePreview: () -> Unit,
+    onClickDebugUpdatedChangelogPreview: () -> Unit,
 ) {
     Scaffold { contentPadding ->
         ScrollbarLazyColumn(
@@ -201,6 +202,14 @@ fun MoreScreen(
                         subtitle = stringResource(AYMR.strings.debug_app_update_preview_summary),
                         icon = Icons.Outlined.NewReleases,
                         onPreferenceClick = onClickDebugAppUpdatePreview,
+                    )
+                }
+                item {
+                    TextPreferenceWidget(
+                        title = stringResource(AYMR.strings.debug_updated_changelog_preview),
+                        subtitle = stringResource(AYMR.strings.debug_updated_changelog_preview_summary),
+                        icon = Icons.Outlined.NewReleases,
+                        onPreferenceClick = onClickDebugUpdatedChangelogPreview,
                     )
                 }
             }

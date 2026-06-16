@@ -1551,6 +1551,8 @@
     <string name="aurora_more">Ещё</string>
     <string name="debug_app_update_preview">Предпросмотр обновления</string>
     <string name="debug_app_update_preview_summary">Открыть экран обновления с тестовыми данными</string>
+    <string name="debug_updated_changelog_preview">Предпросмотр списка изменений</string>
+    <string name="debug_updated_changelog_preview_summary">Открыть экран списка изменений после обновления с тестовыми данными</string>
     <string name="aurora_library">Библиотека</string>
     <string name="aurora_categories">Категории</string>
     <string name="aurora_data_storage">Данные и хранилище</string>
