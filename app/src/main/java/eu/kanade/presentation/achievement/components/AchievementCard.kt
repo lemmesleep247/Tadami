@@ -33,9 +33,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import eu.kanade.presentation.achievement.utils.AchievementRevealHelper
 import eu.kanade.presentation.theme.AuroraTheme
 import tachiyomi.domain.achievement.model.Achievement
 import tachiyomi.domain.achievement.model.AchievementProgress
+import tachiyomi.i18n.aniyomi.AYMR
+import tachiyomi.presentation.core.i18n.stringResource
 
 /**
  * Aurora-themed Achievement Card with glassmorphism and neon effects
@@ -97,7 +100,7 @@ fun AchievementCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = if (achievement.isHidden && !isUnlocked) "???" else achievement.title,
+                        text = AchievementRevealHelper.getDisplayName(achievement, progress),
                         color = if (isUnlocked) colors.textPrimary else colors.textSecondary.copy(alpha = 0.8f),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
@@ -119,17 +122,28 @@ fun AchievementCard(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 // Description
-                if (!achievement.isHidden || isUnlocked) {
-                    achievement.description?.let { description ->
-                        Text(
-                            text = description,
-                            color = colors.textSecondary.copy(alpha = if (isUnlocked) 0.8f else 0.5f),
-                            fontSize = 12.sp,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            lineHeight = 16.sp,
-                        )
-                    }
+                val displayDesc = if (achievement.isHidden && !isUnlocked) {
+                    AchievementRevealHelper.getDisplayDescription(
+                        achievement = achievement,
+                        progress = progress,
+                        vaguePrefix = stringResource(AYMR.strings.achievement_hint_vague_prefix),
+                        directPrefix = stringResource(AYMR.strings.achievement_hint_direct_prefix),
+                        obviousPrefix = stringResource(AYMR.strings.achievement_hint_obvious_prefix),
+                        cluePrefix = stringResource(AYMR.strings.achievement_clue_prefix),
+                    )
+                } else {
+                    achievement.description
+                }
+
+                if (!displayDesc.isNullOrBlank()) {
+                    Text(
+                        text = displayDesc,
+                        color = colors.textSecondary.copy(alpha = if (isUnlocked) 0.8f else 0.5f),
+                        fontSize = 12.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 16.sp,
+                    )
                 }
 
                 // Thin neon progress line (if locked and progress exists)

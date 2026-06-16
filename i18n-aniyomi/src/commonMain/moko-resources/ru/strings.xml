@@ -1685,6 +1685,38 @@
     <string name="achievement_list_confirm">Отлично!</string>
     <string name="achievement_banner_rare_title">РЕДКОЕ ДОСТИЖЕНИЕ!</string>
     <string name="achievement_banner_unlocked_title">ДОСТИЖЕНИЕ РАЗБЛОКИРОВАНО!</string>
+    <string name="achievement_hint_vague_prefix">Намек: %s</string>
+    <string name="achievement_hint_direct_prefix">Подсказка: %s</string>
+    <string name="achievement_hint_obvious_prefix">Цель: %s</string>
+    <string name="achievement_clue_prefix">Детали: %s</string>
+
+    <string name="achievement_secret_persistent_clicker_hint_vague">Упрямство иногда вознаграждается.</string>
+    <string name="achievement_secret_persistent_clicker_hint_direct">Некоторые уголки приложения реагируют на многократные нажатия.</string>
+    <string name="achievement_secret_persistent_clicker_hint_obvious">Продолжайте нажимать туда, где ничего не происходит в настройках или на экранах.</string>
+
+    <string name="achievement_secret_harem_king_hint_vague">Собирается толпа поклонников.</string>
+    <string name="achievement_secret_harem_king_hint_direct">Окружите себя определённым популярным аниме-тропом в библиотеке.</string>
+    <string name="achievement_secret_harem_king_hint_obvious">Соберите 20 тайтлов с жанром «Гарем».</string>
+
+    <string name="achievement_secret_isekai_truck_hint_vague">Осторожно, оживлённое движение!</string>
+    <string name="achievement_secret_isekai_truck_hint_direct">Портал в другой мир открывается известным транспортным средством.</string>
+    <string name="achievement_secret_isekai_truck_hint_obvious">Соберите 20 историй о перерождении в другом мире (Исекай).</string>
+
+    <string name="achievement_secret_shonen_hint_vague">Путь воина начинается с одной тренировки.</string>
+    <string name="achievement_secret_shonen_hint_direct">Дружба, усилия и победа направят вашу библиотеку.</string>
+    <string name="achievement_secret_shonen_hint_obvious">Соберите 10 классических приключенческих тайтлов (Сёнен).</string>
+
+    <string name="achievement_secret_onepiece_hint_vague">Отправляйтесь в плавание к горизонту.</string>
+    <string name="achievement_secret_onepiece_hint_direct">Сокровище ждет в конце очень долгого пути из очков.</string>
+    <string name="achievement_secret_onepiece_hint_obvious">Наберите 1 000 очков достижений, чтобы найти Ван-Пис.</string>
+
+    <string name="achievement_secret_goku_hint_vague">Уровень силы стремительно растет.</string>
+    <string name="achievement_secret_goku_hint_direct">Сканер вот-вот сломается от вашего суммарного счета.</string>
+    <string name="achievement_secret_goku_hint_obvious">Достигните более 9 000 очков достижений. Это больше 9000!</string>
+
+    <string name="achievement_secret_weeb_awakening_hint_vague">Примите культуру во всех её проявлениях.</string>
+    <string name="achievement_secret_weeb_awakening_hint_direct">Ваша библиотека должна охватывать мангу, аниме и ранобэ.</string>
+    <string name="achievement_secret_weeb_awakening_hint_obvious">Соберите 50+ тайтлов во всех трёх медиа-форматах (Манга, Аниме, Ранобэ).</string>
 
     <string name="achievement_first_chapter_title">Первые шаги</string>
     <string name="achievement_first_chapter_desc">Прочитайте свою первую главу</string>

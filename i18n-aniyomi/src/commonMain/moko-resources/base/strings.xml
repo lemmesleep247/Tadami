@@ -2000,6 +2000,38 @@
     <string name="achievement_list_confirm">Awesome!</string>
     <string name="achievement_banner_rare_title">RARE ACHIEVEMENT!</string>
     <string name="achievement_banner_unlocked_title">ACHIEVEMENT UNLOCKED!</string>
+    <string name="achievement_hint_vague_prefix">Clue: %s</string>
+    <string name="achievement_hint_direct_prefix">Hint: %s</string>
+    <string name="achievement_hint_obvious_prefix">Target: %s</string>
+    <string name="achievement_clue_prefix">Details: %s</string>
+
+    <string name="achievement_secret_persistent_clicker_hint_vague">Stubbornness is sometimes rewarded.</string>
+    <string name="achievement_secret_persistent_clicker_hint_direct">Some corners of the app respond to repetitive touch.</string>
+    <string name="achievement_secret_persistent_clicker_hint_obvious">Keep tapping where nothing seems to happen in settings or screens.</string>
+
+    <string name="achievement_secret_harem_king_hint_vague">A crowd of admirers is gathering.</string>
+    <string name="achievement_secret_harem_king_hint_direct">Surround yourself with a certain popular anime trope in library.</string>
+    <string name="achievement_secret_harem_king_hint_obvious">Collect 20 titles with the \'Harem\' genre.</string>
+
+    <string name="achievement_secret_isekai_truck_hint_vague">Watch out for heavy traffic!</string>
+    <string name="achievement_secret_isekai_truck_hint_direct">A portal to another world is opened by a famous vehicle.</string>
+    <string name="achievement_secret_isekai_truck_hint_obvious">Collect 20 stories about reincarnation in another world (Isekai).</string>
+
+    <string name="achievement_secret_shonen_hint_vague">A warrior\'s path starts with a single training session.</string>
+    <string name="achievement_secret_shonen_hint_direct">Friendship, effort, and victory will guide your library.</string>
+    <string name="achievement_secret_shonen_hint_obvious">Collect 10 classic action/adventure titles (Shonen).</string>
+
+    <string name="achievement_secret_onepiece_hint_vague">Set sail towards the horizon.</string>
+    <string name="achievement_secret_onepiece_hint_direct">The treasure lies at the end of a very long journey of points.</string>
+    <string name="achievement_secret_onepiece_hint_obvious">Earn 1,000 points of achievements to find the One Piece.</string>
+
+    <string name="achievement_secret_goku_hint_vague">Power levels are rising rapidly.</string>
+    <string name="achievement_secret_goku_hint_direct">The scanner is about to break from your total score.</string>
+    <string name="achievement_secret_goku_hint_obvious">Reach over 9,000 total achievement points. It\'s over 9,000!</string>
+
+    <string name="achievement_secret_weeb_awakening_hint_vague">Embrace the culture in all its forms.</string>
+    <string name="achievement_secret_weeb_awakening_hint_direct">Your library should span across manga, anime, and novels.</string>
+    <string name="achievement_secret_weeb_awakening_hint_obvious">Collect 50+ titles across all three media formats (Manga, Anime, Novels).</string>
     <string name="achievement_first_chapter_title">First Steps</string>
     <string name="achievement_first_chapter_desc">Read your first chapter</string>
     <string name="achievement_read_10_chapters_title">Novice</string>
