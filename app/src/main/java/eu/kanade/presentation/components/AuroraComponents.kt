@@ -20,7 +20,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -83,8 +82,15 @@ fun AuroraAmbientBackground(
         }
     }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val powerManager =
+        remember(context) {
+            context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+        }
+    val isPowerSaveMode = powerManager?.isPowerSaveMode == true
+
     val shouldAnimate = shouldAnimateAuroraBackground(
-        userEnabled = enabled && !colors.isEInk,
+        userEnabled = enabled && !colors.isEInk && !isPowerSaveMode,
         isLifecycleResumed = isLifecycleResumed,
         systemAnimationsEnabled = ValueAnimator.areAnimatorsEnabled(),
     )
@@ -396,6 +402,76 @@ private fun getCometProgress(elapsed: Float, duration: Float, delay: Float): Flo
     return if (progress < 0f) 0f else progress / duration
 }
 
+private data class Vec3(val x: Float, val y: Float, val z: Float)
+private data class Projected(val x: Float, val y: Float, val z: Float, val p: Float)
+private data class BookSpec(
+    val index: Int,
+    val theme: Int,
+    val width: Float,
+    val depth: Float,
+    val height: Float,
+    val x: Float,
+    val y: Float,
+    val z: Float,
+    val bobPhase: Float,
+    val bobAmp: Float,
+)
+private data class FaceDraw(
+    val book: BookSpec,
+    val face: String,
+    val corners: List<Projected>,
+    val z: Float,
+)
+
+private data class NeonRingSpec(
+    val pitchBase: Float,
+    val yawBase: Float,
+    val rollBase: Float,
+    val spinPitch: Float,
+    val spinYaw: Float,
+    val radiusFraction: Float,
+    val color: Color,
+    val seed: Float,
+)
+
+private class NeonSegment(
+    var x1: Float = 0f,
+    var y1: Float = 0f,
+    var z1: Float = 0f,
+    var x2: Float = 0f,
+    var y2: Float = 0f,
+    var z2: Float = 0f,
+    var z: Float = 0f,
+    var color: Color = Color.Transparent,
+    var alphaMod: Float = 1f,
+    var widthMod: Float = 1f,
+)
+
+private class NeonPacket(
+    var x: Float = 0f,
+    var y: Float = 0f,
+    var z: Float = 0f,
+    var color: Color = Color.Transparent,
+    var sizeMod: Float = 1f,
+)
+
+private fun srHash(seed: Float): Float {
+    return kotlin.math.abs(kotlin.math.sin(seed * 127.1f + 311.7f) * 43758.5453f) % 1f
+}
+
+private fun mix(a: Float, b: Float, t: Float): Float = a + (b - a) * t
+
+private fun blendColor(a: Color, b: Color, t: Float): Color {
+    val clamped = t.coerceIn(0f, 1f)
+    val inv = 1f - clamped
+    return Color(
+        red = a.red * inv + b.red * clamped,
+        green = a.green * inv + b.green * clamped,
+        blue = a.blue * inv + b.blue * clamped,
+        alpha = a.alpha * inv + b.alpha * clamped,
+    )
+}
+
 @Composable
 private fun AuroraSpecialBackgroundCanvas(
     colors: eu.kanade.presentation.theme.AuroraColors,
@@ -406,13 +482,178 @@ private fun AuroraSpecialBackgroundCanvas(
 
     var timeMillis by remember { mutableStateOf(0L) }
 
+    val facePath = remember { Path() }
+    val lensPath = remember { Path() }
+    val textPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG) }
+
+    val booksCount = 11
+    val variety = 0.84f
+    val scatter = 0.53f
+    val vertical = 1.15f
+    val books = remember {
+        List(booksCount) { i ->
+            val seed = i + 1f
+            BookSpec(
+                index = i,
+                theme = i % 4,
+                width = mix(0.62f, 0.98f, srHash(seed * 2.1f)) * mix(0.92f, 1.16f, variety),
+                depth = mix(0.38f, 0.70f, srHash(seed * 3.7f)) * mix(0.88f, 1.12f, variety),
+                height = mix(0.05f, 0.11f, srHash(seed * 4.2f)) * mix(0.88f, 1.10f, variety),
+                x = (srHash(seed * 5.3f) - 0.5f) * 0.22f * scatter,
+                z = (srHash(seed * 6.1f) - 0.5f) * 0.12f * scatter,
+                y = (i - (booksCount - 1) * 0.5f) * 0.155f * vertical +
+                    (srHash(seed * 7.4f) - 0.5f) * 0.022f * scatter,
+                bobPhase = srHash(seed * 11.3f) * (2f * Math.PI.toFloat()),
+                bobAmp = mix(0.010f, 0.026f, srHash(seed * 12.7f)),
+            )
+        }
+    }
+
+    val pageBright = 0.28f
+    val pageTint = 0.46f + pageBright * 0.42f
+    val bookColors = remember(colors) {
+        val archiveCyan = colors.glowEffect
+        val archivePurple = colors.gradientPurple
+        val archiveAccent = colors.accent
+        val archivePink = Color(0xFFFF5BD0)
+        val archiveGold = Color(0xFFFFD36E)
+        val paperLight = Color(0xFFF2E8CB)
+        val paperMid = Color(0xFFD8C9A2)
+        val paperShadow = Color(0xFFBCAA82)
+        val leatherBase = Color(0xFF2A1F36)
+        val coverShadow = Color(0xFF171222)
+        val coverShadow2 = Color(0xFF0E0A18)
+        val bookBright = 0.26f
+        val accentStrength = 0.67f
+
+        fun themeBase(theme: Int): Color = when (theme % 4) {
+            0 -> archiveCyan
+            1 -> archivePurple
+            2 -> archivePink
+            else -> archiveGold
+        }
+
+        fun scaleColor(color: Color, factor: Float): Color {
+            val f = factor.coerceAtLeast(0f)
+            return Color(
+                red = (color.red * f).coerceIn(0f, 1f),
+                green = (color.green * f).coerceIn(0f, 1f),
+                blue = (color.blue * f).coerceIn(0f, 1f),
+                alpha = color.alpha,
+            )
+        }
+
+        fun coverColor(book: BookSpec): Color {
+            val base = themeBase(book.theme)
+            val tintMix = when (book.theme % 4) {
+                0 -> 0.10f
+                1 -> 0.12f
+                2 -> 0.18f
+                else -> 0.08f
+            } + 0.06f * srHash((book.index + 1f) * 4.7f)
+            val brightness = 0.28f + bookBright * 0.42f + srHash((book.index + 1f) * 8.1f) * 0.06f
+            return blendColor(scaleColor(base, brightness), archiveAccent, tintMix * accentStrength * 0.35f)
+        }
+
+        fun spineColor(book: BookSpec): Color {
+            return blendColor(leatherBase, coverColor(book), 0.30f + 0.08f * srHash((book.index + 1f) * 2.9f))
+        }
+
+        books.map { book ->
+            val cover = coverColor(book)
+            val spine = spineColor(book)
+            Triple(
+                listOf(
+                    scaleColor(paperLight, pageTint * 1.02f),
+                    scaleColor(paperMid, pageTint),
+                    scaleColor(
+                        paperShadow,
+                        pageTint * 0.96f,
+                    ),
+                ),
+                listOf(scaleColor(spine, 0.82f), blendColor(spine, cover, 0.42f), scaleColor(spine, 0.62f)),
+                listOf(blendColor(coverShadow, cover, 0.28f), cover, blendColor(coverShadow2, cover, 0.18f)),
+            )
+        }
+    }
+
+    val diskColors = remember(colors) {
+        val diskBrightness = 0.96f
+        val ghostLight = colors.glowEffect
+        val shadowViolet = colors.gradientPurple
+        val realmAccent = colors.accent
+        val photonWhite = Color(0xFFEAFDFF)
+        List(18) { i ->
+            val yNorm = i / 17f - 0.5f
+            val alphaShape = (1f - kotlin.math.abs(yNorm) / 0.9f).coerceIn(0f, 1f)
+            listOf(
+                realmAccent.copy(alpha = 0f),
+                realmAccent.copy(alpha = 0.05f * diskBrightness * alphaShape),
+                ghostLight.copy(alpha = 0.15f * diskBrightness * alphaShape),
+                photonWhite.copy(alpha = 0.42f * diskBrightness * alphaShape),
+                ghostLight.copy(alpha = 0.16f * diskBrightness * alphaShape),
+                realmAccent.copy(alpha = 0.05f * diskBrightness * alphaShape),
+                realmAccent.copy(alpha = 0f),
+            )
+        }
+    }
+
+    val steps = 48
+    val ringsCount = 8
+    val rings = remember(colors) {
+        val cyan = Color(0xFF49E6FF)
+        val purple = Color(0xFF9B8CFF)
+        val gold = Color(0xFFFFD36E)
+        val pink = Color(0xFFFF5BD0)
+        val accentColor = colors.accent
+        val accentStrength = 0.57f
+
+        fun neonRingColor(seed: Float): Color {
+            val colorSeed = srHash(seed * 7f)
+            val base = when {
+                colorSeed > 0.90f -> pink
+                colorSeed > 0.75f -> gold
+                colorSeed > 0.40f -> purple
+                else -> cyan
+            }
+            return when (base) {
+                gold -> blendColor(gold, accentColor, accentStrength * 0.42f)
+                pink -> blendColor(pink, accentColor, accentStrength * 0.24f)
+                else -> base
+            }
+        }
+
+        List(ringsCount) { i ->
+            val seed = i * 17.3f
+            NeonRingSpec(
+                pitchBase = srHash(seed) * Math.PI.toFloat() * 2f,
+                yawBase = srHash(seed * 2f) * Math.PI.toFloat() * 2f,
+                rollBase = srHash(seed * 3f) * Math.PI.toFloat() * 2f,
+                spinPitch = (srHash(seed * 5f) - 0.5f) * 1.5f,
+                spinYaw = (srHash(seed * 6f) - 0.5f) * 1.5f,
+                radiusFraction = 0.60f + srHash(seed * 4f) * 0.60f,
+                color = neonRingColor(seed),
+                seed = seed,
+            )
+        }
+    }
+
+    val segmentPool = remember(steps, ringsCount) {
+        MutableList(steps * ringsCount) { NeonSegment() }
+    }
+    val segmentComparator = remember { compareBy<NeonSegment> { it.z } }
+
+    val packetPool = remember {
+        MutableList(40) { NeonPacket() }
+    }
+    val packetComparator = remember { compareBy<NeonPacket> { it.z } }
+
     if (animate) {
         LaunchedEffect(Unit) {
             val startTime = android.os.SystemClock.uptimeMillis()
             while (true) {
-                withFrameMillis { frameTime ->
-                    timeMillis = frameTime - startTime
-                }
+                timeMillis = android.os.SystemClock.uptimeMillis() - startTime
+                kotlinx.coroutines.delay(33) // ~30 FPS throttling
             }
         }
     }
@@ -711,27 +952,6 @@ private fun AuroraSpecialBackgroundCanvas(
                 val coverShadow = Color(0xFF171222)
                 val coverShadow2 = Color(0xFF0E0A18)
 
-                data class Vec3(val x: Float, val y: Float, val z: Float)
-                data class Projected(val x: Float, val y: Float, val z: Float, val p: Float)
-                data class BookSpec(
-                    val index: Int,
-                    val theme: Int,
-                    val width: Float,
-                    val depth: Float,
-                    val height: Float,
-                    val x: Float,
-                    val y: Float,
-                    val z: Float,
-                    val bobPhase: Float,
-                    val bobAmp: Float,
-                )
-                data class FaceDraw(
-                    val book: BookSpec,
-                    val face: String,
-                    val corners: List<Projected>,
-                    val z: Float,
-                )
-
                 fun srHash(seed: Float): Float {
                     return kotlin.math.abs(kotlin.math.sin(seed * 127.1f + 311.7f) * 43758.5453f) % 1f
                 }
@@ -877,16 +1097,17 @@ private fun AuroraSpecialBackgroundCanvas(
                     typeface: Typeface = Typeface.DEFAULT_BOLD,
                 ) {
                     if (sizePx < 4f || alpha <= 0f) return
-                    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        this.color = color.copy(alpha = alpha.coerceIn(0f, 1f)).toArgb()
-                        textAlign = Paint.Align.CENTER
-                        textSize = sizePx
-                        this.typeface = typeface
-                        setShadowLayer(sizePx * 0.18f, 0f, 0f, color.copy(alpha = alpha * 0.35f).toArgb())
-                    }
+                    textPaint.reset()
+                    textPaint.flags = Paint.ANTI_ALIAS_FLAG
+                    textPaint.color = color.copy(alpha = alpha.coerceIn(0f, 1f)).toArgb()
+                    textPaint.textAlign = Paint.Align.CENTER
+                    textPaint.textSize = sizePx
+                    textPaint.typeface = typeface
+                    textPaint.setShadowLayer(sizePx * 0.18f, 0f, 0f, color.copy(alpha = alpha * 0.35f).toArgb())
+
                     drawContext.canvas.nativeCanvas.save()
                     drawContext.canvas.nativeCanvas.rotate(rotationDeg, position.x, position.y)
-                    drawContext.canvas.nativeCanvas.drawText(text, position.x, position.y + sizePx * 0.34f, paint)
+                    drawContext.canvas.nativeCanvas.drawText(text, position.x, position.y + sizePx * 0.34f, textPaint)
                     drawContext.canvas.nativeCanvas.restore()
                 }
 
@@ -894,13 +1115,13 @@ private fun AuroraSpecialBackgroundCanvas(
                     val book = faceDraw.book
                     val cover = coverColor(book)
                     val spine = spineColor(book)
-                    val path = Path().apply {
-                        moveTo(faceDraw.corners[0].x, faceDraw.corners[0].y)
-                        lineTo(faceDraw.corners[1].x, faceDraw.corners[1].y)
-                        lineTo(faceDraw.corners[2].x, faceDraw.corners[2].y)
-                        lineTo(faceDraw.corners[3].x, faceDraw.corners[3].y)
-                        close()
-                    }
+                    facePath.reset()
+                    facePath.moveTo(faceDraw.corners[0].x, faceDraw.corners[0].y)
+                    facePath.lineTo(faceDraw.corners[1].x, faceDraw.corners[1].y)
+                    facePath.lineTo(faceDraw.corners[2].x, faceDraw.corners[2].y)
+                    facePath.lineTo(faceDraw.corners[3].x, faceDraw.corners[3].y)
+                    facePath.close()
+
                     val vx = Offset(
                         faceDraw.corners[1].x - faceDraw.corners[0].x,
                         faceDraw.corners[1].y - faceDraw.corners[0].y,
@@ -917,39 +1138,21 @@ private fun AuroraSpecialBackgroundCanvas(
                     val isCover = faceDraw.face == "top" || faceDraw.face == "bottom"
                     val isPageEdge = faceDraw.face == "back" || faceDraw.face == "left" || faceDraw.face == "right"
 
-                    val brush = when {
-                        isPageEdge -> Brush.linearGradient(
-                            colors = listOf(
-                                scaleColor(paperLight, pageTint * 1.02f),
-                                scaleColor(paperMid, pageTint),
-                                scaleColor(paperShadow, pageTint * 0.96f),
-                            ),
-                            start = Offset(faceDraw.corners[0].x, faceDraw.corners[0].y),
-                            end = Offset(faceDraw.corners[2].x, faceDraw.corners[2].y),
-                        )
-                        isSpine -> Brush.linearGradient(
-                            colors = listOf(
-                                scaleColor(spine, 0.82f),
-                                blendColor(spine, cover, 0.42f),
-                                scaleColor(spine, 0.62f),
-                            ),
-                            start = Offset(faceDraw.corners[0].x, faceDraw.corners[0].y),
-                            end = Offset(faceDraw.corners[2].x, faceDraw.corners[2].y),
-                        )
-                        else -> Brush.linearGradient(
-                            colors = listOf(
-                                blendColor(coverShadow, cover, 0.28f),
-                                cover,
-                                blendColor(coverShadow2, cover, 0.18f),
-                            ),
-                            start = Offset(faceDraw.corners[0].x, faceDraw.corners[0].y),
-                            end = Offset(faceDraw.corners[2].x, faceDraw.corners[2].y),
-                        )
+                    val colorsList = when {
+                        isPageEdge -> bookColors[book.index].first
+                        isSpine -> bookColors[book.index].second
+                        else -> bookColors[book.index].third
                     }
 
-                    drawPath(path = path, brush = brush)
+                    val brush = Brush.linearGradient(
+                        colors = colorsList,
+                        start = Offset(faceDraw.corners[0].x, faceDraw.corners[0].y),
+                        end = Offset(faceDraw.corners[2].x, faceDraw.corners[2].y),
+                    )
+
+                    drawPath(path = facePath, brush = brush)
                     drawPath(
-                        path = path,
+                        path = facePath,
                         color = if (isPageEdge) {
                             scaleColor(paperShadow, pageTint * 0.96f).copy(
                                 alpha =
@@ -960,7 +1163,7 @@ private fun AuroraSpecialBackgroundCanvas(
                         },
                     )
                     drawPath(
-                        path = path,
+                        path = facePath,
                         color = if (isPageEdge) {
                             archiveWhite.copy(alpha = 0.07f + 0.03f * near)
                         } else {
@@ -1071,23 +1274,6 @@ private fun AuroraSpecialBackgroundCanvas(
                 }
 
                 val scale = minDim * 0.40f * scalePreset
-                val books = List(booksCount) { i ->
-                    val seed = i + 1f
-                    BookSpec(
-                        index = i,
-                        theme = i % 4,
-                        width = mix(0.62f, 0.98f, srHash(seed * 2.1f)) * mix(0.92f, 1.16f, variety),
-                        depth = mix(0.38f, 0.70f, srHash(seed * 3.7f)) * mix(0.88f, 1.12f, variety),
-                        height = mix(0.05f, 0.11f, srHash(seed * 4.2f)) * mix(0.88f, 1.10f, variety),
-                        x = (srHash(seed * 5.3f) - 0.5f) * 0.22f * scatter,
-                        z = (srHash(seed * 6.1f) - 0.5f) * 0.12f * scatter,
-                        y =
-                        (i - (booksCount - 1) * 0.5f) * 0.155f * vertical +
-                            (srHash(seed * 7.4f) - 0.5f) * 0.022f * scatter,
-                        bobPhase = srHash(seed * 11.3f) * (2f * Math.PI.toFloat()),
-                        bobAmp = mix(0.010f, 0.026f, srHash(seed * 12.7f)),
-                    )
-                }
 
                 drawRect(
                     brush = Brush.radialGradient(
@@ -1214,14 +1400,6 @@ private fun AuroraSpecialBackgroundCanvas(
                 val shadowViolet = colors.gradientPurple
                 val realmAccent = colors.accent
 
-                fun srHash(seed: Float): Float {
-                    return kotlin.math.abs(
-                        kotlin.math.sin(seed * 127.1f + 311.7f) * 43758.5453f,
-                    ) % 1f
-                }
-
-                fun srMix(a: Float, b: Float, t: Float): Float = a + (b - a) * t
-
                 fun shadowRealmColor(t: Float, alpha: Float): Color {
                     return when {
                         t < 0.18f -> photonWhite.copy(alpha = alpha)
@@ -1231,26 +1409,25 @@ private fun AuroraSpecialBackgroundCanvas(
                     }
                 }
 
-                fun makeLensPath(radius: Float, height: Float, sign: Float): Path {
-                    return Path().apply {
-                        moveTo(center.x - radius, center.y)
-                        cubicTo(
-                            center.x - radius * 0.62f,
-                            center.y + sign * height * 0.95f,
-                            center.x - radius * 0.34f,
-                            center.y + sign * height * 1.12f,
-                            center.x,
-                            center.y + sign * height * 1.08f,
-                        )
-                        cubicTo(
-                            center.x + radius * 0.34f,
-                            center.y + sign * height * 1.12f,
-                            center.x + radius * 0.62f,
-                            center.y + sign * height * 0.95f,
-                            center.x + radius,
-                            center.y,
-                        )
-                    }
+                fun populateLensPath(path: Path, radius: Float, height: Float, sign: Float) {
+                    path.reset()
+                    path.moveTo(center.x - radius, center.y)
+                    path.cubicTo(
+                        center.x - radius * 0.62f,
+                        center.y + sign * height * 0.95f,
+                        center.x - radius * 0.34f,
+                        center.y + sign * height * 1.12f,
+                        center.x,
+                        center.y + sign * height * 1.08f,
+                    )
+                    path.cubicTo(
+                        center.x + radius * 0.34f,
+                        center.y + sign * height * 1.12f,
+                        center.x + radius * 0.62f,
+                        center.y + sign * height * 0.95f,
+                        center.x + radius,
+                        center.y,
+                    )
                 }
 
                 // 1) Shadow Realm void glow: nearly black, with a faint violet/cyan gravitational aura.
@@ -1273,7 +1450,7 @@ private fun AuroraSpecialBackgroundCanvas(
                 val backgroundStarCount = (42 * starDensity).toInt().coerceAtLeast(24)
                 repeat(backgroundStarCount) { i ->
                     val seed = i + 1f
-                    val baseRadius = minDim * srMix(0.18f, 0.78f, kotlin.math.sqrt(srHash(seed * 1.91f)))
+                    val baseRadius = minDim * mix(0.18f, 0.78f, kotlin.math.sqrt(srHash(seed * 1.91f)))
                     val theta0 = srHash(seed * 3.17f) * 2f * Math.PI.toFloat()
                     val near = (holeRadius * 3.6f / (baseRadius + 1f)).coerceIn(0f, 1f)
                     val omega = (0.025f + near * 0.18f) * realmSpeed * gravityPull
@@ -1329,12 +1506,13 @@ private fun AuroraSpecialBackgroundCanvas(
 
                 repeat(8) { layer ->
                     val t = layer / 7f
-                    val radius = diskRadius * srMix(0.58f, 1.02f, t)
-                    val height = lensHeight * srMix(0.46f, 1.02f, t)
-                    val strokeWidth = diskThickness * srMix(5.2f, 0.9f, t)
-                    val alpha = diskBrightness * srMix(0.13f, 0.045f, t)
+                    val radius = diskRadius * mix(0.58f, 1.02f, t)
+                    val height = lensHeight * mix(0.46f, 1.02f, t)
+                    val strokeWidth = diskThickness * mix(5.2f, 0.9f, t)
+                    val alpha = diskBrightness * mix(0.13f, 0.045f, t)
+                    populateLensPath(lensPath, radius, height, -1f)
                     drawPath(
-                        path = makeLensPath(radius, height, -1f),
+                        path = lensPath,
                         brush = upperArcBrush,
                         alpha = alpha,
                         style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
@@ -1343,12 +1521,13 @@ private fun AuroraSpecialBackgroundCanvas(
 
                 repeat(5) { layer ->
                     val t = layer / 4f
-                    val radius = diskRadius * srMix(0.48f, 0.78f, t)
-                    val height = lensHeight * srMix(0.22f, 0.50f, t)
-                    val strokeWidth = diskThickness * srMix(3.4f, 0.8f, t)
-                    val alpha = diskBrightness * srMix(0.07f, 0.025f, t)
+                    val radius = diskRadius * mix(0.48f, 0.78f, t)
+                    val height = lensHeight * mix(0.22f, 0.50f, t)
+                    val strokeWidth = diskThickness * mix(3.4f, 0.8f, t)
+                    val alpha = diskBrightness * mix(0.07f, 0.025f, t)
+                    populateLensPath(lensPath, radius, height, 1f)
                     drawPath(
-                        path = makeLensPath(radius, height, 1f),
+                        path = lensPath,
                         brush = lowerArcBrush,
                         alpha = alpha,
                         style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
@@ -1361,17 +1540,9 @@ private fun AuroraSpecialBackgroundCanvas(
                     val alphaShape = (1f - kotlin.math.abs(yNorm) / 0.9f).coerceIn(0f, 1f)
                     if (alphaShape > 0f) {
                         val y = center.y + yNorm * diskThickness * 1.55f
-                        val halfWidth = diskRadius * srMix(1.15f, 1.9f, alphaShape.pow(0.25f))
+                        val halfWidth = diskRadius * mix(1.15f, 1.9f, alphaShape.pow(0.25f))
                         val diskBrush = Brush.linearGradient(
-                            colors = listOf(
-                                realmAccent.copy(alpha = 0f),
-                                realmAccent.copy(alpha = 0.05f * diskBrightness * alphaShape),
-                                ghostLight.copy(alpha = 0.15f * diskBrightness * alphaShape),
-                                photonWhite.copy(alpha = 0.42f * diskBrightness * alphaShape),
-                                ghostLight.copy(alpha = 0.16f * diskBrightness * alphaShape),
-                                realmAccent.copy(alpha = 0.05f * diskBrightness * alphaShape),
-                                realmAccent.copy(alpha = 0f),
-                            ),
+                            colors = diskColors[i],
                             start = Offset(center.x - halfWidth, y),
                             end = Offset(center.x + halfWidth, y),
                         )
@@ -1390,7 +1561,7 @@ private fun AuroraSpecialBackgroundCanvas(
                 repeat(particleCount) { i ->
                     val seed = i + 1f
                     val band = srHash(seed * 9.1f)
-                    val orbitRadius = holeRadius * srMix(1.18f, 2.05f, band.pow(0.85f))
+                    val orbitRadius = holeRadius * mix(1.18f, 2.05f, band.pow(0.85f))
                     val near = (1f - (orbitRadius - holeRadius * 1.18f) / (holeRadius * 0.95f)).coerceIn(0f, 1f)
                     val omega = (0.85f + near * 2.7f) * particleSpeed * gravityPull
                     val theta = srHash(seed * 3.7f) * 2f * Math.PI.toFloat() - time * omega
@@ -1499,7 +1670,6 @@ private fun AuroraSpecialBackgroundCanvas(
                 val time = if (animate) elapsedSeconds else 0f
 
                 // NEON_DYSON_V1 preset from the approved HTML prototype.
-                val ringsCount = 8
                 val sphereScale = 0.90f
                 val spinSpeed = 0.11f
                 val packetDensity = 0.19f
@@ -1520,123 +1690,18 @@ private fun AuroraSpecialBackgroundCanvas(
                 val white = Color(0xFFEAFDFF)
                 val accentColor = colors.accent
 
-                data class NeonVec3(val x: Float, val y: Float, val z: Float)
-                data class NeonProjected(val x: Float, val y: Float, val p: Float)
-                data class NeonRingSpec(
-                    val pitchBase: Float,
-                    val yawBase: Float,
-                    val rollBase: Float,
-                    val spinPitch: Float,
-                    val spinYaw: Float,
-                    val radiusFraction: Float,
-                    val color: Color,
-                    val seed: Float,
-                )
-                data class NeonSegment(
-                    val p1: NeonVec3,
-                    val p2: NeonVec3,
-                    val z: Float,
-                    val color: Color,
-                    val packet: Boolean,
-                    val alphaMod: Float,
-                    val widthMod: Float,
-                )
-                data class NeonPacket(
-                    val point: NeonVec3,
-                    val color: Color,
-                    val z: Float,
-                    val sizeMod: Float,
-                )
-
-                fun neonHash(seed: Float): Float {
-                    return kotlin.math.abs(kotlin.math.sin(seed * 127.1f + 311.7f) * 43758.5453f) % 1f
-                }
-
-                fun neonBlend(a: Color, b: Color, t: Float): Color {
-                    val clamped = t.coerceIn(0f, 1f)
-                    val inv = 1f - clamped
-                    return Color(
-                        red = a.red * inv + b.red * clamped,
-                        green = a.green * inv + b.green * clamped,
-                        blue = a.blue * inv + b.blue * clamped,
-                        alpha = a.alpha * inv + b.alpha * clamped,
-                    )
-                }
-
-                fun neonRotateX(point: NeonVec3, angle: Float): NeonVec3 {
-                    val c = kotlin.math.cos(angle)
-                    val s2 = kotlin.math.sin(angle)
-                    return NeonVec3(point.x, point.y * c - point.z * s2, point.y * s2 + point.z * c)
-                }
-
-                fun neonRotateY(point: NeonVec3, angle: Float): NeonVec3 {
-                    val c = kotlin.math.cos(angle)
-                    val s2 = kotlin.math.sin(angle)
-                    return NeonVec3(point.x * c - point.z * s2, point.y, point.x * s2 + point.z * c)
-                }
-
-                fun neonRotateZ(point: NeonVec3, angle: Float): NeonVec3 {
-                    val c = kotlin.math.cos(angle)
-                    val s2 = kotlin.math.sin(angle)
-                    return NeonVec3(point.x * c - point.y * s2, point.x * s2 + point.y * c, point.z)
-                }
-
-                fun neonOrient(point: NeonVec3, pitch: Float, yaw: Float, roll: Float): NeonVec3 {
-                    return neonRotateY(neonRotateX(neonRotateZ(point, roll), pitch), yaw)
+                fun neonPacketColor(seed: Float): Color {
+                    val orbitIndex = (seed / 17.3f).toInt() % 4
+                    return when (orbitIndex) {
+                        0 -> blendColor(accentColor, white, 0.14f)
+                        1 -> blendColor(cyan, accentColor, 0.10f)
+                        2 -> blendColor(purple, white, 0.08f)
+                        else -> blendColor(gold, accentColor, 0.16f)
+                    }
                 }
 
                 val scale = minDim * 0.40f * sphereScale
                 val camDist = cameraPreset * 3f + 1f
-
-                fun neonProject(point: NeonVec3): NeonProjected {
-                    val cameraScale = camDist * scale
-                    val cz = (point.z + cameraScale).coerceAtLeast(0.01f)
-                    val persp = cameraScale / cz
-                    return NeonProjected(
-                        x = center.x + point.x * persp,
-                        y = center.y - point.y * persp,
-                        p = persp,
-                    )
-                }
-
-                fun neonRingColor(seed: Float): Color {
-                    val colorSeed = neonHash(seed * 7f)
-                    val base = when {
-                        colorSeed > 0.90f -> pink
-                        colorSeed > 0.75f -> gold
-                        colorSeed > 0.40f -> purple
-                        else -> cyan
-                    }
-                    return when (base) {
-                        gold -> neonBlend(gold, accentColor, accentStrength * 0.42f)
-                        pink -> neonBlend(pink, accentColor, accentStrength * 0.24f)
-                        else -> base
-                    }
-                }
-
-                fun neonPacketColor(seed: Float): Color {
-                    val orbitIndex = (seed / 17.3f).toInt() % 4
-                    return when (orbitIndex) {
-                        0 -> neonBlend(accentColor, white, 0.14f)
-                        1 -> neonBlend(cyan, accentColor, 0.10f)
-                        2 -> neonBlend(purple, white, 0.08f)
-                        else -> neonBlend(gold, accentColor, 0.16f)
-                    }
-                }
-
-                val rings = List(ringsCount) { i ->
-                    val seed = i * 17.3f
-                    NeonRingSpec(
-                        pitchBase = neonHash(seed) * Math.PI.toFloat() * 2f,
-                        yawBase = neonHash(seed * 2f) * Math.PI.toFloat() * 2f,
-                        rollBase = neonHash(seed * 3f) * Math.PI.toFloat() * 2f,
-                        spinPitch = (neonHash(seed * 5f) - 0.5f) * 1.5f,
-                        spinYaw = (neonHash(seed * 6f) - 0.5f) * 1.5f,
-                        radiusFraction = 0.60f + neonHash(seed * 4f) * 0.60f,
-                        color = neonRingColor(seed),
-                        seed = seed,
-                    )
-                }
 
                 drawCircle(
                     brush = Brush.radialGradient(
@@ -1652,9 +1717,8 @@ private fun AuroraSpecialBackgroundCanvas(
                     center = center,
                 )
 
-                val segments = mutableListOf<NeonSegment>()
-                val packets = mutableListOf<NeonPacket>()
-                val steps = 144
+                // Populate segment pool
+                var segmentIndex = 0
                 rings.forEach { ring ->
                     val ringTime = time * spinSpeed
                     val pitchNow = ring.pitchBase + ringTime * ring.spinPitch
@@ -1662,89 +1726,162 @@ private fun AuroraSpecialBackgroundCanvas(
                     val rollNow = ring.rollBase
                     val ringRadius = ring.radiusFraction * scale
 
-                    val points = List(steps) { j ->
-                        val theta = (j / steps.toFloat()) * Math.PI.toFloat() * 2f
-                        neonOrient(
-                            NeonVec3(kotlin.math.cos(theta) * ringRadius, kotlin.math.sin(theta) * ringRadius, 0f),
-                            pitchNow,
-                            yawNow,
-                            rollNow,
-                        )
-                    }
+                    val cr = kotlin.math.cos(rollNow)
+                    val sr = kotlin.math.sin(rollNow)
+                    val cp = kotlin.math.cos(pitchNow)
+                    val sp = kotlin.math.sin(pitchNow)
+                    val cy = kotlin.math.cos(yawNow)
+                    val sy = kotlin.math.sin(yawNow)
 
-                    repeat(steps) { j ->
-                        val a = points[j]
-                        val b = points[(j + 1) % steps]
-                        segments.add(
-                            NeonSegment(
-                                p1 = a,
-                                p2 = b,
-                                z = (a.z + b.z) * 0.5f,
-                                color = ring.color,
-                                packet = false,
-                                alphaMod = 1f,
-                                widthMod = 1f,
-                            ),
-                        )
+                    // Compute for theta = 0
+                    val rx0 = ringRadius * cr
+                    val ry0 = ringRadius * sr
+                    val py0 = ry0 * cp
+                    val pz0 = ry0 * sp
+                    val firstX = rx0 * cy - pz0 * sy
+                    val firstY = py0
+                    val firstZ = rx0 * sy + pz0 * cy
+
+                    var prevX = firstX
+                    var prevY = firstY
+                    var prevZ = firstZ
+
+                    for (j in 1..steps) {
+                        val theta = (j % steps / steps.toFloat()) * Math.PI.toFloat() * 2f
+                        val currX: Float
+                        val currY: Float
+                        val currZ: Float
+                        if (j == steps) {
+                            currX = firstX
+                            currY = firstY
+                            currZ = firstZ
+                        } else {
+                            val lx = kotlin.math.cos(theta) * ringRadius
+                            val ly = kotlin.math.sin(theta) * ringRadius
+                            val rx = lx * cr - ly * sr
+                            val ry = lx * sr + ly * cr
+                            val py = ry * cp
+                            val pz = ry * sp
+                            currX = rx * cy - pz * sy
+                            currY = py
+                            currZ = rx * sy + pz * cy
+                        }
+
+                        val seg = segmentPool[segmentIndex++]
+                        seg.x1 = prevX
+                        seg.y1 = prevY
+                        seg.z1 = prevZ
+                        seg.x2 = currX
+                        seg.y2 = currY
+                        seg.z2 = currZ
+                        seg.z = (prevZ + currZ) * 0.5f
+                        seg.color = ring.color
+                        seg.alphaMod = 1f
+                        seg.widthMod = 1f
+
+                        prevX = currX
+                        prevY = currY
+                        prevZ = currZ
                     }
+                }
+
+                // Populate packet pool
+                var packetIndex = 0
+                rings.forEach { ring ->
+                    val ringTime = time * spinSpeed
+                    val pitchNow = ring.pitchBase + ringTime * ring.spinPitch
+                    val yawNow = ring.yawBase + ringTime * ring.spinYaw
+                    val rollNow = ring.rollBase
+                    val ringRadius = ring.radiusFraction * scale
+
+                    val cr = kotlin.math.cos(rollNow)
+                    val sr = kotlin.math.sin(rollNow)
+                    val cp = kotlin.math.cos(pitchNow)
+                    val sp = kotlin.math.sin(pitchNow)
+                    val cy = kotlin.math.cos(yawNow)
+                    val sy = kotlin.math.sin(yawNow)
 
                     val packetCount = (packetDensity * 15f * ring.radiusFraction).toInt().coerceAtLeast(1)
                     repeat(packetCount) { k ->
                         val pSeed = ring.seed + k * 11.1f
-                        var packetSpeed = (0.5f + neonHash(pSeed) * 1.5f) * dataSpeed
-                        if (neonHash(pSeed * 2f) > 0.5f) packetSpeed *= -1f
+                        var packetSpeed = (0.5f + srHash(pSeed) * 1.5f) * dataSpeed
+                        if (srHash(pSeed * 2f) > 0.5f) packetSpeed *= -1f
                         var currentTheta =
-                            (neonHash(pSeed * 3f) * Math.PI.toFloat() * 2f + time * packetSpeed) %
+                            (srHash(pSeed * 3f) * Math.PI.toFloat() * 2f + time * packetSpeed) %
                                 (Math.PI.toFloat() * 2f)
                         if (currentTheta < 0f) currentTheta += Math.PI.toFloat() * 2f
-                        val packetPoint = neonOrient(
-                            NeonVec3(
-                                kotlin.math.cos(currentTheta) * ringRadius,
-                                kotlin.math.sin(currentTheta) * ringRadius,
-                                0f,
-                            ),
-                            pitchNow,
-                            yawNow,
-                            rollNow,
-                        )
-                        packets.add(
-                            NeonPacket(
-                                point = packetPoint,
-                                color = neonPacketColor(ring.seed),
-                                z = packetPoint.z,
-                                sizeMod = 0.82f + neonHash(pSeed * 4f) * 0.36f,
-                            ),
-                        )
+
+                        val lx = kotlin.math.cos(currentTheta) * ringRadius
+                        val ly = kotlin.math.sin(currentTheta) * ringRadius
+
+                        val rx = lx * cr - ly * sr
+                        val ry = lx * sr + ly * cr
+
+                        val py = ry * cp
+                        val pz = ry * sp
+
+                        val ox = rx * cy - pz * sy
+                        val oy = py
+                        val oz = rx * sy + pz * cy
+
+                        if (packetIndex < packetPool.size) {
+                            val packet = packetPool[packetIndex++]
+                            packet.x = ox
+                            packet.y = oy
+                            packet.z = oz
+                            packet.color = neonPacketColor(ring.seed)
+                            packet.sizeMod = 0.82f + srHash(pSeed * 4f) * 0.36f
+                        }
                     }
                 }
-                segments.sortBy { it.z }
-                packets.sortBy { it.z }
 
+                // Sort Pools In-Place (zero allocations)
+                val activeSegments = segmentPool.subList(0, segmentIndex)
+                activeSegments.sortWith(segmentComparator)
+
+                val activePackets = packetPool.subList(0, packetIndex)
+                activePackets.sortWith(packetComparator)
+
+                // Inline drawing functions to avoid local method allocations
                 fun drawNeonSegment(segment: NeonSegment) {
-                    val p1 = neonProject(segment.p1)
-                    val p2 = neonProject(segment.p2)
-                    val pMid = (p1.p + p2.p) * 0.5f
+                    val cameraScale = camDist * scale
+                    val cz1 = (segment.z1 + cameraScale).coerceAtLeast(0.01f)
+                    val p1p = cameraScale / cz1
+                    val p1x = center.x + segment.x1 * p1p
+                    val p1y = center.y - segment.y1 * p1p
+
+                    val cz2 = (segment.z2 + cameraScale).coerceAtLeast(0.01f)
+                    val p2p = cameraScale / cz2
+                    val p2x = center.x + segment.x2 * p2p
+                    val p2y = center.y - segment.y2 * p2p
+
+                    val pMid = (p1p + p2p) * 0.5f
                     val width = pMid * segment.widthMod
                     val depthAlpha = ((pMid - 0.3f) * 1.2f).coerceIn(0.05f, 1f)
                     val alpha = depthAlpha * glowStrength * segment.alphaMod * 0.12f * themeLineBoost
                     if (alpha < 0.01f) return
                     drawLine(
                         color = segment.color.copy(alpha = alpha.coerceIn(0f, 1f)),
-                        start = Offset(p1.x, p1.y),
-                        end = Offset(p2.x, p2.y),
+                        start = Offset(p1x, p1y),
+                        end = Offset(p2x, p2y),
                         strokeWidth = width.dp.toPx(),
                         cap = StrokeCap.Butt,
                     )
                 }
 
                 fun drawNeonPacket(packet: NeonPacket) {
-                    val p = neonProject(packet.point)
-                    val depthAlpha = ((p.p - 0.3f) * 1.2f).coerceIn(0.08f, 1f)
+                    val cameraScale = camDist * scale
+                    val cz = (packet.z + cameraScale).coerceAtLeast(0.01f)
+                    val pP = cameraScale / cz
+                    val pX = center.x + packet.x * pP
+                    val pY = center.y - packet.y * pP
+
+                    val depthAlpha = ((pP - 0.3f) * 1.2f).coerceIn(0.08f, 1f)
                     val alpha = (depthAlpha * glowStrength * 0.78f * themePacketBoost).coerceIn(0f, 1f)
                     if (alpha < 0.01f) return
 
-                    val radius = (p.p * 2.35f * packet.sizeMod).dp.toPx()
-                    val centerPoint = Offset(p.x, p.y)
+                    val radius = (pP * 2.35f * packet.sizeMod).dp.toPx()
+                    val centerPoint = Offset(pX, pY)
 
                     drawCircle(
                         color = packet.color.copy(alpha = alpha * 0.16f),
@@ -1763,8 +1900,8 @@ private fun AuroraSpecialBackgroundCanvas(
                     )
                 }
 
-                segments.forEach { if (it.z >= 0f) drawNeonSegment(it) }
-                packets.forEach { if (it.z >= 0f) drawNeonPacket(it) }
+                activeSegments.forEach { if (it.z >= 0f) drawNeonSegment(it) }
+                activePackets.forEach { if (it.z >= 0f) drawNeonPacket(it) }
 
                 val coreRadius = coreSize * minDim * 0.07f
                 val reactorGlow = coreGlow * glowStrength
@@ -1803,7 +1940,7 @@ private fun AuroraSpecialBackgroundCanvas(
                             colors = listOf(
                                 white.copy(alpha = 0.55f * reactorGlow),
                                 gold.copy(alpha = 0.36f * reactorGlow),
-                                neonBlend(pink, accentColor, accentStrength * 0.35f).copy(alpha = 0.16f * reactorGlow),
+                                blendColor(pink, accentColor, accentStrength * 0.35f).copy(alpha = 0.16f * reactorGlow),
                                 Color(0xFF2A2140).copy(alpha = themeCoreInkAlpha),
                                 cyan.copy(alpha = 0.22f * reactorGlow),
                             ),
@@ -1831,8 +1968,8 @@ private fun AuroraSpecialBackgroundCanvas(
                     }
                 }
 
-                segments.forEach { if (it.z < 0f) drawNeonSegment(it) }
-                packets.forEach { if (it.z < 0f) drawNeonPacket(it) }
+                activeSegments.forEach { if (it.z < 0f) drawNeonSegment(it) }
+                activePackets.forEach { if (it.z < 0f) drawNeonPacket(it) }
             }
         }
     }
