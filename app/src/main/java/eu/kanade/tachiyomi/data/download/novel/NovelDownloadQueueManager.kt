@@ -222,7 +222,7 @@ object NovelDownloadQueueManager {
     private val queueScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val downloadManager = NovelDownloadManager()
     private val translatedDownloadManager = NovelTranslatedDownloadManager()
-    private val downloadPreferences: DownloadPreferences = Injekt.get()
+    private val downloadPreferences: DownloadPreferences by lazy { Injekt.get() }
     private val _state = MutableStateFlow(NovelDownloadQueueState())
     val state = _state.asStateFlow()
     private val notifier = runCatching {

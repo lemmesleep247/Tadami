@@ -26,7 +26,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -440,7 +439,6 @@ private fun AuroraSpecialBackgroundCanvas(
     }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
-
         when (styleKey) {
             "petal_storm" -> {
                 val petalColor = if (colors.isDark) {
@@ -526,14 +524,14 @@ private fun AuroraSpecialBackgroundCanvas(
                 val cores = listOf(
                     Pair(coreCyan, baseAng),
                     Pair(corePurple, baseAng + (2f * Math.PI.toFloat() / 3f)),
-                    Pair(coreGold, baseAng + (4f * Math.PI.toFloat() / 3f))
+                    Pair(coreGold, baseAng + (4f * Math.PI.toFloat() / 3f)),
                 )
 
                 val corePts = cores.map { (col, ang) ->
                     Triple(
                         center.x + kotlin.math.cos(ang) * orbitR,
                         center.y + kotlin.math.sin(ang) * orbitR,
-                        col
+                        col,
                     )
                 }
 
@@ -546,13 +544,13 @@ private fun AuroraSpecialBackgroundCanvas(
                     val dy = syRaw - center.y
                     val baseDist = kotlin.math.hypot(dx, dy)
                     val baseAngle = kotlin.math.atan2(dy.toDouble(), dx.toDouble()).toFloat()
-                    
+
                     val swirlOff = (swirlFactor * minDim) / (baseDist + 100f)
                     val ang = baseAngle + time * 0.08f * orbitSpeed * swirlOff
-                    
+
                     val sx = center.x + kotlin.math.cos(ang) * baseDist
                     val sy = center.y + kotlin.math.sin(ang) * baseDist
-                    
+
                     val blink = 0.6f + 0.4f * kotlin.math.sin(time * 1.5f + star.phase)
                     val starCol = when (i % 3) {
                         0 -> coreCyan
@@ -562,7 +560,7 @@ private fun AuroraSpecialBackgroundCanvas(
                     drawCircle(
                         color = starCol.copy(alpha = (star.size * 0.15f * blink * glow).coerceIn(0f, 1f)),
                         radius = (star.size * 1.2f).dp.toPx(),
-                        center = Offset(sx, sy)
+                        center = Offset(sx, sy),
                     )
                 }
 
@@ -576,7 +574,7 @@ private fun AuroraSpecialBackgroundCanvas(
                 drawPath(
                     path = path,
                     color = accentColor.copy(alpha = 0.16f * glow),
-                    style = Stroke(width = 1.5f.dp.toPx())
+                    style = Stroke(width = 1.5f.dp.toPx()),
                 )
 
                 // Energy Flow Particles
@@ -588,34 +586,34 @@ private fun AuroraSpecialBackgroundCanvas(
                     val ny = (srHash(seed * 5.5f) + srHash(seed * 6.6f) + srHash(seed * 7.7f) - 1.5f) * 1.5f
                     val pSize = (0.8f + srHash(seed * 8.8f) * 1.8f).dp.toPx()
                     val speedMod = 0.7f + srHash(seed * 9.9f) * 0.6f
-                    
+
                     val t = (phase + time * energySpeed * 0.4f * speedMod) % 1f
                     val segment = (t * 3f).toInt()
                     val u = (t * 3f) % 1f
-                    
+
                     val c1 = corePts[segment]
                     val c2 = corePts[(segment + 1) % 3]
-                    
+
                     val cpX = center.x + nx * spreadBase
                     val cpY = center.y + ny * spreadBase
-                    
+
                     val inv = 1f - u
                     val px = inv * inv * c1.first + 2f * inv * u * cpX + u * u * c2.first
                     val py = inv * inv * c1.second + 2f * inv * u * cpY + u * u * c2.second
-                    
+
                     val baseCol = if (u > 0.5f) c2.third else c1.third
                     val finalCol = blendColor(baseCol, accentColor, 0.4f + 0.2f * srHash(seed * 10.1f))
                     val particleA = (0.2f + 0.8f * kotlin.math.sin(u * Math.PI.toFloat())) * glow
-                    
+
                     drawCircle(
                         color = finalCol.copy(alpha = particleA.coerceIn(0f, 1f)),
                         radius = pSize,
-                        center = Offset(px, py)
+                        center = Offset(px, py),
                     )
                     drawCircle(
                         color = finalCol.copy(alpha = (particleA * 0.3f).coerceIn(0f, 1f)),
                         radius = pSize * 1.5f,
-                        center = Offset(px - (px - cpX) * 0.015f, py - (py - cpY) * 0.015f)
+                        center = Offset(px - (px - cpX) * 0.015f, py - (py - cpY) * 0.015f),
                     )
                 }
 
@@ -626,41 +624,41 @@ private fun AuroraSpecialBackgroundCanvas(
                             colors = listOf(
                                 col.copy(alpha = 0.4f * glow),
                                 col.copy(alpha = 0.15f * glow),
-                                col.copy(alpha = 0f)
+                                col.copy(alpha = 0f),
                             ),
                             center = Offset(cx, cy),
-                            radius = coreR * 3f
+                            radius = coreR * 3f,
                         ),
                         radius = coreR * 3f,
-                        center = Offset(cx, cy)
+                        center = Offset(cx, cy),
                     )
-                    
+
                     val innerCol = blendColor(col, accentColor, 0.35f)
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
                                 Color.White.copy(alpha = 1f * glow),
                                 innerCol.copy(alpha = 0.9f * glow),
-                                innerCol.copy(alpha = 0f)
+                                innerCol.copy(alpha = 0f),
                             ),
                             center = Offset(cx, cy),
-                            radius = coreR
+                            radius = coreR,
                         ),
                         radius = coreR,
-                        center = Offset(cx, cy)
+                        center = Offset(cx, cy),
                     )
-                    
+
                     drawCircle(
                         color = Color.Black.copy(alpha = 0.4f * glow),
                         radius = coreR * 0.4f,
                         center = Offset(cx, cy),
-                        style = Stroke(width = 1.5f.dp.toPx())
+                        style = Stroke(width = 1.5f.dp.toPx()),
                     )
                     drawCircle(
                         color = Color.White.copy(alpha = 0.8f * glow),
                         radius = coreR * 0.2f,
                         center = Offset(cx, cy),
-                        style = Stroke(width = 0.5f.dp.toPx())
+                        style = Stroke(width = 0.5f.dp.toPx()),
                     )
                 }
 
@@ -670,13 +668,13 @@ private fun AuroraSpecialBackgroundCanvas(
                         colors = listOf(
                             accentColor.copy(alpha = 0.18f * glow),
                             coreCyan.copy(alpha = 0.04f * glow),
-                            Color.Transparent
+                            Color.Transparent,
                         ),
                         center = center,
-                        radius = orbitR * 1.5f
+                        radius = orbitR * 1.5f,
                     ),
                     radius = orbitR * 1.5f,
-                    center = center
+                    center = center,
                 )
             }
             "deep_space_archive" -> {
@@ -808,7 +806,12 @@ private fun AuroraSpecialBackgroundCanvas(
                     val hd = book.depth * 0.5f
                     return when (face) {
                         "top" -> listOf(Vec3(-hw, hh, -hd), Vec3(hw, hh, -hd), Vec3(hw, hh, hd), Vec3(-hw, hh, hd))
-                        "bottom" -> listOf(Vec3(-hw, -hh, hd), Vec3(hw, -hh, hd), Vec3(hw, -hh, -hd), Vec3(-hw, -hh, -hd))
+                        "bottom" -> listOf(
+                            Vec3(-hw, -hh, hd),
+                            Vec3(hw, -hh, hd),
+                            Vec3(hw, -hh, -hd),
+                            Vec3(-hw, -hh, -hd),
+                        )
                         "front" -> listOf(Vec3(-hw, -hh, hd), Vec3(hw, -hh, hd), Vec3(hw, hh, hd), Vec3(-hw, hh, hd))
                         "back" -> listOf(Vec3(hw, -hh, -hd), Vec3(-hw, -hh, -hd), Vec3(-hw, hh, -hd), Vec3(hw, hh, -hd))
                         "right" -> listOf(Vec3(hw, -hh, hd), Vec3(hw, -hh, -hd), Vec3(hw, hh, -hd), Vec3(hw, hh, hd))
@@ -898,8 +901,14 @@ private fun AuroraSpecialBackgroundCanvas(
                         lineTo(faceDraw.corners[3].x, faceDraw.corners[3].y)
                         close()
                     }
-                    val vx = Offset(faceDraw.corners[1].x - faceDraw.corners[0].x, faceDraw.corners[1].y - faceDraw.corners[0].y)
-                    val vy = Offset(faceDraw.corners[3].x - faceDraw.corners[0].x, faceDraw.corners[3].y - faceDraw.corners[0].y)
+                    val vx = Offset(
+                        faceDraw.corners[1].x - faceDraw.corners[0].x,
+                        faceDraw.corners[1].y - faceDraw.corners[0].y,
+                    )
+                    val vy = Offset(
+                        faceDraw.corners[3].x - faceDraw.corners[0].x,
+                        faceDraw.corners[3].y - faceDraw.corners[0].y,
+                    )
                     val faceWidthPx = kotlin.math.hypot(vx.x, vx.y)
                     val faceHeightPx = kotlin.math.hypot(vy.x, vy.y)
                     val axisDeg = (Math.atan2(vx.y.toDouble(), vx.x.toDouble()) * 180.0 / Math.PI).toFloat()
@@ -941,12 +950,25 @@ private fun AuroraSpecialBackgroundCanvas(
                     drawPath(path = path, brush = brush)
                     drawPath(
                         path = path,
-                        color = if (isPageEdge) scaleColor(paperShadow, pageTint * 0.96f).copy(alpha = 0.24f + 0.06f * near)
-                        else cover.copy(alpha = 0.06f + 0.03f * near),
+                        color = if (isPageEdge) {
+                            scaleColor(paperShadow, pageTint * 0.96f).copy(
+                                alpha =
+                                0.24f + 0.06f * near,
+                            )
+                        } else {
+                            cover.copy(alpha = 0.06f + 0.03f * near)
+                        },
                     )
                     drawPath(
                         path = path,
-                        color = if (isPageEdge) archiveWhite.copy(alpha = 0.07f + 0.03f * near) else cover.copy(alpha = 0.10f + 0.04f * near),
+                        color = if (isPageEdge) {
+                            archiveWhite.copy(alpha = 0.07f + 0.03f * near)
+                        } else {
+                            cover.copy(
+                                alpha =
+                                0.10f + 0.04f * near,
+                            )
+                        },
                         style = Stroke(width = 1.0f.dp.toPx()),
                     )
 
@@ -955,8 +977,28 @@ private fun AuroraSpecialBackgroundCanvas(
                         val count = kotlin.math.max(6, (longest / (6f.dp.toPx())).toInt())
                         repeat(count + 1) { i ->
                             val t = i / count.toFloat()
-                            val a = if (faceWidthPx >= faceHeightPx) bilinear(faceDraw.corners, 0.06f, 0.08f + t * 0.84f) else bilinear(faceDraw.corners, 0.08f + t * 0.84f, 0.06f)
-                            val b = if (faceWidthPx >= faceHeightPx) bilinear(faceDraw.corners, 0.94f, 0.08f + t * 0.84f) else bilinear(faceDraw.corners, 0.08f + t * 0.84f, 0.94f)
+                            val a = if (faceWidthPx >=
+                                faceHeightPx
+                            ) {
+                                bilinear(faceDraw.corners, 0.06f, 0.08f + t * 0.84f)
+                            } else {
+                                bilinear(
+                                    faceDraw.corners,
+                                    0.08f + t * 0.84f,
+                                    0.06f,
+                                )
+                            }
+                            val b = if (faceWidthPx >=
+                                faceHeightPx
+                            ) {
+                                bilinear(faceDraw.corners, 0.94f, 0.08f + t * 0.84f)
+                            } else {
+                                bilinear(
+                                    faceDraw.corners,
+                                    0.08f + t * 0.84f,
+                                    0.94f,
+                                )
+                            }
                             drawLine(
                                 color = archiveWhite.copy(alpha = 0.08f + 0.04f * near),
                                 start = a,
@@ -1039,7 +1081,9 @@ private fun AuroraSpecialBackgroundCanvas(
                         height = mix(0.05f, 0.11f, srHash(seed * 4.2f)) * mix(0.88f, 1.10f, variety),
                         x = (srHash(seed * 5.3f) - 0.5f) * 0.22f * scatter,
                         z = (srHash(seed * 6.1f) - 0.5f) * 0.12f * scatter,
-                        y = (i - (booksCount - 1) * 0.5f) * 0.155f * vertical + (srHash(seed * 7.4f) - 0.5f) * 0.022f * scatter,
+                        y =
+                        (i - (booksCount - 1) * 0.5f) * 0.155f * vertical +
+                            (srHash(seed * 7.4f) - 0.5f) * 0.022f * scatter,
                         bobPhase = srHash(seed * 11.3f) * (2f * Math.PI.toFloat()),
                         bobAmp = mix(0.010f, 0.026f, srHash(seed * 12.7f)),
                     )
@@ -1078,7 +1122,8 @@ private fun AuroraSpecialBackgroundCanvas(
                 val particleHeight = (size.height / (scale * 1.02f)).coerceAtLeast(3.0f) * 1.08f
                 repeat((42 + 96 * dustDensity).toInt()) { i ->
                     val seed = i + 1f
-                    val loopT = (srHash(seed * 2.1f) + time * (0.45f + srHash(seed * 3.3f) * 0.95f) * flowSpeed * 0.11f) % 1f
+                    val loopT =
+                        (srHash(seed * 2.1f) + time * (0.45f + srHash(seed * 3.3f) * 0.95f) * flowSpeed * 0.11f) % 1f
                     val angle = loopT * 2f * Math.PI.toFloat() * 3.2f + srHash(seed * 4.7f) * 2f * Math.PI.toFloat()
                     val radial = 0.76f + 0.22f * kotlin.math.sin(angle * 2.0f + srHash(seed * 6.4f) * 8f)
                     val y = (loopT - 0.5f) * particleHeight
@@ -1090,7 +1135,9 @@ private fun AuroraSpecialBackgroundCanvas(
                         tone > 0.45f -> archiveCyan
                         else -> archivePurple
                     }
-                    val alpha = (0.05f + 0.18f * pr.p) * glowStrength * if (tone > 0.82f) (0.72f + 0.42f * accentStrength) else 1f
+                    val alpha =
+                        (0.05f + 0.18f * pr.p) * glowStrength *
+                            if (tone > 0.82f) (0.72f + 0.42f * accentStrength) else 1f
                     drawCircle(
                         color = color.copy(alpha = alpha.coerceIn(0f, 0.55f)),
                         radius = (0.7f + srHash(seed * 9.9f) * 1.25f).dp.toPx() * pr.p,
@@ -1646,10 +1693,16 @@ private fun AuroraSpecialBackgroundCanvas(
                         val pSeed = ring.seed + k * 11.1f
                         var packetSpeed = (0.5f + neonHash(pSeed) * 1.5f) * dataSpeed
                         if (neonHash(pSeed * 2f) > 0.5f) packetSpeed *= -1f
-                        var currentTheta = (neonHash(pSeed * 3f) * Math.PI.toFloat() * 2f + time * packetSpeed) % (Math.PI.toFloat() * 2f)
+                        var currentTheta =
+                            (neonHash(pSeed * 3f) * Math.PI.toFloat() * 2f + time * packetSpeed) %
+                                (Math.PI.toFloat() * 2f)
                         if (currentTheta < 0f) currentTheta += Math.PI.toFloat() * 2f
                         val packetPoint = neonOrient(
-                            NeonVec3(kotlin.math.cos(currentTheta) * ringRadius, kotlin.math.sin(currentTheta) * ringRadius, 0f),
+                            NeonVec3(
+                                kotlin.math.cos(currentTheta) * ringRadius,
+                                kotlin.math.sin(currentTheta) * ringRadius,
+                                0f,
+                            ),
                             pitchNow,
                             yawNow,
                             rollNow,
@@ -1781,7 +1834,6 @@ private fun AuroraSpecialBackgroundCanvas(
                 segments.forEach { if (it.z < 0f) drawNeonSegment(it) }
                 packets.forEach { if (it.z < 0f) drawNeonPacket(it) }
             }
-
         }
     }
 }

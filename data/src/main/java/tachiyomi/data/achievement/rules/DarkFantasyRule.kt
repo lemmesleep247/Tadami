@@ -48,14 +48,16 @@ class DarkFantasyRule(
             val genres = item.manga.genre ?: return@any false
             genres.any { g -> GenreAliases.genreMatches(g, groupA) } &&
                 genres.any { g -> GenreAliases.genreMatches(g, groupB) }
-        } || animeRepository.getLibraryAnime().any { item ->
-            val genres = item.anime.genre ?: return@any false
-            genres.any { g -> GenreAliases.genreMatches(g, groupA) } &&
-                genres.any { g -> GenreAliases.genreMatches(g, groupB) }
-        } || novelRepository.getLibraryNovel().any { item ->
-            val genres = item.novel.genre ?: return@any false
-            genres.any { g -> GenreAliases.genreMatches(g, groupA) } &&
-                genres.any { g -> GenreAliases.genreMatches(g, groupB) }
-        }
+        } ||
+            animeRepository.getLibraryAnime().any { item ->
+                val genres = item.anime.genre ?: return@any false
+                genres.any { g -> GenreAliases.genreMatches(g, groupA) } &&
+                    genres.any { g -> GenreAliases.genreMatches(g, groupB) }
+            } ||
+            novelRepository.getLibraryNovel().any { item ->
+                val genres = item.novel.genre ?: return@any false
+                genres.any { g -> GenreAliases.genreMatches(g, groupA) } &&
+                    genres.any { g -> GenreAliases.genreMatches(g, groupB) }
+            }
     }
 }

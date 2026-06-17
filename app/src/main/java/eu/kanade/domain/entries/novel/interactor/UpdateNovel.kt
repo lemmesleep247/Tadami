@@ -54,7 +54,7 @@ class UpdateNovel(
         localNovel: Novel,
         remoteNovel: SNovel,
         manualFetch: Boolean,
-        coverCache: NovelCoverCache = Injekt.get(),
+        coverCache: NovelCoverCache? = null,
     ): Boolean {
         val remoteTitle = try {
             remoteNovel.title
@@ -64,21 +64,23 @@ class UpdateNovel(
 
         val title = if (remoteTitle.isEmpty() || localNovel.favorite) null else remoteTitle
         val shouldUpdateCover = manualFetch || localNovel.thumbnailUrl.isNullOrEmpty() || !localNovel.initialized
+        val remoteThumbnailUrl = remoteNovel.thumbnail_url?.takeIf { it.isNotEmpty() }
+        val hasCustomCover = if (remoteThumbnailUrl != null && shouldUpdateCover) {
+            localNovel.hasCustomCover(coverCache ?: Injekt.get())
+        } else {
+            false
+        }
 
         val coverLastModified =
             when {
-                remoteNovel.thumbnail_url.isNullOrEmpty() -> null
+                remoteThumbnailUrl == null -> null
                 !shouldUpdateCover -> null
-                localNovel.hasCustomCover(coverCache) -> null
+                hasCustomCover -> null
                 else -> Instant.now().toEpochMilli()
             }
 
-        val thumbnailUrl = if (shouldUpdateCover) {
-            if (localNovel.hasCustomCover(coverCache)) {
-                null
-            } else {
-                remoteNovel.thumbnail_url?.takeIf { it.isNotEmpty() }
-            }
+        val thumbnailUrl = if (shouldUpdateCover && !hasCustomCover) {
+            remoteThumbnailUrl
         } else {
             null
         }

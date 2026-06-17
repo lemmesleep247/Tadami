@@ -36,7 +36,8 @@ class AchievementRestorer(
             backupActivityLog.isEmpty() &&
             backupStats == null
         ) {
-            logcat { "[BACKUP] No achievement data to restore" }
+            logcat { "[BACKUP] No achievement data to restore; rehydrating derived unlockable state" }
+            rehydrateUnlockables()
             return
         }
 

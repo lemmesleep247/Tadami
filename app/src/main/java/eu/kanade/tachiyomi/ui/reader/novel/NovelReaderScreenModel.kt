@@ -850,7 +850,7 @@ class NovelReaderScreenModel(
         val decodedPageReaderProgress = decodePageReaderProgress(chapter.lastPageRead)
         val lastSavedIndex = when {
             decodedNativeProgress != null -> decodedNativeProgress.index
-            decodedPageReaderProgress != null -> decodedPageReaderProgress.index
+            decodedPageReaderProgress != null -> 0
             decodedWebProgressPercent != null -> 0
             else -> chapter.lastPageRead.coerceAtLeast(0L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         }
@@ -2005,7 +2005,7 @@ class NovelReaderScreenModel(
             val decodedPageReaderProgress = decodePageReaderProgress(progress)
             val lastSavedIndex = when {
                 decodedNativeProgress != null -> decodedNativeProgress.index
-                decodedPageReaderProgress != null -> decodedPageReaderProgress.index
+                decodedPageReaderProgress != null -> currentState.lastSavedIndex
                 decodedWebProgressPercent != null -> currentState.lastSavedIndex
                 else -> progress.coerceAtLeast(0L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             }
