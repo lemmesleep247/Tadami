@@ -355,14 +355,20 @@ class AnimeImageFetcher(
                 isLibraryAnime = data.favorite,
                 options = options,
                 coverFileProvider = { effectiveUrl ->
-                    if (isBackground) backgroundCache.getBackgroundFile(effectiveUrl) else coverCache.getCoverFile(effectiveUrl)
+                    if (isBackground) {
+                        backgroundCache.getBackgroundFile(
+                            effectiveUrl,
+                        )
+                    } else {
+                        coverCache.getCoverFile(effectiveUrl)
+                    }
                 },
                 customCoverFileLazy = customCoverCacheLazy,
                 diskCacheKeyProvider = { effectiveUrl ->
                     if (isBackground) {
-                        "anime-bg;${data.id};${effectiveUrl};${data.backgroundLastModified}"
+                        "anime-bg;${data.id};$effectiveUrl;${data.backgroundLastModified}"
                     } else {
-                        "anime;${data.id};${effectiveUrl};${data.coverLastModified}"
+                        "anime;${data.id};$effectiveUrl;${data.coverLastModified}"
                     }
                 },
                 metadataCoverUrlProvider = {
@@ -390,7 +396,7 @@ class AnimeImageFetcher(
                 options = options,
                 coverFileProvider = coverCache::getCoverFile,
                 customCoverFileLazy = lazy { coverCache.getCustomCoverFile(data.animeId) },
-                diskCacheKeyProvider = { effectiveUrl -> "anime;${data.animeId};${effectiveUrl};${data.lastModified}" },
+                diskCacheKeyProvider = { effectiveUrl -> "anime;${data.animeId};$effectiveUrl;${data.lastModified}" },
                 metadataCoverUrlProvider = { metadataCoverResolver.resolveAnimeCoverUrl(data.animeId) },
                 sourceLazy = lazy { sourceManager.get(data.sourceId) as? AnimeHttpSource },
                 callFactoryLazy = callFactoryLazy,

@@ -769,7 +769,13 @@ class AnimeScreenModel(
 
             if (sourceRating != null || state.sourceRating != null) {
                 updateSuccessState { current ->
-                    if (current.anime.id != state.anime.id) current else current.copy(sourceRating = sourceRating ?: current.sourceRating)
+                    if (current.anime.id !=
+                        state.anime.id
+                    ) {
+                        current
+                    } else {
+                        current.copy(sourceRating = sourceRating ?: current.sourceRating)
+                    }
                 }
             }
         }

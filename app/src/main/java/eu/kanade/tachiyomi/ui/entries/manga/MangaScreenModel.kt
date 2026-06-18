@@ -516,11 +516,15 @@ class MangaScreenModel(
                 val scanlatorChapterCounts = getScanlatorChapterCounts.await(mangaId)
                 val excludedScanlators = getExcludedScanlators.await(mangaId)
                 updateSuccessState { current ->
-                    if (current.manga.id != manga.id) current else current.copy(
-                        availableScanlators = availableScanlators,
-                        scanlatorChapterCounts = scanlatorChapterCounts,
-                        excludedScanlators = excludedScanlators,
-                    )
+                    if (current.manga.id != manga.id) {
+                        current
+                    } else {
+                        current.copy(
+                            availableScanlators = availableScanlators,
+                            scanlatorChapterCounts = scanlatorChapterCounts,
+                            excludedScanlators = excludedScanlators,
+                        )
+                    }
                 }
             }
             screenModelScope.launchIO {

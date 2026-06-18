@@ -2,9 +2,9 @@ package eu.kanade.tachiyomi.network.interceptor
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
-import android.webkit.CookieManager
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -13,9 +13,9 @@ import eu.kanade.tachiyomi.network.AndroidCookieJar
 import eu.kanade.tachiyomi.util.system.toast
 import okhttp3.Cookie
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import tachiyomi.i18n.MR
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor

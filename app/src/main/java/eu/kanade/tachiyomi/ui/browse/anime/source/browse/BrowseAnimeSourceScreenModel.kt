@@ -141,7 +141,13 @@ class BrowseAnimeSourceScreenModel(
             val loadedFilters = loadSourceFilters()
             mutableState.update { state ->
                 val updatedListing = when (val listing = state.listing) {
-                    is Listing.Search -> if (listing.filters.isEmpty()) listing.copy(filters = loadedFilters) else listing
+                    is Listing.Search -> if (listing.filters.isEmpty()) {
+                        listing.copy(
+                            filters = loadedFilters,
+                        )
+                    } else {
+                        listing
+                    }
                     else -> listing
                 }
                 state.copy(

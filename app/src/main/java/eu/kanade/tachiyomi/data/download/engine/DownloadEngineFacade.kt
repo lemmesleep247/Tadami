@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.data.download.engine
 import android.app.Application
 import android.app.usage.StorageStatsManager
 import android.os.Build
-import android.os.storage.StorageManager as AndroidStorageManager
 import com.hippo.unifile.UniFile
 import eu.kanade.tachiyomi.data.download.anime.AnimeDownloadManager
 import eu.kanade.tachiyomi.data.download.anime.model.AnimeDownload
@@ -30,6 +29,7 @@ import uy.kohesive.injekt.api.get
 import java.io.Closeable
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
+import android.os.storage.StorageManager as AndroidStorageManager
 
 /**
  * Combines anime, manga, and novel backend queue states into one aggregated

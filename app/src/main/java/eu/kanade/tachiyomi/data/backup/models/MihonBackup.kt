@@ -88,7 +88,10 @@ internal fun Backup.routeSharedMangaEntriesBySource(
     }
 
     val routedNovelSources = novels
-        .map { novel -> backupSources.firstOrNull { it.sourceId == novel.source } ?: BackupSource(name = "", sourceId = novel.source) }
+        .map { novel ->
+            backupSources.firstOrNull { it.sourceId == novel.source }
+                ?: BackupSource(name = "", sourceId = novel.source)
+        }
         .distinctBy { it.sourceId }
     val routedAnimeSources = animes
         .map { anime ->
@@ -101,8 +104,12 @@ internal fun Backup.routeSharedMangaEntriesBySource(
         backupManga = mangas,
         backupNovel = novels,
         backupAnime = animes,
-        backupNovelCategories = backupNovelCategories.ifEmpty { if (novels.isNotEmpty()) backupCategories else emptyList() },
-        backupAnimeCategories = backupAnimeCategories.ifEmpty { if (animes.isNotEmpty()) backupCategories else emptyList() },
+        backupNovelCategories = backupNovelCategories.ifEmpty {
+            if (novels.isNotEmpty()) backupCategories else emptyList()
+        },
+        backupAnimeCategories = backupAnimeCategories.ifEmpty {
+            if (animes.isNotEmpty()) backupCategories else emptyList()
+        },
         backupNovelSources = (backupNovelSources + routedNovelSources).distinctBy { it.sourceId },
         backupAnimeSources = (backupAnimeSources + routedAnimeSources).distinctBy { it.sourceId },
     )

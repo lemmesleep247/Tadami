@@ -84,4 +84,3 @@ internal fun Modifier.auroraPosterBlur(blurRadius: Dp): Modifier {
 internal fun shouldDrawAuroraPosterBlurOverlay(alpha: Float): Boolean {
     return alpha > 0.01f
 }
-
