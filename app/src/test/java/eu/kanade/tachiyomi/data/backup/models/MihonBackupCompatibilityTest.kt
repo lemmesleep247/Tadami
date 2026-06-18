@@ -32,6 +32,41 @@ class MihonBackupCompatibilityTest {
     }
 
     @Test
+    fun `Mihon shaped backup decoded as Tadami schema routes entries by source section`() {
+        val mihonBackup = MihonBackup(
+            backupManga = listOf(
+                sampleManga().copy(source = 1, title = "Manga title"),
+                sampleManga().copy(source = 2, title = "Novel title"),
+                sampleManga().copy(source = 3, title = "Anime title"),
+            ),
+            backupCategories = listOf(BackupCategory(name = "Default", order = 0)),
+            backupSources = listOf(
+                BackupSource(name = "Manga source", sourceId = 1),
+                BackupSource(name = "Novel source", sourceId = 2),
+                BackupSource(name = "Anime source", sourceId = 3),
+            ),
+        )
+
+        val decodedAsTadami = ProtoBuf.decodeFromByteArray(
+            Backup.serializer(),
+            ProtoBuf.encodeToByteArray(MihonBackup.serializer(), mihonBackup),
+        )
+        val routed = decodedAsTadami.routeSharedMangaEntriesBySource(
+            mangaSourceClassifier = { it == 1L },
+            novelSourceClassifier = { it == 2L },
+            animeSourceClassifier = { it == 3L },
+        )
+
+        assertEquals(listOf("Manga title"), routed.backupManga.map { it.title })
+        assertEquals(listOf("Novel title"), routed.backupNovel.map { it.title })
+        assertEquals(listOf("Anime title"), routed.backupAnime.map { it.title })
+        assertEquals(listOf("Default"), routed.backupNovelCategories.map { it.name })
+        assertEquals(listOf("Default"), routed.backupAnimeCategories.map { it.name })
+        assertEquals(listOf("Novel source"), routed.backupNovelSources.map { it.name })
+        assertEquals(listOf("Anime source"), routed.backupAnimeSources.map { it.name })
+    }
+
+    @Test
     fun `Mihon backup extension repos use proto field 106 and restore into Tadami manga repos`() {
         val mihonBackup = MihonBackup(
             backupManga = listOf(sampleManga()),

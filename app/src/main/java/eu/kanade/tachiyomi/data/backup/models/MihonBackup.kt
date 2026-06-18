@@ -41,39 +41,18 @@ data class MihonBackup(
         novelSourceClassifier: (Long) -> Boolean,
         animeSourceClassifier: (Long) -> Boolean,
     ): Backup {
-        val mangas = mutableListOf<BackupManga>()
-        val novels = mutableListOf<BackupNovel>()
-        val animes = mutableListOf<BackupAnime>()
-
-        backupManga.forEach { entry ->
-            val sourceId = entry.source
-            when {
-                novelSourceClassifier(sourceId) -> novels.add(entry.toBackupNovel())
-                animeSourceClassifier(sourceId) -> animes.add(entry.toBackupAnime())
-                mangaSourceClassifier(sourceId) -> mangas.add(entry)
-                else -> mangas.add(entry)
-            }
-        }
-
         return Backup(
-            backupManga = mangas,
+            backupManga = backupManga,
             backupCategories = backupCategories,
             backupSources = backupSources,
             backupPreferences = backupPreferences,
             backupSourcePreferences = backupSourcePreferences,
             backupMangaExtensionRepo = backupExtensionRepo,
-
             isLegacy = false,
-            backupAnime = animes,
-            backupAnimeCategories = if (animes.isNotEmpty()) backupCategories else emptyList(),
-            backupAnimeSources = animes.map { BackupAnimeSource(name = "", sourceId = it.source) },
-            backupExtensions = emptyList(),
-            backupAnimeExtensionRepo = emptyList(),
-            backupCustomButton = emptyList(),
-            backupNovelExtensionRepo = emptyList(),
-            backupNovel = novels,
-            backupNovelCategories = if (novels.isNotEmpty()) backupCategories else emptyList(),
-            backupNovelSources = novels.map { BackupSource(name = "", sourceId = it.source) },
+        ).routeSharedMangaEntriesBySource(
+            mangaSourceClassifier = mangaSourceClassifier,
+            novelSourceClassifier = novelSourceClassifier,
+            animeSourceClassifier = animeSourceClassifier,
         )
     }
 }
@@ -86,6 +65,46 @@ internal fun Backup.toMihonBackup(): MihonBackup {
         backupPreferences = backupPreferences,
         backupSourcePreferences = backupSourcePreferences,
         backupExtensionRepo = backupMangaExtensionRepo,
+    )
+}
+
+internal fun Backup.routeSharedMangaEntriesBySource(
+    mangaSourceClassifier: (Long) -> Boolean,
+    novelSourceClassifier: (Long) -> Boolean,
+    animeSourceClassifier: (Long) -> Boolean,
+): Backup {
+    val mangas = mutableListOf<BackupManga>()
+    val novels = backupNovel.toMutableList()
+    val animes = backupAnime.toMutableList()
+
+    backupManga.forEach { entry ->
+        val sourceId = entry.source
+        when {
+            novelSourceClassifier(sourceId) -> novels.add(entry.toBackupNovel())
+            animeSourceClassifier(sourceId) -> animes.add(entry.toBackupAnime())
+            mangaSourceClassifier(sourceId) -> mangas.add(entry)
+            else -> mangas.add(entry)
+        }
+    }
+
+    val routedNovelSources = novels
+        .map { novel -> backupSources.firstOrNull { it.sourceId == novel.source } ?: BackupSource(name = "", sourceId = novel.source) }
+        .distinctBy { it.sourceId }
+    val routedAnimeSources = animes
+        .map { anime ->
+            val source = backupSources.firstOrNull { it.sourceId == anime.source }
+            BackupAnimeSource(name = source?.name.orEmpty(), sourceId = anime.source)
+        }
+        .distinctBy { it.sourceId }
+
+    return copy(
+        backupManga = mangas,
+        backupNovel = novels,
+        backupAnime = animes,
+        backupNovelCategories = backupNovelCategories.ifEmpty { if (novels.isNotEmpty()) backupCategories else emptyList() },
+        backupAnimeCategories = backupAnimeCategories.ifEmpty { if (animes.isNotEmpty()) backupCategories else emptyList() },
+        backupNovelSources = (backupNovelSources + routedNovelSources).distinctBy { it.sourceId },
+        backupAnimeSources = (backupAnimeSources + routedAnimeSources).distinctBy { it.sourceId },
     )
 }
 
