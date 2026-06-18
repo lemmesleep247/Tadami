@@ -53,6 +53,7 @@ import eu.kanade.tachiyomi.data.suggestions.SuggestionSeed
 import eu.kanade.tachiyomi.data.suggestions.SuggestionSourceWeight
 import eu.kanade.tachiyomi.data.suggestions.SuggestionState
 import eu.kanade.tachiyomi.data.suggestions.SuggestionTitleResolver
+import eu.kanade.tachiyomi.data.suggestions.suggestionCoverModel
 import eu.kanade.tachiyomi.data.suggestions.anime.AnimeFallbackOutcome
 import eu.kanade.tachiyomi.data.suggestions.anime.AnimeSearchFallbackEngine
 import eu.kanade.tachiyomi.data.suggestions.manga.MangaFallbackOutcome
@@ -678,20 +679,4 @@ private fun SuggestionItem.reasonAccentColor(): Color = when (reason) {
     eu.kanade.tachiyomi.data.suggestions.SuggestionReason.POPULAR_BACKFILL -> Color(0xFF546E7A)
 }
 
-private fun getCoverModel(item: SuggestionItem): Any? {
-    val url = item.thumbnailUrl ?: return null
-    if (item.mediaType != eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType.NOVEL) return url
-
-    if (eu.kanade.tachiyomi.source.novel.NovelPluginImage.isSupported(url)) {
-        return eu.kanade.tachiyomi.source.novel.NovelPluginImage(url)
-    }
-
-    val sourceId = item.providerId?.substringBefore(":")?.toLongOrNull() ?: -1L
-    return tachiyomi.domain.entries.novel.model.NovelCover(
-        novelId = -1L,
-        sourceId = sourceId,
-        isNovelFavorite = false,
-        url = url,
-        lastModified = 0L,
-    )
-}
+private fun getCoverModel(item: SuggestionItem): Any? = suggestionCoverModel(item)
