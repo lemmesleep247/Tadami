@@ -301,6 +301,7 @@
     <string name="theme_onyx_gold">Ониксовые регалии</string>
     <string name="theme_sakura_noir">Затмение сакуры</string>
     <string name="theme_nebula_tide">Астральный прилив</string>
+    <string name="theme_event_horizon">Горизонт событий</string>
     <string name="pref_library_rows">Размер списка</string>
     <string name="pref_preserve_reading_position">Сохранение позиции чтения в прочитанных главах</string>
     <string name="pref_download_slots">Максимум загрузок</string>
@@ -2441,5 +2442,11 @@
     <string name="player_subtitle_translation_embedded_unavailable">Перевод встроенных субтитров доступен только для локальных или загруженных видео, если поток субтитров удалось сопоставить.</string>
     <string name="player_subtitle_translation_progress">%1$d%%, %2$d/%3$d реплик</string>
     <string name="player_subtitle_translation_from_to">%1$s → %2$s</string>
+
+    <string name="treasury_tagline_event_horizon">Рентгеновски белые элементы, инфракрасные полосы горизонта, холодное линзирование и стеклянно-черные поверхности</string>
+    <string name="treasury_bg_event_horizon_title">Библиотека горизонта событий</string>
+    <string name="treasury_bg_event_horizon_desc">Кинематографичная сингулярность с линзирующими кольцами, архивными осколками, параллакс-рамками и сдержанным движением.</string>
+    <string name="achievement_event_horizon_cartographer_title">Картограф горизонта событий</string>
+    <string name="achievement_event_horizon_cartographer_desc">Соберите 12 манг, 12 аниме, 12 ранобэ и 12 разных источников</string>
 
 </resources>

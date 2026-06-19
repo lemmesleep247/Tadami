@@ -1421,6 +1421,7 @@
     <string name="unlockable_theme_ONYX_GOLD">Тема «Ониксовые регалии»</string>
     <string name="unlockable_theme_SAKURA_NOIR">Тема «Затмение сакуры»</string>
     <string name="unlockable_theme_NEBULA_TIDE">Тема «Астральный прилив»</string>
+    <string name="unlockable_theme_EVENT_HORIZON">Тема «Горизонт событий»</string>
     <string name="unlockable_badge_achievement_master">Значок мастера достижений</string>
     <string name="unlockable_badge_week_warrior">Значок воина недели</string>
     <string name="unlockable_display_grid_large">Большая сетка библиотеки</string>
@@ -1443,6 +1444,7 @@
     <string name="unlockable_home_badge_shuriken">Эффект главного экрана «Сюрикен»</string>
     <string name="unlockable_special_background_petal_storm">«Шторм лепестков»</string>
     <string name="unlockable_special_background_neon_orbit">«Неоновая орбита»</string>
+    <string name="unlockable_special_background_event_horizon_library">«Библиотека горизонта событий»</string>
     <string name="unlockable_aura_trinity_orbit">Аура «Орбита Триединства»</string>
     <string name="unlockable_aura_trinity_orbit_desc">Три орбиты манги, аниме и ранобэ вокруг карточек</string>
     <string name="unlockable_aura_deep_focus">Аура «Глубокий фокус»</string>

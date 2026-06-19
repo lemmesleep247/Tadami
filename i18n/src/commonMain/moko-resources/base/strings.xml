@@ -1575,6 +1575,7 @@
     <string name="unlockable_theme_ONYX_GOLD">Onyx Regalia Theme</string>
     <string name="unlockable_theme_SAKURA_NOIR">Sakura Eclipse Theme</string>
     <string name="unlockable_theme_NEBULA_TIDE">Astral Tide Theme</string>
+    <string name="unlockable_theme_EVENT_HORIZON">Event Horizon Theme</string>
     <string name="unlockable_badge_achievement_master">Achievement Master Badge</string>
     <string name="unlockable_badge_week_warrior">Week Warrior Badge</string>
     <string name="unlockable_display_grid_large">Large Library Grid</string>
@@ -1597,6 +1598,7 @@
     <string name="unlockable_home_badge_shuriken">Shuriken Home Hub Effect</string>
     <string name="unlockable_special_background_petal_storm">Petal Storm</string>
     <string name="unlockable_special_background_neon_orbit">Neon Orbit</string>
+    <string name="unlockable_special_background_event_horizon_library">Event Horizon Library</string>
     <string name="unlockable_aura_trinity_orbit">Trinity Orbit Aura</string>
     <string name="unlockable_aura_trinity_orbit_desc">Three orbital rings wrapping cards</string>
     <string name="unlockable_aura_deep_focus">Deep Focus Aura</string>
