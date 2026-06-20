@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -133,25 +134,36 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         }
 
         // Avoid potential crashes
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val isMainProcess = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val process = getProcessName()
             if (packageName != process) WebView.setDataDirectorySuffix(process)
+            packageName == process
+        } else {
+            true
+        }
+
+        // Warm up the WebView default user agent on the main thread before any source loads.
+        // Some sources call WebSettings.getDefaultUserAgent() while being constructed on a
+        // background thread. If Chromium needs the main thread at the same time, startup can
+        // stall behind the splash.
+        if (isMainProcess) {
+            try {
+                WebSettings.getDefaultUserAgent(this)
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR) { "Failed to warm up WebView user agent: ${e.message}" }
+            }
         }
 
         Injekt.importModule(PreferenceModule(this))
-        Injekt.importModule(AppModule(this))
+        // Register domain interactors before app managers. Some app managers can be touched by
+        // async platform callbacks during AppModule registration, so their domain dependencies
+        // must already exist in Injekt.
         Injekt.importModule(DomainModule())
         // SY -->
         Injekt.importModule(SYDomainModule())
         // SY <--
+        Injekt.importModule(AppModule(this))
         SingletonImageLoader.setUnsafe { context -> newImageLoader(context) }
-
-        // Register memory-pressure callback that trims novel plugin runtime caches
-        registerComponentCallbacks(
-            NovelRuntimeCacheTrimCallbacks(
-                sourceFactory = Injekt.get<NovelPluginSourceFactory>(),
-            ),
-        )
 
         Handler(Looper.getMainLooper()).post {
             achievementScope.launch {
@@ -165,6 +177,13 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
                     this@App.systemLogcat(LogPriority.ERROR, error) { "App update cleanup failed" }
                 }
             }
+
+            // Register memory-pressure callback that trims novel plugin runtime caches
+            registerComponentCallbacks(
+                NovelRuntimeCacheTrimCallbacks(
+                    sourceFactory = Injekt.get<NovelPluginSourceFactory>(),
+                ),
+            )
         }
 
         setupNotificationChannels()

@@ -22,16 +22,11 @@ import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.i18n.aniyomi.AYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 
 internal class MangaHomeHubScreenModel(
     context: android.content.Context = Injekt.get<android.app.Application>(),
-    private val getMangaHistory: GetMangaHistory = Injekt.get(),
-    private val getMangaWithChapters: GetMangaWithChapters = Injekt.get(),
-    private val getLibraryManga: GetLibraryManga = Injekt.get(),
-    private val getMangaCategories: GetMangaCategories = Injekt.get(),
     userProfilePreferences: UserProfilePreferences = Injekt.get(),
-    private val sourcePreferences: SourcePreferences = Injekt.get(),
-    private val sourceManager: MangaSourceManager = Injekt.get(),
 ) : BaseHomeHubScreenModel(
     context = context,
     initialState = HomeHubUiState(
@@ -44,6 +39,13 @@ internal class MangaHomeHubScreenModel(
     ),
     userProfilePreferences = userProfilePreferences,
 ) {
+
+    private val getMangaHistory: GetMangaHistory by injectLazy()
+    private val getMangaWithChapters: GetMangaWithChapters by injectLazy()
+    private val getLibraryManga: GetLibraryManga by injectLazy()
+    private val getMangaCategories: GetMangaCategories by injectLazy()
+    private val sourcePreferences: SourcePreferences by injectLazy()
+    private val sourceManager: MangaSourceManager by injectLazy()
 
     override val avatarFileName: String = "user_avatar_manga.jpg"
 

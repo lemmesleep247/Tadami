@@ -21,19 +21,11 @@ import tachiyomi.domain.source.anime.service.AnimeSourceManager
 import tachiyomi.i18n.aniyomi.AYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 
 internal class HomeHubScreenModel(
     context: android.content.Context = Injekt.get<android.app.Application>(),
-    private val getAnimeHistory: GetAnimeHistory = Injekt.get(),
-    private val getNextEpisodes: GetNextEpisodes = Injekt.get(),
-    private val getLibraryAnime: GetLibraryAnime = Injekt.get(),
-    private val getAnimeCategories: GetAnimeCategories = Injekt.get(),
     userProfilePreferences: UserProfilePreferences = Injekt.get(),
-    private val sourcePreferences: SourcePreferences = Injekt.get(),
-    private val sourceManager: AnimeSourceManager = Injekt.get(),
-    private val userProfileManager: tachiyomi.data.achievement.UserProfileManager = Injekt.get(),
-    private val streakChecker: tachiyomi.data.achievement.handler.checkers.StreakAchievementChecker = Injekt.get(),
-    private val activityDataRepository: tachiyomi.domain.achievement.repository.ActivityDataRepository = Injekt.get(),
 ) : BaseHomeHubScreenModel(
     context = context,
     initialState = HomeHubUiState(
@@ -46,6 +38,16 @@ internal class HomeHubScreenModel(
     ),
     userProfilePreferences = userProfilePreferences,
 ) {
+
+    private val getAnimeHistory: GetAnimeHistory by injectLazy()
+    private val getNextEpisodes: GetNextEpisodes by injectLazy()
+    private val getLibraryAnime: GetLibraryAnime by injectLazy()
+    private val getAnimeCategories: GetAnimeCategories by injectLazy()
+    private val sourcePreferences: SourcePreferences by injectLazy()
+    private val sourceManager: AnimeSourceManager by injectLazy()
+    private val userProfileManager: tachiyomi.data.achievement.UserProfileManager by injectLazy()
+    private val streakChecker: tachiyomi.data.achievement.handler.checkers.StreakAchievementChecker by injectLazy()
+    private val activityDataRepository: tachiyomi.domain.achievement.repository.ActivityDataRepository by injectLazy()
 
     override val avatarFileName: String = "user_avatar.jpg"
 

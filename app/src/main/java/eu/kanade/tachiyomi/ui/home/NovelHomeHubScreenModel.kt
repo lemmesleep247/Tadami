@@ -19,16 +19,11 @@ import tachiyomi.domain.source.novel.service.NovelSourceManager
 import tachiyomi.i18n.aniyomi.AYMR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 
 internal class NovelHomeHubScreenModel(
     context: android.content.Context = Injekt.get<android.app.Application>(),
-    private val historyRepository: NovelHistoryRepository = Injekt.get(),
-    private val getLibraryNovel: GetLibraryNovel = Injekt.get(),
-    private val getNovelWithChapters: GetNovelWithChapters = Injekt.get(),
-    private val getNovelCategories: GetNovelCategories = Injekt.get(),
     userProfilePreferences: UserProfilePreferences = Injekt.get(),
-    private val sourcePreferences: SourcePreferences = Injekt.get(),
-    private val sourceManager: NovelSourceManager = Injekt.get(),
 ) : BaseHomeHubScreenModel(
     context = context,
     initialState = HomeHubUiState(
@@ -41,6 +36,13 @@ internal class NovelHomeHubScreenModel(
     ),
     userProfilePreferences = userProfilePreferences,
 ) {
+
+    private val historyRepository: NovelHistoryRepository by injectLazy()
+    private val getLibraryNovel: GetLibraryNovel by injectLazy()
+    private val getNovelWithChapters: GetNovelWithChapters by injectLazy()
+    private val getNovelCategories: GetNovelCategories by injectLazy()
+    private val sourcePreferences: SourcePreferences by injectLazy()
+    private val sourceManager: NovelSourceManager by injectLazy()
 
     override val avatarFileName: String = "user_avatar_novel.jpg"
 
