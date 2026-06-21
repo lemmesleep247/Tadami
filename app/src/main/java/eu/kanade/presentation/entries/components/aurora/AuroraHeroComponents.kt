@@ -109,6 +109,7 @@ fun AuroraHeroStatsRow(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(
+            modifier = Modifier.align(Alignment.CenterVertically),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -129,9 +130,10 @@ fun AuroraHeroStatsRow(
         }
 
         if (secondValue != null) {
-            HeroStatDivider()
+            HeroStatDivider(modifier = Modifier.align(Alignment.CenterVertically))
             Text(
                 text = secondValue,
+                modifier = Modifier.align(Alignment.CenterVertically),
                 color = colors.textSecondary.copy(alpha = 0.82f),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -141,9 +143,10 @@ fun AuroraHeroStatsRow(
         }
 
         if (thirdValue != null) {
-            HeroStatDivider()
+            HeroStatDivider(modifier = Modifier.align(Alignment.CenterVertically))
             Text(
                 text = thirdValue,
+                modifier = Modifier.align(Alignment.CenterVertically),
                 color = colors.textPrimary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -155,10 +158,10 @@ fun AuroraHeroStatsRow(
 }
 
 @Composable
-internal fun HeroStatDivider() {
+internal fun HeroStatDivider(modifier: Modifier = Modifier) {
     val colors = AuroraTheme.colors
     Box(
-        modifier = Modifier
+        modifier = modifier
             .width(1.dp)
             .height(10.dp)
             .background(colors.textSecondary.copy(alpha = 0.3f)),
