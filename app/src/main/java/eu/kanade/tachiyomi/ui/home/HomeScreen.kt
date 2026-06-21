@@ -258,7 +258,12 @@ object HomeScreen : Screen() {
                                         .border(
                                             BorderStroke(
                                                 width = 1.dp,
-                                                color = Color.White,
+                                                brush = Brush.verticalGradient(
+                                                    listOf(
+                                                        Color.White.copy(alpha = 0.80f),
+                                                        Color.White.copy(alpha = 0.20f),
+                                                    ),
+                                                ),
                                             ),
                                             shape = navBarShape,
                                         )

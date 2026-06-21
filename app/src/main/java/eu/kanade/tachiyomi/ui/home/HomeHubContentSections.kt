@@ -480,6 +480,18 @@ internal fun QuickSourceButton(sourceName: String?, onClick: () -> Unit) {
     val sourceButtonShape = CircleShape
     val isLightTheme = !colors.isDark && !colors.isEInk
     val tabContainerColor = resolveAuroraTabContainerColor(colors)
+    val quickSourceBorderBrush = remember(colors) {
+        if (colors.isDark && !colors.isEInk) {
+            Brush.verticalGradient(
+                listOf(
+                    Color.White.copy(alpha = 0.08f),
+                    Color.Transparent,
+                )
+            )
+        } else {
+            auroraMenuRimLightBrush(colors)
+        }
+    }
     val sourceBorderBrush = remember(colors) { auroraMenuRimLightBrush(colors) }
     val sourceShowBorder = colors.isDark || colors.isEInk
 
@@ -546,7 +558,7 @@ internal fun QuickSourceButton(sourceName: String?, onClick: () -> Unit) {
                             applyDarkShadow = false,
                         )
                         .border(
-                            BorderStroke(1.dp, sourceBorderBrush),
+                            BorderStroke(1.dp, quickSourceBorderBrush),
                             shape = sourceButtonShape,
                         )
                 } else {
