@@ -264,6 +264,7 @@ class BrowseMangaSourceScreenModel(
             Pager(PagingConfig(pageSize = 25)) {
                 getRemoteManga.subscribe(sourceId, listing.query ?: "", listing.filters)
             }.flow
+                .cachedIn(ioCoroutineScope)
                 .combine(favoriteMangaUrls) { pagingData, favorites ->
                     pagingData.map { manga ->
                         val isFavorite = manga.url in favorites

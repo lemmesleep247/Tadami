@@ -330,6 +330,7 @@ class BrowseNovelSourceScreenModel(
             Pager(PagingConfig(pageSize = 25)) {
                 getRemoteNovel.subscribe(sourceId, request.query, request.filters)
             }.flow
+                .cachedIn(ioCoroutineScope)
                 .combine(favoriteNovelUrls) { pagingData, favorites ->
                     pagingData.map { novel ->
                         val isFavorite = novel.url in favorites
