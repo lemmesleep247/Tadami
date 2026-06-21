@@ -21,6 +21,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -180,7 +182,7 @@ object HomeScreen : Screen() {
                                 tabNavigator.current != currentMoreTab
                             val auroraColors = if (useAuroraBottomNav) AuroraTheme.colorsForCurrentTheme() else null
                             val navBarShape = if (useAuroraBottomNav) {
-                                RoundedCornerShape(28.dp)
+                                CircleShape
                             } else {
                                 RoundedCornerShape(
                                     topStart = 20.dp,
@@ -284,6 +286,11 @@ object HomeScreen : Screen() {
                                         },
                                         modifier = navModifier,
                                         shape = navBarShape,
+                                        contentPadding = if (useAuroraBottomNav) {
+                                            PaddingValues(horizontal = 8.dp)
+                                        } else {
+                                            PaddingValues(0.dp)
+                                        },
                                     ) {
                                         navStyle.tabs.fastForEach {
                                             NavigationBarItem(it, useAuroraBottomNav)
@@ -314,6 +321,11 @@ object HomeScreen : Screen() {
                                         },
                                         modifier = navModifier,
                                         shape = navBarShape,
+                                        contentPadding = if (useAuroraBottomNav) {
+                                            PaddingValues(horizontal = 8.dp)
+                                        } else {
+                                            PaddingValues(0.dp)
+                                        },
                                     ) {
                                         navStyle.tabs.fastForEach {
                                             NavigationBarItem(it, useAuroraBottomNav)
