@@ -235,9 +235,13 @@ object KotlinNovelExtensionLoader {
                 selectExtensionPackage(sharedPkg, privatePkg)
             }
 
+        val trustedFingerprints = runBlocking {
+            trustExtension.getTrustedFingerprints()
+        }
+
         return runBlocking {
             extPkgs.map { extensionInfo ->
-                async { loadExtension(context, extensionInfo) }
+                async { loadExtension(context, extensionInfo, trustedFingerprints) }
             }.awaitAll().filterNotNull()
         }
     }
@@ -246,7 +250,11 @@ object KotlinNovelExtensionLoader {
         return getExtensionPackageInfoFromPkgName(context, pkgName) != null
     }
 
-    private suspend fun loadExtension(context: Context, extensionInfo: ExtensionInfo): KotlinNovelExtensionLoadResult? {
+    private suspend fun loadExtension(
+        context: Context,
+        extensionInfo: ExtensionInfo,
+        trustedFingerprints: Set<String>,
+    ): KotlinNovelExtensionLoadResult? {
         val pkgManager = context.packageManager
         val pkgInfo = extensionInfo.packageInfo
         val appInfo = pkgInfo.applicationInfo ?: return null
@@ -275,7 +283,7 @@ object KotlinNovelExtensionLoader {
         val iconUrl = runCatching { saveIcon(context, pkgName, appInfo.loadIcon(pkgManager)) }
             .onFailure { logcat(LogPriority.WARN, it) { "Failed to save Kotlin novel extension icon for $pkgName" } }
             .getOrNull()
-        if (!trustExtension.isTrusted(pkgInfo, signatures)) {
+        if (!trustExtension.isTrusted(pkgInfo, signatures, trustedFingerprints)) {
             logcat(LogPriority.WARN) { "Kotlin novel extension $pkgName is not trusted" }
             return KotlinNovelExtensionLoadResult(
                 plugin = NovelPlugin.Untrusted(

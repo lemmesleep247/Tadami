@@ -180,10 +180,14 @@ internal object MangaExtensionLoader {
 
         if (extPkgs.isEmpty()) return emptyList()
 
+        val trustedFingerprints = runBlocking {
+            trustExtension.getTrustedFingerprints()
+        }
+
         // Load each extension concurrently and wait for completion
         return runBlocking {
             val deferred = extPkgs.map {
-                async { loadMangaExtension(context, it) }
+                async { loadMangaExtension(context, it, trustedFingerprints) }
             }
             deferred.awaitAll()
         }
@@ -250,7 +254,11 @@ internal object MangaExtensionLoader {
      * @param context The application context.
      * @param extensionInfo The extension to load.
      */
-    private suspend fun loadMangaExtension(context: Context, extensionInfo: MangaExtensionInfo): MangaLoadResult {
+    private suspend fun loadMangaExtension(
+        context: Context,
+        extensionInfo: MangaExtensionInfo,
+        trustedFingerprints: Set<String>? = null,
+    ): MangaLoadResult {
         val pkgManager = context.packageManager
         val pkgInfo = extensionInfo.packageInfo
         val appInfo = pkgInfo.applicationInfo!!
@@ -278,10 +286,18 @@ internal object MangaExtensionLoader {
         }
 
         val signatures = getSignatures(pkgInfo)
+        val isTrusted = if (signatures.isNullOrEmpty()) {
+            false
+        } else if (trustedFingerprints != null) {
+            trustExtension.isTrusted(pkgInfo, signatures, trustedFingerprints)
+        } else {
+            trustExtension.isTrusted(pkgInfo, signatures)
+        }
+
         if (signatures.isNullOrEmpty()) {
             logcat(LogPriority.WARN) { "Package $pkgName isn't signed" }
             return MangaLoadResult.Error
-        } else if (!trustExtension.isTrusted(pkgInfo, signatures)) {
+        } else if (!isTrusted) {
             val extension = MangaExtension.Untrusted(
                 extName,
                 pkgName,

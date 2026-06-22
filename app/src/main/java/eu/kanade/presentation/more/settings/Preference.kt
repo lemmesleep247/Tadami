@@ -1,10 +1,10 @@
 package eu.kanade.presentation.more.settings
 
-import androidx.compose.foundation.text.KeyboardOptions
 import android.content.Context
 import android.os.Build
 import android.os.Environment
 import androidx.annotation.IntRange
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.vector.ImageVector

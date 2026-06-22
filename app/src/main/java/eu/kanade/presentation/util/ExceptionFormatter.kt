@@ -16,7 +16,7 @@ fun Throwable.formattedMessage(appContext: Context): String {
     when (this) {
         is aniyomi.core.common.torrent.DisabledTorrServerException,
         is eu.kanade.tachiyomi.torrentutils.model.DisabledTorrServerException,
-            -> return appContext.stringResource(AYMR.strings.torrserver_disabled)
+        -> return appContext.stringResource(AYMR.strings.torrserver_disabled)
         is eu.kanade.tachiyomi.torrentutils.model.DeadTorrentException -> {
             return appContext.stringResource(AYMR.strings.dead_torrent)
         }

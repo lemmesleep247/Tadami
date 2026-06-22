@@ -23,7 +23,8 @@ class TorrentServerUtilsTest {
 
         val result = TorrentServerUtils.buildTorrentPlayLink("http://127.0.0.1:8090", torrent, 2)
 
-        result shouldBe "http://127.0.0.1:8090/stream/%D0%92%D0%B8%D0%B4%D0%B5%D0%BE+%D1%84%D0%B0%D0%B9%D0%BB.mkv?link=abc123&index=2&play"
+        result shouldBe
+            "http://127.0.0.1:8090/stream/%D0%92%D0%B8%D0%B4%D0%B5%D0%BE+%D1%84%D0%B0%D0%B9%D0%BB.mkv?link=abc123&index=2&play"
     }
 
     @Test

@@ -40,7 +40,8 @@ udp://tracker.opentrackr.org:1337/announce
 udp://tracker.tiny-vps.com:6969/announce
 udp://tracker.torrent.eu.org:451/announce
 udp://valakas.rollo.dnsabr.com:2710/announce
-udp://www.torrent.eu.org:451/announce""".trimIndent()
+udp://www.torrent.eu.org:451/announce
+        """.trimIndent()
     }
 }
 
