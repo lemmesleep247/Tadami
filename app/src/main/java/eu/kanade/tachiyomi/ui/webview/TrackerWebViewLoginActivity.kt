@@ -270,23 +270,82 @@ internal fun extractNovelUpdatesCookie(cookieHeader: String?): String? {
     return if (cookies.contains("wordpress_logged_in")) cookies else null
 }
 
+private val novelListAccessTokenRegex = Regex("\"access_token\"\\s*:\\s*\"([^\"]+)\"")
+private val novelListJwtRegex = Regex("eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+")
+
 internal fun extractNovelListToken(cookieHeader: String?): String? {
     val cookies = cookieHeader?.trim().orEmpty()
-    val novellistCookie = Regex("novellist=([^;]+)").find(cookies)?.groupValues?.get(1) ?: return null
+    if (cookies.isEmpty()) return null
 
-    val decoded = try {
-        if (novellistCookie.startsWith("base64-")) {
-            val base64Part = novellistCookie.removePrefix("base64-")
-            val decodedBytes = java.util.Base64.getDecoder().decode(base64Part)
-            String(decodedBytes, Charsets.UTF_8)
-        } else {
-            novellistCookie
-        }
-    } catch (e: Exception) {
-        Log.e("TrackerWebViewLogin", "Failed to decode NovelList cookie", e)
-        novellistCookie
+    val singleCookie = Regex("(?:^|[;\\s])novellist=([^;]+)").find(cookies)?.groupValues?.get(1)
+    if (singleCookie != null) {
+        return normalizeNovelListToken(singleCookie)
     }
 
-    val tokenMatch = Regex("\"access_token\"\\s*:\\s*\"([^\"]+)\"").find(decoded)
-    return tokenMatch?.groupValues?.get(1) ?: decoded.takeIf { it.isNotBlank() }
+    val chunkedCookie = Regex("(?:^|[;\\s])novellist\\.(\\d+)=([^;]+)").findAll(cookies)
+        .mapNotNull { match ->
+            val index = match.groupValues[1].toIntOrNull() ?: return@mapNotNull null
+            index to match.groupValues[2]
+        }
+        .sortedBy { it.first }
+        .joinToString(separator = "") { it.second }
+        .ifBlank { null }
+
+    if (chunkedCookie != null) {
+        return normalizeNovelListToken(chunkedCookie)
+    }
+
+    return normalizeNovelListToken(cookies)
+}
+
+internal fun normalizeNovelListToken(input: String): String? {
+    val raw = input.trim()
+    if (raw.isEmpty()) return null
+
+    val base64Match = Regex("base64-([A-Za-z0-9+/=_-]+)").find(raw)
+    if (base64Match != null) {
+        val decoded = decodeNovelListBase64(base64Match.groupValues[1]) ?: return null
+        novelListAccessTokenRegex.find(decoded)?.groupValues?.get(1)?.let { return it }
+        novelListJwtRegex.find(decoded)?.value?.let { return it }
+        return decoded.takeIf { it.isNotBlank() }
+    }
+
+    novelListAccessTokenRegex.find(raw)?.groupValues?.get(1)?.let { return it }
+    novelListJwtRegex.find(raw)?.value?.let { return it }
+
+    if (raw.startsWith("Bearer ", ignoreCase = true)) {
+        val bearerValue = raw.substringAfter(' ').trim()
+        novelListJwtRegex.find(bearerValue)?.value?.let { return it }
+        return bearerValue.ifBlank { null }
+    }
+
+    if (!raw.contains(';') && !Regex("\\w+=").containsMatchIn(raw)) {
+        return raw
+    }
+
+    return null
+}
+
+internal fun decodeNovelListBase64(encoded: String): String? {
+    val normalized = encoded
+        .trim()
+        .replace('-', '+')
+        .replace('_', '/')
+        .replace("\\s".toRegex(), "")
+        .trimEnd('=')
+
+    if (normalized.isEmpty()) return null
+
+    val padded = when (normalized.length % 4) {
+        0 -> normalized
+        2 -> "$normalized=="
+        3 -> "$normalized="
+        else -> normalized.dropLast(1)
+    }
+
+    return runCatching {
+        String(java.util.Base64.getDecoder().decode(padded), Charsets.UTF_8)
+    }.onFailure {
+        Log.e("TrackerWebViewLogin", "Failed to decode NovelList session", it)
+    }.getOrNull()
 }

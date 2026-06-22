@@ -40,6 +40,8 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.domain.track.manga.interactor.RefreshMangaTracks
 import eu.kanade.domain.track.manga.model.toDbTrack
+import eu.kanade.domain.track.novel.interactor.AddNovelTracks
+import eu.kanade.domain.track.novel.interactor.RefreshNovelTracks
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.track.TrackDateSelector
 import eu.kanade.presentation.track.TrackItemSelector
@@ -76,6 +78,9 @@ import tachiyomi.domain.source.manga.service.MangaSourceManager
 import tachiyomi.domain.track.manga.interactor.DeleteMangaTrack
 import tachiyomi.domain.track.manga.interactor.GetMangaTracks
 import tachiyomi.domain.track.manga.model.MangaTrack
+import tachiyomi.domain.track.novel.interactor.DeleteNovelTrack
+import tachiyomi.domain.track.novel.interactor.GetNovelTracks
+import tachiyomi.domain.track.novel.model.NovelTrack
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.LabeledCheckbox
 import tachiyomi.presentation.core.components.material.AlertDialogContent
@@ -165,6 +170,7 @@ data class MangaTrackInfoDialogHomeScreen(
                             initialQuery = it.track?.title ?: mangaTitle,
                             currentUrl = it.track?.remoteUrl,
                             serviceId = it.tracker.id,
+                            isNovelEntry = isNovelEntry,
                         ),
                     )
                 }
@@ -176,6 +182,7 @@ data class MangaTrackInfoDialogHomeScreen(
                         mangaId = mangaId,
                         track = it.track!!,
                         serviceId = it.tracker.id,
+                        isNovelEntry = isNovelEntry,
                     ),
                 )
             },
@@ -206,6 +213,7 @@ data class MangaTrackInfoDialogHomeScreen(
         private val sourceId: Long,
         private val isNovelEntry: Boolean,
         private val getTracks: GetMangaTracks = Injekt.get(),
+        private val getNovelTracks: GetNovelTracks = Injekt.get(),
     ) : StateScreenModel<Model.State>(State()) {
 
         init {
@@ -214,10 +222,17 @@ data class MangaTrackInfoDialogHomeScreen(
             }
 
             screenModelScope.launch {
-                getTracks.subscribe(mangaId)
+                val trackItemsFlow = if (isNovelEntry) {
+                    getNovelTracks.subscribe(mangaId)
+                        .map { it.mapNovelToTrackItem() }
+                } else {
+                    getTracks.subscribe(mangaId)
+                        .map { it.mapToTrackItem() }
+                }
+
+                trackItemsFlow
                     .catch { logcat(LogPriority.ERROR, it) }
                     .distinctUntilChanged()
-                    .map { it.mapToTrackItem() }
                     .collectLatest { trackItems ->
                         mutableState.update {
                             it.copy(
@@ -242,10 +257,14 @@ data class MangaTrackInfoDialogHomeScreen(
         }
 
         private suspend fun refreshTrackers() {
-            val refreshTracks = Injekt.get<RefreshMangaTracks>()
             val context = Injekt.get<Application>()
+            val refreshFailures = if (isNovelEntry) {
+                Injekt.get<RefreshNovelTracks>().await(mangaId)
+            } else {
+                Injekt.get<RefreshMangaTracks>().await(mangaId)
+            }
 
-            refreshTracks.await(mangaId)
+            refreshFailures
                 .filter { it.first != null }
                 .forEach { (track, e) ->
                     logcat(LogPriority.ERROR, e) {
@@ -282,6 +301,12 @@ data class MangaTrackInfoDialogHomeScreen(
                 .map { service -> MangaTrackItem(find { it.trackerId == service.id }, service) }
                 // Show only if the service supports this manga's source
                 .filter { (it.tracker as? EnhancedMangaTracker)?.accept(source) ?: true }
+        }
+
+        private fun List<NovelTrack>.mapNovelToTrackItem(): List<MangaTrackItem> {
+            val trackerManager = Injekt.get<TrackerManager>()
+            return trackerManager.novelTrackers
+                .map { service -> MangaTrackItem(find { it.trackerId == service.id }?.toMangaTrack(), service) }
         }
 
         @Immutable
@@ -696,6 +721,7 @@ data class TrackServiceSearchScreen(
     private val initialQuery: String,
     private val currentUrl: String?,
     private val serviceId: Long,
+    private val isNovelEntry: Boolean = false,
 ) : Screen() {
 
     @Composable
@@ -707,6 +733,7 @@ data class TrackServiceSearchScreen(
                 currentUrl = currentUrl,
                 initialQuery = initialQuery,
                 tracker = Injekt.get<TrackerManager>().get(serviceId)!!,
+                isNovelEntry = isNovelEntry,
             )
         }
 
@@ -735,6 +762,8 @@ data class TrackServiceSearchScreen(
         private val currentUrl: String? = null,
         initialQuery: String,
         private val tracker: Tracker,
+        private val isNovelEntry: Boolean,
+        private val addNovelTracks: AddNovelTracks = Injekt.get(),
     ) : StateScreenModel<Model.State>(State()) {
 
         val supportsPrivateTracking = tracker.supportsPrivateTracking
@@ -771,10 +800,14 @@ data class TrackServiceSearchScreen(
         fun registerTracking(item: MangaTrackSearch) {
             screenModelScope.launchNonCancellable {
                 try {
-                    tracker.mangaService.register(item, mangaId)
+                    if (isNovelEntry) {
+                        addNovelTracks.bind(tracker.mangaService, item, mangaId)
+                    } else {
+                        tracker.mangaService.register(item, mangaId)
+                    }
                 } catch (e: Throwable) {
                     logcat(LogPriority.ERROR, e) {
-                        "Failed to register manga tracking entry mangaId=$mangaId serviceId=${tracker.id}"
+                        "Failed to register tracking entry entryId=$mangaId serviceId=${tracker.id} isNovel=$isNovelEntry"
                     }
                 }
             }
@@ -796,6 +829,7 @@ private data class TrackerMangaRemoveScreen(
     private val mangaId: Long,
     private val track: MangaTrack,
     private val serviceId: Long,
+    private val isNovelEntry: Boolean = false,
 ) : Screen() {
 
     @Composable
@@ -806,6 +840,7 @@ private data class TrackerMangaRemoveScreen(
                 mangaId = mangaId,
                 track = track,
                 tracker = Injekt.get<TrackerManager>().get(serviceId)!!,
+                isNovelEntry = isNovelEntry,
             )
         }
         val serviceName = screenModel.getName()
@@ -873,7 +908,9 @@ private data class TrackerMangaRemoveScreen(
         private val mangaId: Long,
         private val track: MangaTrack,
         private val tracker: Tracker,
+        private val isNovelEntry: Boolean,
         private val deleteTrack: DeleteMangaTrack = Injekt.get(),
+        private val deleteNovelTrack: DeleteNovelTrack = Injekt.get(),
     ) : ScreenModel {
 
         fun getName() = tracker.name
@@ -891,7 +928,32 @@ private data class TrackerMangaRemoveScreen(
         }
 
         fun unregisterTracking(serviceId: Long) {
-            screenModelScope.launchNonCancellable { deleteTrack.await(mangaId, serviceId) }
+            screenModelScope.launchNonCancellable {
+                if (isNovelEntry) {
+                    deleteNovelTrack.await(mangaId, serviceId)
+                } else {
+                    deleteTrack.await(mangaId, serviceId)
+                }
+            }
         }
     }
+}
+
+private fun NovelTrack.toMangaTrack(): MangaTrack {
+    return MangaTrack(
+        id = id,
+        mangaId = novelId,
+        trackerId = trackerId,
+        remoteId = remoteId,
+        libraryId = libraryId,
+        title = title,
+        lastChapterRead = lastChapterRead,
+        totalChapters = totalChapters,
+        status = status,
+        score = score,
+        remoteUrl = remoteUrl,
+        startDate = startDate,
+        finishDate = finishDate,
+        private = private,
+    )
 }

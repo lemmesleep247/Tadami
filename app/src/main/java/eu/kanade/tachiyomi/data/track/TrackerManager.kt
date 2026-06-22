@@ -18,7 +18,6 @@ import eu.kanade.tachiyomi.data.track.suwayomi.Suwayomi
 import eu.kanade.tachiyomi.data.track.tmdb.Tmdb
 import eu.kanade.tachiyomi.data.track.trakt.Trakt
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 
 class TrackerManager(context: Context) {
 
@@ -57,11 +56,7 @@ class TrackerManager(context: Context) {
 
     fun loggedInTrackers() = trackers.filter { it.isLoggedIn }
 
-    fun loggedInNovelTrackers() = filterLoggedInTrackersForEntry(
-        isNovelEntry = true,
-        trackers = trackers,
-        novelTrackerIds = novelTrackerIds,
-    )
+    fun loggedInNovelTrackers() = novelTrackers.filter { it.isLoggedIn }
 
     fun loggedInMangaTrackers() = filterLoggedInTrackersForEntry(
         isNovelEntry = false,
@@ -75,12 +70,10 @@ class TrackerManager(context: Context) {
         }
     }
 
-    fun loggedInNovelTrackersFlow() = loggedInTrackersFlow().map { trackers ->
-        filterLoggedInTrackersForEntry(
-            isNovelEntry = true,
-            trackers = trackers,
-            novelTrackerIds = novelTrackerIds,
-        )
+    fun loggedInNovelTrackersFlow() = combine(novelTrackers.map { it.isLoggedInFlow }) { loggedIn ->
+        loggedIn.mapIndexedNotNull { index, isLoggedIn ->
+            if (isLoggedIn) novelTrackers[index] else null
+        }
     }
 
     fun get(id: Long) = trackers.find { it.id == id }
@@ -95,6 +88,13 @@ internal fun filterLoggedInTrackersForEntry(
     trackers: List<Tracker>,
     novelTrackerIds: Set<Long>,
 ): List<Tracker> {
-    return trackers
-        .filter { it is MangaTracker && it.isLoggedIn && (isNovelEntry || it.id !in novelTrackerIds) }
+    return trackers.filter { tracker ->
+        tracker is MangaTracker &&
+            tracker.isLoggedIn &&
+            if (isNovelEntry) {
+                tracker.id in novelTrackerIds
+            } else {
+                tracker.id !in novelTrackerIds
+            }
+    }
 }

@@ -47,6 +47,10 @@
     <string name="pref_library_summary">Категории, глобальное обновление, смахивание глав/эпизодов</string>
     <string name="novel_trackers_title">Трекеры новелл</string>
     <string name="novel_trackers_info">Используйте эти сервисы для отслеживания прогресса и списков чтения новелл.</string>
+    <string name="novel_list_mark_chapters_read_title">Отмечать главы прочитанными в NovelList</string>
+    <string name="novel_list_mark_chapters_read_summary">Автоматически отправлять прогресс чтения глав в NovelList.</string>
+    <string name="novel_list_sync_reading_list_title">Синхронизировать список чтения NovelList</string>
+    <string name="novel_list_sync_reading_list_summary">Отправлять изменения статуса NovelList при обновлении статуса отслеживания.</string>
     <string name="novel_updates_use_custom_list_mapping_title">Использовать собственное сопоставление списков NovelUpdates</string>
     <string name="novel_updates_use_custom_list_mapping_summary">Сопоставлять статусы чтения с пользовательскими списками NovelUpdates.</string>
     <string name="novel_updates_configure_list_mapping_title">Настроить сопоставление списков NovelUpdates</string>

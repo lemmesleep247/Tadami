@@ -54,6 +54,16 @@ class TrackPreferences(
         0L,
     )
 
+    fun novelListMarkChaptersAsRead() = preferenceStore.getBoolean(
+        "novellist_mark_chapters_read",
+        true,
+    )
+
+    fun novelListSyncReadingList() = preferenceStore.getBoolean(
+        "novellist_sync_reading_list",
+        true,
+    )
+
     fun anilistScoreType() = preferenceStore.getString("anilist_score_type", Anilist.POINT_10)
 
     fun autoUpdateTrack() = preferenceStore.getBoolean("pref_auto_update_manga_sync_key", true)

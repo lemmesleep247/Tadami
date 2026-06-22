@@ -223,6 +223,16 @@ object SettingsTrackingScreen : SearchableSettings {
                         logout = { dialog = LogoutDialog(trackerManager.novelList) },
                     ),
                     Preference.PreferenceItem.SwitchPreference(
+                        preference = trackPreferences.novelListMarkChaptersAsRead(),
+                        title = stringResource(AYMR.strings.novel_list_mark_chapters_read_title),
+                        subtitle = stringResource(AYMR.strings.novel_list_mark_chapters_read_summary),
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = trackPreferences.novelListSyncReadingList(),
+                        title = stringResource(AYMR.strings.novel_list_sync_reading_list_title),
+                        subtitle = stringResource(AYMR.strings.novel_list_sync_reading_list_summary),
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
                         preference = trackPreferences.novelUpdatesUseCustomListMapping(),
                         title = stringResource(AYMR.strings.novel_updates_use_custom_list_mapping_title),
                         subtitle = stringResource(AYMR.strings.novel_updates_use_custom_list_mapping_summary),

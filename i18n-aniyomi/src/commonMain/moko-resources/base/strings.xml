@@ -1191,6 +1191,10 @@
     <string name="pref_track_on_add_library">Open track menu on adding to library</string>
     <string name="novel_trackers_title">Novel Trackers</string>
     <string name="novel_trackers_info">Use these services to track novel progress and reading lists.</string>
+    <string name="novel_list_mark_chapters_read_title">Mark chapters as read on NovelList</string>
+    <string name="novel_list_mark_chapters_read_summary">Automatically push novel chapter progress to NovelList.</string>
+    <string name="novel_list_sync_reading_list_title">Sync NovelList reading list</string>
+    <string name="novel_list_sync_reading_list_summary">Push NovelList status changes when you update tracking status.</string>
     <string name="novel_updates_use_custom_list_mapping_title">Use custom NovelUpdates list mapping</string>
     <string name="novel_updates_use_custom_list_mapping_summary">Map reading statuses to custom NovelUpdates lists.</string>
     <string name="novel_updates_configure_list_mapping_title">Configure NovelUpdates list mapping</string>

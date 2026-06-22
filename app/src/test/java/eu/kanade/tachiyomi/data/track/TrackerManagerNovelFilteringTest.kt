@@ -29,7 +29,7 @@ class TrackerManagerNovelFilteringTest {
             trackers = trackers,
             novelTrackerIds = novelTrackerIds,
         ).map { it.id }.toSet()
-        novelIds shouldContain 7L
+        novelIds shouldNotContain 7L
         novelIds shouldContain 10L
         novelIds shouldContain 11L
         novelIds shouldNotContain 2L

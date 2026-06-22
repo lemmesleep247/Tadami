@@ -25,6 +25,7 @@ import logcat.LogPriority
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.track.novel.interactor.InsertNovelTrack
@@ -163,11 +164,7 @@ class NovelList(id: Long) : BaseTracker(id, "NovelList"), MangaTracker {
     override suspend fun register(item: MangaTrack, mangaId: Long) {
         item.manga_id = mangaId
         try {
-            bind(item, false)
-            if (item.status == PLAN_TO_READ) {
-                item.status = READING
-            }
-            update(item)
+            bind(item, hasReadChapters = item.last_chapter_read > 0.0)
             item.toNovelTrack(idRequired = false)?.let { insertTrack.await(it) }
         } catch (e: Throwable) {
             withUIContext { Injekt.get<Application>().toast(e.message) }
@@ -184,8 +181,6 @@ class NovelList(id: Long) : BaseTracker(id, "NovelList"), MangaTracker {
         val requestBody = buildJsonObject {
             put("status", if (hasReadChapters) "IN_PROGRESS" else "PLANNED")
             put("chapter_count", track.last_chapter_read.toInt())
-            put("rating", 0)
-            put("note", "")
         }.toString().toRequestBody("application/json".toMediaType())
 
         val request = buildAuthenticatedRequest(url)
@@ -235,7 +230,7 @@ class NovelList(id: Long) : BaseTracker(id, "NovelList"), MangaTracker {
                     ?: ""
                 track.summary = obj["description"]?.jsonPrimitive?.contentOrNull ?: ""
                 val slug = obj["slug"]?.jsonPrimitive?.contentOrNull ?: idString
-                track.tracking_url = "https://www.novellist.co/novel/$slug#$idString"
+                track.tracking_url = buildNovelListTrackingUrl(slug, idString)
                 track.publishing_status = obj["status"]?.jsonPrimitive?.contentOrNull ?: ""
                 track
             }
@@ -276,6 +271,63 @@ class NovelList(id: Long) : BaseTracker(id, "NovelList"), MangaTracker {
         saveCredentials(username.ifBlank { "NovelList User" }, password)
     }
 
+    override suspend fun setRemoteMangaStatus(track: MangaTrack, status: Long) {
+        if (!trackPreferences.novelListSyncReadingList().get()) return
+        track.status = status
+        if (track.status == getCompletionStatus() && track.total_chapters != 0L) {
+            track.last_chapter_read = track.total_chapters.toDouble()
+        }
+        updateRemoteNovel(track)
+    }
+
+    override suspend fun setRemoteLastChapterRead(track: MangaTrack, chapterNumber: Int) {
+        if (!trackPreferences.novelListMarkChaptersAsRead().get()) return
+        if (track.last_chapter_read == 0.0 &&
+            track.last_chapter_read < chapterNumber &&
+            track.status != getRereadingStatus()
+        ) {
+            track.status = getReadingStatus()
+        }
+        track.last_chapter_read = chapterNumber.toDouble()
+        if (track.total_chapters != 0L &&
+            track.last_chapter_read.toLong() == track.total_chapters
+        ) {
+            track.status = getCompletionStatus()
+            track.finished_reading_date = System.currentTimeMillis()
+        }
+        updateRemoteNovel(track)
+    }
+
+    override suspend fun setRemoteScore(track: MangaTrack, scoreString: String) {
+        track.score = indexToScore(getScoreList().indexOf(scoreString))
+        updateRemoteNovel(track)
+    }
+
+    override suspend fun setRemoteStartDate(track: MangaTrack, epochMillis: Long) {
+        track.started_reading_date = epochMillis
+        updateRemoteNovel(track)
+    }
+
+    override suspend fun setRemoteFinishDate(track: MangaTrack, epochMillis: Long) {
+        track.finished_reading_date = epochMillis
+        updateRemoteNovel(track)
+    }
+
+    override suspend fun setRemotePrivate(track: MangaTrack, private: Boolean) {
+        track.private = private
+        updateRemoteNovel(track)
+    }
+
+    private suspend fun updateRemoteNovel(track: MangaTrack): Unit = withIOContext {
+        try {
+            update(track)
+            track.toNovelTrack(idRequired = false)?.let { insertTrack.await(it) }
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to update remote NovelList track data id=${track.id}" }
+            withUIContext { Injekt.get<Application>().toast(e.message) }
+        }
+    }
+
     companion object {
         const val READING = 1L
         const val COMPLETED = 2L
@@ -285,4 +337,12 @@ class NovelList(id: Long) : BaseTracker(id, "NovelList"), MangaTracker {
 
         const val LOGIN_URL = "https://www.novellist.co/sign-in"
     }
+}
+
+internal fun buildNovelListTrackingUrl(slug: String, uuid: String): String {
+    return "https://www.novellist.co/novels/$slug#$uuid"
+}
+
+internal fun extractNovelListUuid(trackingUrl: String): String {
+    return trackingUrl.substringAfter("#", "")
 }
