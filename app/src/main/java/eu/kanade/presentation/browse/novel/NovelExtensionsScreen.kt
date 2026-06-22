@@ -65,6 +65,59 @@ internal fun shouldLoadNovelPluginIcon(iconUrl: String?): Boolean {
     return !iconUrl.isNullOrBlank()
 }
 
+internal fun uniqueNovelExtensionItemKeys(
+    section: String,
+    items: List<NovelExtensionItem>,
+): List<String> {
+    val seen = mutableMapOf<String, Int>()
+    return items.map { item ->
+        val baseKey = novelExtensionItemBaseKey(section, item)
+        val duplicateIndex = seen.getOrDefault(baseKey, 0)
+        seen[baseKey] = duplicateIndex + 1
+        if (duplicateIndex == 0) {
+            baseKey
+        } else {
+            "$baseKey#$duplicateIndex"
+        }
+    }
+}
+
+private fun novelExtensionItemBaseKey(
+    section: String,
+    item: NovelExtensionItem,
+): String {
+    val plugin = item.plugin
+    val status = when (item.status) {
+        NovelExtensionItem.Status.UpdateAvailable -> "update"
+        NovelExtensionItem.Status.Installed -> "installed"
+        NovelExtensionItem.Status.Untrusted -> "untrusted"
+        NovelExtensionItem.Status.Available -> "available"
+    }
+    val pluginType = when (plugin) {
+        is NovelPlugin.Available -> "available"
+        is NovelPlugin.Installed -> "installed"
+        is NovelPlugin.Untrusted -> "untrusted"
+    }
+    val packageName = when (plugin) {
+        is NovelPlugin.Available -> plugin.pkgName
+        is NovelPlugin.Installed -> plugin.pkgName
+        is NovelPlugin.Untrusted -> plugin.pkgName
+    }.orEmpty()
+    val trustSignature = (plugin as? NovelPlugin.Untrusted)?.signatureHash.orEmpty()
+
+    return listOf(
+        "novel-ext",
+        section,
+        status,
+        pluginType,
+        plugin.id,
+        plugin.repoUrl,
+        packageName,
+        plugin.sha256,
+        trustSignature,
+    ).joinToString(separator = "|")
+}
+
 internal enum class NovelExtensionRowAction {
     None,
     Install,
@@ -203,10 +256,11 @@ private fun NovelExtensionContent(
                     },
                 )
             }
+            val keyedUpdates = uniqueNovelExtensionItemKeys("update", updates).zip(updates)
             items(
-                items = updates,
-                key = { item -> "novel-ext-update-${item.plugin.id}" },
-            ) { item ->
+                items = keyedUpdates,
+                key = { (key, _) -> key },
+            ) { (_, item) ->
                 NovelExtensionItemRow(
                     item = item,
                     onUpdateExtension = onUpdateExtension,
@@ -225,10 +279,11 @@ private fun NovelExtensionContent(
             item(key = "novel-ext-installed-header") {
                 ExtensionHeader(textRes = MR.strings.ext_installed)
             }
+            val keyedInstalled = uniqueNovelExtensionItemKeys("installed", installed).zip(installed)
             items(
-                items = installed,
-                key = { item -> "novel-ext-installed-${item.plugin.id}" },
-            ) { item ->
+                items = keyedInstalled,
+                key = { (key, _) -> key },
+            ) { (_, item) ->
                 NovelExtensionItemRow(
                     item = item,
                     onOpenExtension = onOpenExtension,
@@ -271,10 +326,12 @@ private fun NovelExtensionContent(
                     )
                 }
 
+                val keyedLanguageItems = uniqueNovelExtensionItemKeys("available-$language", languageItems)
+                    .zip(languageItems)
                 items(
-                    items = languageItems,
-                    key = { item -> "novel-ext-available-$language-${item.plugin.id}" },
-                ) { item ->
+                    items = keyedLanguageItems,
+                    key = { (key, _) -> key },
+                ) { (_, item) ->
                     NovelExtensionItemRow(
                         item = item,
                         onInstallExtension = onInstallExtension,
