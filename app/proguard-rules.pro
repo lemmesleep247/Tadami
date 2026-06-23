@@ -51,6 +51,11 @@
 -keep class eu.kanade.tachiyomi.extension.novel.kotlin.KotlinNovelExtensionSupport$* { *; }
 -keep class eu.kanade.tachiyomi.util.system.ChildFirstPathClassLoader { *; }
 
+# Novel Kotlin extensions are dynamically loaded and cast to host-side source APIs.
+# Keep the extension-facing API stable in release/minified builds.
+-keep class eu.kanade.tachiyomi.novelsource.** { *; }
+-keep class eu.kanade.tachiyomi.source.novel.** { *; }
+
 # From extensions-lib
 -keep,allowoptimization class eu.kanade.tachiyomi.network.interceptor.RateLimitInterceptorKt { public protected *; }
 -keep,allowoptimization class eu.kanade.tachiyomi.network.interceptor.SpecificHostRateLimitInterceptorKt { public protected *; }

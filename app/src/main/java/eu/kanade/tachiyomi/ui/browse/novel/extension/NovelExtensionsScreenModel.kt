@@ -1,11 +1,15 @@
 package eu.kanade.tachiyomi.ui.browse.novel.extension
 
+import android.app.Application
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.components.SEARCH_DEBOUNCE_MILLIS
 import eu.kanade.tachiyomi.extension.InstallStep
+import eu.kanade.tachiyomi.extension.installer.ExtensionApkFileStore
+import eu.kanade.tachiyomi.extension.installer.ExtensionInstallDiagnostic
 import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
 import eu.kanade.tachiyomi.extension.novel.NovelPluginId
 import eu.kanade.tachiyomi.extension.novel.runtime.NovelPluginIdentitySource
@@ -19,6 +23,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
@@ -29,10 +34,14 @@ import uy.kohesive.injekt.api.get
 class NovelExtensionsScreenModel(
     private val extensionManager: NovelExtensionManager = Injekt.get(),
     private val sourcePreferences: SourcePreferences = Injekt.get(),
+    private val context: Application = Injekt.get(),
+    private val basePreferences: BasePreferences = Injekt.get(),
 ) : StateScreenModel<NovelExtensionsScreenModel.State>(State()) {
 
     private val currentDownloads = MutableStateFlow<Map<String, InstallStep>>(hashMapOf())
     private val allPluginVariants = MutableStateFlow<Map<String, List<NovelPlugin.Available>>>(emptyMap())
+    private val lastDiagnostics = MutableStateFlow<Map<String, ExtensionInstallDiagnostic>>(emptyMap())
+    private val apkFileStore = ExtensionApkFileStore(basePreferences)
 
     init {
         screenModelScope.launchIO {
@@ -247,6 +256,20 @@ class NovelExtensionsScreenModel(
         currentDownloads.update { it - plugin.id }
     }
 
+    fun diagnosticFor(plugin: NovelPlugin): String {
+        return (lastDiagnostics.value[plugin.id] ?: buildDiagnostic(plugin, null)).format()
+    }
+
+    fun shareApk(plugin: NovelPlugin) {
+        screenModelScope.launch {
+            apkFileStore.share(context, plugin.packageNameForDiagnostic())
+        }
+    }
+
+    fun installerCompatibilityDiagnostic(): String {
+        return ExtensionInstallDiagnostic.getInstallerDiagnosticString(context, basePreferences)
+    }
+
     fun updateAllExtensions() {
         screenModelScope.launchIO {
             state.value.items
@@ -277,17 +300,61 @@ class NovelExtensionsScreenModel(
             addDownloadState(installed, InstallStep.Installing)
             try {
                 extensionManager.replacePluginFromRepo(installed, replacement)
+                clearDiagnostic(installed)
                 addDownloadState(installed, InstallStep.Installed)
                 removeDownloadState(installed)
             } catch (e: CancellationException) {
                 removeDownloadState(installed)
                 throw e
             } catch (e: Throwable) {
+                val diagnostic = buildDiagnostic(replacement, e)
+                lastDiagnostics.update { it + (installed.id to diagnostic) }
                 logcat(LogPriority.WARN, e) {
-                    "Failed to reinstall novel plugin ${installed.id} from ${replacement.repoUrl}"
+                    "Failed to reinstall novel plugin ${installed.id} from ${replacement.repoUrl}\n${diagnostic.format()}"
                 }
                 addDownloadState(installed, InstallStep.Error)
             }
+        }
+    }
+
+    private fun buildDiagnostic(plugin: NovelPlugin, failure: Throwable?): ExtensionInstallDiagnostic {
+        return ExtensionInstallDiagnostic.forNovelPlugin(
+            context = context,
+            basePreferences = basePreferences,
+            packageName = plugin.packageNameForDiagnostic(),
+            displayName = plugin.name,
+            repoUrl = plugin.repoUrl,
+            assetUrl = plugin.assetUrlForDiagnostic(),
+            isKotlinExtension = plugin.isKotlinExtensionForDiagnostic(),
+            failure = failure,
+        )
+    }
+
+    private fun clearDiagnostic(plugin: NovelPlugin) {
+        lastDiagnostics.update { it - plugin.id }
+    }
+
+    private fun NovelPlugin.packageNameForDiagnostic(): String {
+        return when (this) {
+            is NovelPlugin.Available -> pkgName ?: id
+            is NovelPlugin.Installed -> pkgName ?: id
+            is NovelPlugin.Untrusted -> pkgName
+        }
+    }
+
+    private fun NovelPlugin.assetUrlForDiagnostic(): String {
+        return when (this) {
+            is NovelPlugin.Available -> apkUrl ?: url
+            is NovelPlugin.Installed -> apkUrl ?: url
+            is NovelPlugin.Untrusted -> url
+        }
+    }
+
+    private fun NovelPlugin.isKotlinExtensionForDiagnostic(): Boolean {
+        return when (this) {
+            is NovelPlugin.Available -> isKotlinExtension
+            is NovelPlugin.Installed -> isKotlinExtension
+            is NovelPlugin.Untrusted -> isKotlinExtension
         }
     }
 
@@ -337,13 +404,19 @@ class NovelExtensionsScreenModel(
         addDownloadState(plugin, InstallStep.Installing)
         try {
             extensionManager.installPlugin(plugin)
+            clearDiagnostic(plugin)
             addDownloadState(plugin, InstallStep.Installed)
             removeDownloadState(plugin)
         } catch (e: CancellationException) {
             removeDownloadState(plugin)
             throw e
         } catch (e: Throwable) {
-            logcat(LogPriority.WARN, e) { "Failed to install novel plugin ${plugin.id}" }
+            val reason = e.message ?: e::class.simpleName.orEmpty()
+            val diagnostic = buildDiagnostic(plugin, e)
+            lastDiagnostics.update { it + (plugin.id to diagnostic) }
+            logcat(LogPriority.WARN, e) {
+                "Failed to install novel plugin ${plugin.id}: $reason\n${diagnostic.format()}"
+            }
             addDownloadState(plugin, InstallStep.Error)
         }
     }

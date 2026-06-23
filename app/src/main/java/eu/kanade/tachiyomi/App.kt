@@ -63,6 +63,7 @@ import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.data.updater.AppUpdateFileManager
 import eu.kanade.tachiyomi.di.AppModule
 import eu.kanade.tachiyomi.di.PreferenceModule
+import eu.kanade.tachiyomi.extension.installer.PendingApkInstallStore
 import eu.kanade.tachiyomi.extension.novel.NovelPluginSourceFactory
 import eu.kanade.tachiyomi.extension.novel.runtime.NovelRuntimeCacheTrimCallbacks
 import eu.kanade.tachiyomi.network.NetworkHelper
@@ -114,6 +115,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
 
     private val disableIncognitoReceiver = DisableIncognitoReceiver()
     private val achievementScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     @SuppressLint("LaunchActivityFromNotification")
     @OptIn(DelicateCoilApi::class)
@@ -410,6 +412,9 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
     override fun onStart(owner: LifecycleOwner) {
         SecureActivityDelegate.onApplicationStart()
         sessionManager.onSessionStart()
+        applicationScope.launch {
+            PendingApkInstallStore(basePreferences).resumeIfPermissionGranted(this@App)
+        }
         val libraryPreferences = Injekt.get<tachiyomi.domain.library.service.LibraryPreferences>()
         val autoUpdateInterval = libraryPreferences.autoUpdateInterval().get()
         if (autoUpdateInterval == -1) {

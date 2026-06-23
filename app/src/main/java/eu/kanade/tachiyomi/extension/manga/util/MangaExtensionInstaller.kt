@@ -18,13 +18,27 @@ import com.tadami.aurora.R
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.extension.InstallStep
+import eu.kanade.tachiyomi.extension.installer.ApkDownloadBackend
+import eu.kanade.tachiyomi.extension.installer.ApkExtensionInstallPolicy
+import eu.kanade.tachiyomi.extension.installer.ApkExtensionKind
+import eu.kanade.tachiyomi.extension.installer.DownloadManagerIdRegistry
+import eu.kanade.tachiyomi.extension.installer.ExtensionApkFileStore
+import eu.kanade.tachiyomi.extension.installer.PendingApkFileMaterializer
+import eu.kanade.tachiyomi.extension.installer.PendingApkInstallStore
+import eu.kanade.tachiyomi.extension.installer.toApkInstallBackend
 import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import eu.kanade.tachiyomi.extension.manga.installer.InstallerManga
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
+import eu.kanade.tachiyomi.extension.util.OkHttpExtensionApkDownloader
+import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.util.storage.getUriCompat
 import eu.kanade.tachiyomi.util.system.isPackageInstalled
 import eu.kanade.tachiyomi.util.system.notificationBuilder
 import eu.kanade.tachiyomi.util.system.notify
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +48,7 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.transformWhile
+import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.withUIContext
@@ -42,6 +57,7 @@ import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
+import java.util.Collections
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -77,7 +93,20 @@ internal class MangaExtensionInstaller(private val context: Context) {
 
     private val downloadsStateFlows = hashMapOf<Long, MutableStateFlow<InstallStep>>()
 
-    private val extensionInstaller = Injekt.get<BasePreferences>().extensionInstaller()
+    private val basePreferences = Injekt.get<BasePreferences>()
+    private val extensionInstaller = basePreferences.extensionInstaller()
+
+    private val apkDownloader = OkHttpExtensionApkDownloader(
+        context = context,
+        client = Injekt.get<NetworkHelper>().client,
+        basePreferences = basePreferences,
+    )
+    private val downloadManagerIdRegistry = DownloadManagerIdRegistry()
+    private val pendingInstallStore = PendingApkInstallStore(basePreferences)
+    private val pendingApkFileMaterializer = PendingApkFileMaterializer()
+    private val apkFileStore = ExtensionApkFileStore(basePreferences)
+    private val installerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val okHttpFallbackAttempted = Collections.synchronizedSet(mutableSetOf<String>())
 
     /**
      * Adds the given extension to the downloads queue and returns an observable containing its
@@ -92,6 +121,19 @@ internal class MangaExtensionInstaller(private val context: Context) {
         val oldDownload = activeDownloads[pkgName]
         if (oldDownload != null) {
             deleteDownload(pkgName)
+        }
+
+        when (
+            ApkExtensionInstallPolicy.selectDownloadBackend(
+                context = context,
+                kind = ApkExtensionKind.MANGA,
+                preferredBackend = ApkDownloadBackend.AUTO,
+            )
+        ) {
+            ApkDownloadBackend.OKHTTP -> return downloadAndInstallWithOkHttp(url, extension.name, pkgName)
+            ApkDownloadBackend.DOWNLOAD_MANAGER,
+            ApkDownloadBackend.AUTO,
+            -> Unit
         }
 
         // Register the receiver after removing (and unregistering) the previous download
@@ -109,6 +151,7 @@ internal class MangaExtensionInstaller(private val context: Context) {
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
 
         val id = downloadManager.enqueue(request)
+        downloadManagerIdRegistry.put(pkgName, id)
         activeDownloads[pkgName] = id
         downloadIdToPkgName[id] = pkgName
 
@@ -122,15 +165,38 @@ internal class MangaExtensionInstaller(private val context: Context) {
             when (downloadStatus) {
                 DownloadManager.STATUS_PENDING -> InstallStep.Pending
                 DownloadManager.STATUS_RUNNING -> InstallStep.Downloading
-                DownloadManager.STATUS_SUCCESSFUL, DownloadManager.STATUS_FAILED -> {
+                DownloadManager.STATUS_SUCCESSFUL -> {
                     handleDownloadCompletion(id)
+                    null
+                }
+                DownloadManager.STATUS_FAILED -> {
+                    fallbackDownloadManagerToOkHttp(
+                        id = id,
+                        url = url,
+                        displayName = extension.name,
+                        pkgName = pkgName,
+                        reason = "DownloadManager STATUS_FAILED",
+                    ).takeIf { !it }?.let { handleDownloadCompletion(id) }
                     null
                 }
                 else -> null
             }
         }
 
-        return merge(downloadStateFlow, pollStatusFlow).transformWhile {
+        val fallbackTimeoutFlow = flow<InstallStep> {
+            delay(DOWNLOAD_MANAGER_FALLBACK_TIMEOUT_MS)
+            if (activeDownloads[pkgName] == id && !handledDownloadIds.contains(id)) {
+                fallbackDownloadManagerToOkHttp(
+                    id = id,
+                    url = url,
+                    displayName = extension.name,
+                    pkgName = pkgName,
+                    reason = "DownloadManager timeout after $DOWNLOAD_MANAGER_FALLBACK_TIMEOUT_MS ms",
+                )
+            }
+        }
+
+        return merge(downloadStateFlow, pollStatusFlow, fallbackTimeoutFlow).transformWhile {
             emit(it)
             // Stop when the application is installed or errors
             !it.isCompleted()
@@ -140,11 +206,104 @@ internal class MangaExtensionInstaller(private val context: Context) {
             // background restrictions. Explicit user cancellation still goes through
             // cancelInstall(), which removes the DownloadManager request.
             if (cause == null) {
+                okHttpFallbackAttempted.remove(pkgName)
                 // Always notify on main thread
                 withUIContext {
                     deleteDownload(pkgName)
                 }
             }
+        }
+    }
+
+    private fun downloadAndInstallWithOkHttp(
+        url: String,
+        displayName: String,
+        pkgName: String,
+    ): Flow<InstallStep> {
+        val id = downloadManagerIdRegistry.allocateSyntheticId(pkgName)
+        activeDownloads[pkgName] = id
+        downloadIdToPkgName[id] = pkgName
+
+        val downloadStateFlow = MutableStateFlow(InstallStep.Pending)
+        downloadsStateFlows[id] = downloadStateFlow
+
+        val downloadFlow = flow {
+            emit(InstallStep.Pending)
+            emit(InstallStep.Downloading)
+            try {
+                val apkFile = apkDownloader.download(
+                    url = url,
+                    packageName = pkgName,
+                    displayName = displayName,
+                    kind = ApkExtensionKind.MANGA,
+                )
+                if (activeDownloads[pkgName] != id) {
+                    return@flow
+                }
+                withUIContext {
+                    installApk(id, apkFile.getUriCompat(context))
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) {
+                    "Failed to download manga extension APK via OkHttp package=$pkgName url=$url"
+                }
+                updateInstallStep(id, InstallStep.Error)
+            }
+        }
+
+        return merge(downloadStateFlow, downloadFlow).transformWhile {
+            emit(it)
+            !it.isCompleted()
+        }.onCompletion { cause ->
+            if (cause == null) {
+                okHttpFallbackAttempted.remove(pkgName)
+                withUIContext {
+                    deleteDownload(pkgName)
+                }
+            }
+        }
+    }
+
+    private suspend fun fallbackDownloadManagerToOkHttp(
+        id: Long,
+        url: String,
+        displayName: String,
+        pkgName: String,
+        reason: String,
+    ): Boolean {
+        if (!okHttpFallbackAttempted.add(pkgName)) return false
+        if (!handledDownloadIds.add(id)) return false
+
+        logcat(LogPriority.WARN) {
+            "Falling back to OkHttp for manga extension package=$pkgName id=$id reason=$reason"
+        }
+        downloadManager.remove(id)
+        updateInstallStep(id, InstallStep.Downloading)
+
+        return try {
+            val apkFile = apkDownloader.download(
+                url = url,
+                packageName = pkgName,
+                displayName = displayName,
+                kind = ApkExtensionKind.MANGA,
+            )
+            if (activeDownloads[pkgName] != id) {
+                return true
+            }
+            withUIContext {
+                installApk(id, apkFile.getUriCompat(context))
+            }
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) {
+                "Failed OkHttp fallback for manga extension package=$pkgName url=$url"
+            }
+            updateInstallStep(id, InstallStep.Error)
+            true
         }
     }
 
@@ -187,7 +346,7 @@ internal class MangaExtensionInstaller(private val context: Context) {
     fun installApk(downloadId: Long, uri: Uri) {
         val installer = extensionInstaller.get()
         if (requiresUnknownAppsPermission(installer)) {
-            requestUnknownAppsPermission(downloadId)
+            requestUnknownAppsPermission(downloadId, uri, installer)
             return
         }
 
@@ -276,7 +435,10 @@ internal class MangaExtensionInstaller(private val context: Context) {
      */
     fun cancelInstall(pkgName: String) {
         val downloadId = activeDownloads.remove(pkgName) ?: return
-        downloadManager.remove(downloadId)
+        if (downloadId >= 0) {
+            downloadManager.remove(downloadId)
+        }
+        updateInstallStep(downloadId, InstallStep.Idle)
         InstallerManga.cancelInstallQueue(context, downloadId)
     }
 
@@ -315,7 +477,10 @@ internal class MangaExtensionInstaller(private val context: Context) {
     private fun deleteDownload(pkgName: String) {
         val downloadId = activeDownloads.remove(pkgName)
         if (downloadId != null) {
-            downloadManager.remove(downloadId)
+            if (downloadId >= 0) {
+                downloadManager.remove(downloadId)
+            }
+            downloadManagerIdRegistry.remove(pkgName)
             downloadsStateFlows.remove(downloadId)
             downloadIdToPkgName.remove(downloadId)
             handledDownloadIds.remove(downloadId)
@@ -331,7 +496,38 @@ internal class MangaExtensionInstaller(private val context: Context) {
             !context.packageManager.canRequestPackageInstalls()
     }
 
-    private fun requestUnknownAppsPermission(downloadId: Long) {
+    private fun requestUnknownAppsPermission(
+        downloadId: Long,
+        uri: Uri,
+        installer: BasePreferences.ExtensionInstaller,
+    ) {
+        val pkgName = downloadIdToPkgName[downloadId] ?: return updateInstallStep(downloadId, InstallStep.Error)
+        installerScope.launch {
+            runCatching {
+                pendingApkFileMaterializer.materialize(context, uri, pkgName)
+            }.onSuccess { file ->
+                pendingInstallStore.save(
+                    PendingApkInstallStore.PendingInstall(
+                        packageName = pkgName,
+                        displayName = pkgName,
+                        filePath = file.absolutePath,
+                        kind = ApkExtensionKind.MANGA,
+                        backend = installer.toApkInstallBackend(),
+                    ),
+                )
+                withUIContext {
+                    openUnknownAppsSettings(downloadId)
+                }
+            }.onFailure { error ->
+                logcat(LogPriority.ERROR, error) {
+                    "Failed to materialize pending manga APK install for package=$pkgName uri=$uri"
+                }
+                updateInstallStep(downloadId, InstallStep.Error)
+            }
+        }
+    }
+
+    private fun openUnknownAppsSettings(downloadId: Long) {
         val intent = Intent(
             Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
             Uri.parse("package:${context.packageName}"),
@@ -366,6 +562,27 @@ internal class MangaExtensionInstaller(private val context: Context) {
                     if (uri == null) {
                         updateInstallStep(id, InstallStep.Error)
                     } else {
+                        val pkgName = downloadIdToPkgName[id]
+                        if (pkgName != null) {
+                            installerScope.launch {
+                                runCatching { pendingApkFileMaterializer.materialize(context, uri, pkgName) }
+                                    .onSuccess { file ->
+                                        apkFileStore.save(
+                                            ExtensionApkFileStore.ApkFile(
+                                                packageName = pkgName,
+                                                displayName = pkgName,
+                                                filePath = file.absolutePath,
+                                                kind = ApkExtensionKind.MANGA,
+                                            ),
+                                        )
+                                    }
+                                    .onFailure { error ->
+                                        logcat(LogPriority.WARN, error) {
+                                            "Failed to materialize DownloadManager manga APK for manual share package=$pkgName uri=$uri"
+                                        }
+                                    }
+                            }
+                        }
                         installApk(id, uri)
                     }
                 }
@@ -446,6 +663,7 @@ internal class MangaExtensionInstaller(private val context: Context) {
 
     companion object {
         const val APK_MIME = "application/vnd.android.package-archive"
+        const val DOWNLOAD_MANAGER_FALLBACK_TIMEOUT_MS = 2 * 60 * 1000L
         const val EXTRA_DOWNLOAD_ID = "ExtensionInstaller.extra.DOWNLOAD_ID"
         const val EXTRA_PACKAGE_NAME = "ExtensionInstaller.extra.PACKAGE_NAME"
         const val FILE_SCHEME = "file://"

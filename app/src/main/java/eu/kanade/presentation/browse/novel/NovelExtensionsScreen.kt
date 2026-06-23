@@ -12,12 +12,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.CircularProgressIndicator
@@ -173,6 +175,8 @@ fun NovelExtensionScreen(
     onUpdateAll: () -> Unit,
     onRefresh: () -> Unit,
     onToggleSection: (String) -> Unit,
+    onCopyDiagnostic: (NovelPlugin) -> Unit,
+    onShareApk: (NovelPlugin) -> Unit,
 ) {
     val navigator = LocalNavigator.currentOrThrow
 
@@ -215,6 +219,8 @@ fun NovelExtensionScreen(
                     onTrustExtension = onTrustExtension,
                     onUpdateAll = onUpdateAll,
                     onToggleSection = onToggleSection,
+                    onCopyDiagnostic = onCopyDiagnostic,
+                    onShareApk = onShareApk,
                 )
             }
         }
@@ -235,6 +241,8 @@ private fun NovelExtensionContent(
     onTrustExtension: (NovelPlugin.Untrusted) -> Unit,
     onUpdateAll: () -> Unit,
     onToggleSection: (String) -> Unit,
+    onCopyDiagnostic: (NovelPlugin) -> Unit,
+    onShareApk: (NovelPlugin) -> Unit,
 ) {
     val grouped = state.items.groupBy { it.status }
     val context = LocalContext.current
@@ -274,6 +282,8 @@ private fun NovelExtensionContent(
                     onOpenExtensionSettings = onOpenExtensionSettings,
                     onUninstallExtension = onUninstallExtension,
                     onTrustExtension = { trustState = it },
+                    onCopyDiagnostic = onCopyDiagnostic,
+                    onShareApk = onShareApk,
                 )
             }
         }
@@ -296,6 +306,8 @@ private fun NovelExtensionContent(
                     onOpenExtensionSettings = onOpenExtensionSettings,
                     onUninstallExtension = onUninstallExtension,
                     onTrustExtension = { trustState = it },
+                    onCopyDiagnostic = onCopyDiagnostic,
+                    onShareApk = onShareApk,
                 )
             }
         }
@@ -342,6 +354,8 @@ private fun NovelExtensionContent(
                         modifier = Modifier.animateItemFastScroll(this),
                         item = item,
                         onInstallExtension = onInstallExtension,
+                        onCopyDiagnostic = onCopyDiagnostic,
+                        onShareApk = onShareApk,
                     )
                 }
             }
@@ -375,6 +389,8 @@ private fun NovelExtensionItemRow(
     onOpenExtensionSettings: ((Long) -> Unit)? = null,
     onUninstallExtension: ((NovelPlugin.Installed) -> Unit)? = null,
     onTrustExtension: ((NovelPlugin.Untrusted) -> Unit)? = null,
+    onCopyDiagnostic: ((NovelPlugin) -> Unit)? = null,
+    onShareApk: ((NovelPlugin) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val plugin = item.plugin
@@ -439,13 +455,31 @@ private fun NovelExtensionItemRow(
             when (item.installStep) {
                 InstallStep.Pending, InstallStep.Downloading, InstallStep.Installing -> Unit
                 InstallStep.Error -> {
-                    val retryAction = resolveNovelExtensionRowAction(item)
-                    if (retryAction != NovelExtensionRowAction.None) {
-                        IconButton(onClick = onItemClick) {
-                            Icon(
-                                imageVector = Icons.Outlined.Refresh,
-                                contentDescription = stringResource(MR.strings.action_retry),
-                            )
+                    Row {
+                        val retryAction = resolveNovelExtensionRowAction(item)
+                        if (retryAction != NovelExtensionRowAction.None) {
+                            IconButton(onClick = onItemClick) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Refresh,
+                                    contentDescription = stringResource(MR.strings.action_retry),
+                                )
+                            }
+                        }
+                        if (onShareApk != null) {
+                            IconButton(onClick = { onShareApk(plugin) }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Share,
+                                    contentDescription = stringResource(MR.strings.action_share),
+                                )
+                            }
+                        }
+                        if (onCopyDiagnostic != null) {
+                            IconButton(onClick = { onCopyDiagnostic(plugin) }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.ContentCopy,
+                                    contentDescription = stringResource(MR.strings.action_copy_to_clipboard),
+                                )
+                            }
                         }
                     }
                 }

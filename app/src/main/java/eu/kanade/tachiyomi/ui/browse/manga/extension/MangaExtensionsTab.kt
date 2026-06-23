@@ -30,6 +30,7 @@ import eu.kanade.presentation.more.settings.screen.browse.MangaExtensionReposScr
 import eu.kanade.tachiyomi.extension.manga.model.MangaExtension
 import eu.kanade.tachiyomi.ui.browse.manga.extension.details.MangaExtensionDetailsScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
+import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.isPackageInstalled
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
@@ -47,6 +48,7 @@ fun mangaExtensionsTab(
     val state by extensionsScreenModel.state.collectAsStateWithLifecycle()
     var privateExtensionToUninstall by remember { mutableStateOf<MangaExtension?>(null) }
     var extensionToReinstall by remember { mutableStateOf<MangaExtension.Installed?>(null) }
+    var showInstallerDiagnostics by remember { mutableStateOf(false) }
 
     return TabContent(
         titleRes = AYMR.strings.label_manga_extensions,
@@ -60,6 +62,10 @@ fun mangaExtensionsTab(
             AppBar.OverflowAction(
                 title = stringResource(MR.strings.label_extension_repos),
                 onClick = { navigator.push(MangaExtensionReposScreen()) },
+            ),
+            AppBar.OverflowAction(
+                title = "Installer diagnostics",
+                onClick = { showInstallerDiagnostics = true },
             ),
         ),
         content = { contentPadding, _ ->
@@ -140,6 +146,32 @@ fun mangaExtensionsTab(
                     optionVersionText = { "v${it.versionName}" },
                     comparator = compareBy<MangaExtension.Available> { it.versionCode }
                         .thenBy { it.libVersion },
+                )
+            }
+
+            if (showInstallerDiagnostics) {
+                val diagnostic = extensionsScreenModel.installerCompatibilityDiagnostic()
+                AlertDialog(
+                    title = { Text(text = "Installer diagnostics") },
+                    text = { Text(text = diagnostic) },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                context.copyToClipboard(
+                                    label = "Installer diagnostics",
+                                    content = diagnostic,
+                                )
+                            },
+                        ) {
+                            Text(text = stringResource(MR.strings.action_copy_to_clipboard))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showInstallerDiagnostics = false }) {
+                            Text(text = stringResource(MR.strings.action_cancel))
+                        }
+                    },
+                    onDismissRequest = { showInstallerDiagnostics = false },
                 )
             }
         },

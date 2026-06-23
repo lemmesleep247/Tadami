@@ -22,6 +22,36 @@ class BasePreferences(
 
     fun extensionInstaller() = ExtensionInstallerPreference(context, preferenceStore)
 
+    fun pendingApkInstallPackage() = preferenceStore.getString(
+        Preference.appStateKey("pending_apk_install_package"),
+        "",
+    )
+
+    fun pendingApkInstallDisplayName() = preferenceStore.getString(
+        Preference.appStateKey("pending_apk_install_display_name"),
+        "",
+    )
+
+    fun pendingApkInstallPath() = preferenceStore.getString(Preference.appStateKey("pending_apk_install_path"), "")
+
+    fun pendingApkInstallKind() = preferenceStore.getString(Preference.appStateKey("pending_apk_install_kind"), "")
+
+    fun pendingApkInstallBackend() = preferenceStore.getString(
+        Preference.appStateKey("pending_apk_install_backend"),
+        "",
+    )
+
+    fun lastExtensionApkPackage() = preferenceStore.getString(Preference.appStateKey("last_extension_apk_package"), "")
+
+    fun lastExtensionApkDisplayName() = preferenceStore.getString(
+        Preference.appStateKey("last_extension_apk_display_name"),
+        "",
+    )
+
+    fun lastExtensionApkPath() = preferenceStore.getString(Preference.appStateKey("last_extension_apk_path"), "")
+
+    fun lastExtensionApkKind() = preferenceStore.getString(Preference.appStateKey("last_extension_apk_kind"), "")
+
     fun deviceHasPip() = context.packageManager.hasSystemFeature(
         PackageManager.FEATURE_PICTURE_IN_PICTURE,
     )

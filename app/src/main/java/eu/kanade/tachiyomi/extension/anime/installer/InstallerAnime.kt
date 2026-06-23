@@ -1,13 +1,9 @@
 package eu.kanade.tachiyomi.extension.anime.installer
 
 import android.app.Service
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.net.Uri
 import androidx.annotation.CallSuper
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import eu.kanade.tachiyomi.extension.InstallStep
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
 import uy.kohesive.injekt.injectLazy
@@ -23,13 +19,6 @@ abstract class InstallerAnime(private val service: Service) {
 
     private var waitingInstall = AtomicReference<Entry>(null)
     private val queue = Collections.synchronizedList(mutableListOf<Entry>())
-
-    private val cancelReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            val downloadId = intent.getLongExtra(EXTRA_DOWNLOAD_ID, -1).takeIf { it >= 0 } ?: return
-            cancelQueue(downloadId)
-        }
-    }
 
     /**
      * Installer readiness. If false, queue check will not run.
@@ -112,7 +101,9 @@ abstract class InstallerAnime(private val service: Service) {
      */
     @CallSuper
     open fun onDestroy() {
-        LocalBroadcastManager.getInstance(service).unregisterReceiver(cancelReceiver)
+        synchronized(activeInstallers) {
+            activeInstallers.remove(this)
+        }
         waitingInstall.getAndSet(null)?.let {
             extensionManager.updateInstallStep(it.downloadId, InstallStep.Error)
         }
@@ -150,13 +141,13 @@ abstract class InstallerAnime(private val service: Service) {
     data class Entry(val downloadId: Long, val uri: Uri)
 
     init {
-        val filter = IntentFilter(ACTION_CANCEL_QUEUE)
-        LocalBroadcastManager.getInstance(service).registerReceiver(cancelReceiver, filter)
+        synchronized(activeInstallers) {
+            activeInstallers.add(this)
+        }
     }
 
     companion object {
-        private const val ACTION_CANCEL_QUEUE = "InstallerAnime.action.CANCEL_QUEUE"
-        private const val EXTRA_DOWNLOAD_ID = "InstallerAnime.extra.DOWNLOAD_ID"
+        private val activeInstallers = Collections.synchronizedSet(mutableSetOf<InstallerAnime>())
 
         /**
          * Attempts to cancel the installation entry for the provided download ID.
@@ -164,9 +155,10 @@ abstract class InstallerAnime(private val service: Service) {
          * @param downloadId Download ID as known by [ExtensionManager]
          */
         fun cancelInstallQueue(context: Context, downloadId: Long) {
-            val intent = Intent(ACTION_CANCEL_QUEUE)
-            intent.putExtra(EXTRA_DOWNLOAD_ID, downloadId)
-            LocalBroadcastManager.getInstance(context).sendBroadcast(intent)
+            val installers = synchronized(activeInstallers) {
+                activeInstallers.toList()
+            }
+            installers.forEach { it.cancelQueue(downloadId) }
         }
     }
 }

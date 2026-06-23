@@ -41,6 +41,14 @@ import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.data.translation.TranslationNotificationManager
 import eu.kanade.tachiyomi.data.translation.TranslationQueueManager
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
+import eu.kanade.tachiyomi.extension.installer.ApkInstallBackend
+import eu.kanade.tachiyomi.extension.installer.ApkInstallStateStore
+import eu.kanade.tachiyomi.extension.installer.PendingApkInstallStore
+import eu.kanade.tachiyomi.extension.installer.PrivateApkInstallBackendAdapter
+import eu.kanade.tachiyomi.extension.installer.ShizukuApkInstallBackendAdapter
+import eu.kanade.tachiyomi.extension.installer.SystemIntentApkInstallBackendAdapter
+import eu.kanade.tachiyomi.extension.installer.UnifiedApkExtensionInstallCoordinator
+import eu.kanade.tachiyomi.extension.installer.UnifiedApkExtensionInstaller
 import eu.kanade.tachiyomi.extension.manga.MangaExtensionManager
 import eu.kanade.tachiyomi.extension.novel.DefaultNovelExtensionManager
 import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
@@ -701,7 +709,20 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { NovelPluginWebViewCoordinator(get()) }
         addSingletonFactory<NovelPluginSourceFactory> { NovelJsSourceFactory(get(), get(), get(), get(), get(), get()) }
         addSingletonFactory { TrustNovelExtension(get(), get()) }
-        addSingletonFactory { KotlinNovelExtensionInstaller(app, get<NetworkHelper>().client) }
+        addSingletonFactory { ApkInstallStateStore() }
+        addSingletonFactory { PendingApkInstallStore(get()) }
+        addSingletonFactory<UnifiedApkExtensionInstaller> {
+            UnifiedApkExtensionInstallCoordinator(
+                stateStore = get(),
+                backendAdapters = setOf(
+                    PrivateApkInstallBackendAdapter(app),
+                    SystemIntentApkInstallBackendAdapter(app, get(), ApkInstallBackend.PACKAGE_INSTALLER),
+                    SystemIntentApkInstallBackendAdapter(app, get(), ApkInstallBackend.LEGACY),
+                    ShizukuApkInstallBackendAdapter(app),
+                ),
+            )
+        }
+        addSingletonFactory { KotlinNovelExtensionInstaller(app, get<NetworkHelper>().client, get(), get()) }
 
         addSingletonFactory<NovelExtensionManager> {
             DefaultNovelExtensionManager(app, get(), get(), get(), get(), get())

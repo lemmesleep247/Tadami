@@ -355,6 +355,14 @@ class MangaExtensionsScreenModel(
     ) {
         val isEmpty = items.isEmpty()
     }
+
+    fun installerCompatibilityDiagnostic(): String {
+        val app = uy.kohesive.injekt.Injekt.get<android.app.Application>()
+        return eu.kanade.tachiyomi.extension.installer.ExtensionInstallDiagnostic.getInstallerDiagnosticString(
+            app,
+            uy.kohesive.injekt.Injekt.get(),
+        )
+    }
 }
 
 typealias ItemGroups = MutableMap<MangaExtensionUiModel.Header, List<MangaExtensionUiModel.Item>>

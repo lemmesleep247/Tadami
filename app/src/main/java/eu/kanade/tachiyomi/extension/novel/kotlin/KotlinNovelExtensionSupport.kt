@@ -1,10 +1,8 @@
 package eu.kanade.tachiyomi.extension.novel.kotlin
 
 import android.annotation.SuppressLint
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
@@ -14,13 +12,19 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
-import android.provider.Settings
-import androidx.core.content.ContextCompat
 import androidx.core.content.pm.PackageInfoCompat
 import androidx.preference.PreferenceScreen
 import dalvik.system.PathClassLoader
+import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.extension.novel.interactor.TrustNovelExtension
 import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.tachiyomi.extension.InstallStep
+import eu.kanade.tachiyomi.extension.installer.ApkExtensionKind
+import eu.kanade.tachiyomi.extension.installer.ApkInstallRequest
+import eu.kanade.tachiyomi.extension.installer.ExtensionApkFileStore
+import eu.kanade.tachiyomi.extension.installer.PendingApkInstallStore
+import eu.kanade.tachiyomi.extension.installer.UnifiedApkExtensionInstaller
+import eu.kanade.tachiyomi.extension.installer.toApkInstallBackend
 import eu.kanade.tachiyomi.extension.novel.runtime.NovelPluginIdentitySource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
@@ -43,15 +47,15 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.novel.NovelSiteSource
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.lang.Hash
+import eu.kanade.tachiyomi.util.storage.copyAndSetReadOnlyTo
 import eu.kanade.tachiyomi.util.storage.getUriCompat
 import eu.kanade.tachiyomi.util.system.ChildFirstPathClassLoader
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import logcat.LogPriority
 import okhttp3.OkHttpClient
 import rx.Observable
@@ -67,12 +71,18 @@ private const val INSTALL_TIMEOUT_MS = 5 * 60 * 1000L
 class KotlinNovelExtensionInstaller(
     private val context: Context,
     private val client: OkHttpClient,
+    private val basePreferences: BasePreferences,
+    private val unifiedInstaller: UnifiedApkExtensionInstaller,
 ) {
+    private val pendingInstallStore = PendingApkInstallStore(basePreferences)
+    private val apkFileStore = ExtensionApkFileStore(basePreferences)
+
     suspend fun install(plugin: NovelPlugin.Available): NovelPlugin.Installed {
         val apkUrl = plugin.apkUrl ?: plugin.url
+        val pkgName = plugin.pkgName ?: plugin.id
         val apkFile = withContext(Dispatchers.IO) {
             val safeName = plugin.id.replace(Regex("[^A-Za-z0-9_.-]"), "_")
-            val dir = File(context.externalCacheDir ?: context.cacheDir, "novel_kotlin_extensions")
+            val dir = File(context.cacheDir, "novel_kotlin_extensions")
             dir.mkdirs()
             val file = File(dir, "$safeName.apk")
             client.newCall(GET(apkUrl)).awaitSuccess().use { response ->
@@ -82,7 +92,31 @@ class KotlinNovelExtensionInstaller(
             }
             file
         }
-        awaitSystemInstall(plugin.pkgName ?: plugin.id, apkFile)
+
+        apkFileStore.save(
+            ExtensionApkFileStore.ApkFile(
+                packageName = pkgName,
+                displayName = plugin.name,
+                filePath = apkFile.absolutePath,
+                kind = ApkExtensionKind.NOVEL_KOTLIN,
+            ),
+        )
+
+        val installer = basePreferences.extensionInstaller().get()
+        val terminalStep = unifiedInstaller.install(
+            ApkInstallRequest(
+                id = pkgName,
+                packageName = pkgName,
+                displayName = plugin.name,
+                uri = apkFile.getUriCompat(context),
+                file = apkFile,
+                backend = installer.toApkInstallBackend(),
+                kind = ApkExtensionKind.NOVEL_KOTLIN,
+            ),
+        ).first { it.isCompleted() }
+        if (terminalStep != InstallStep.Installed) {
+            error("Failed to install Kotlin novel extension $pkgName using ${installer.name}: $terminalStep")
+        }
         return plugin.toInstalledKotlin()
     }
 
@@ -98,49 +132,6 @@ class KotlinNovelExtensionInstaller(
         }.onFailure {
             logcat(LogPriority.WARN, it) { "Failed to launch system uninstall for Kotlin novel extension $pkgName" }
         }
-    }
-
-    private suspend fun awaitSystemInstall(pkgName: String, apkFile: File) {
-        val installResult = CompletableDeferred<Unit>()
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent?) {
-                val action = intent?.action ?: return
-                if (action != Intent.ACTION_PACKAGE_ADDED && action != Intent.ACTION_PACKAGE_REPLACED) return
-                val installedPkgName = intent.data?.encodedSchemeSpecificPart ?: return
-                if (installedPkgName == pkgName) {
-                    installResult.complete(Unit)
-                }
-            }
-        }
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_PACKAGE_ADDED)
-            addAction(Intent.ACTION_PACKAGE_REPLACED)
-            addDataScheme("package")
-        }
-        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-        try {
-            installApk(apkFile)
-            withTimeout(INSTALL_TIMEOUT_MS) { installResult.await() }
-        } finally {
-            runCatching { context.unregisterReceiver(receiver) }
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    private fun installApk(apkFile: File) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
-            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                .setData(Uri.parse("package:${context.packageName}"))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                .let(context::startActivity)
-            throw IllegalStateException("Package install permission is required")
-        }
-
-        Intent(Intent.ACTION_INSTALL_PACKAGE)
-            .setDataAndType(apkFile.getUriCompat(context), APK_MIME)
-            .putExtra(Intent.EXTRA_RETURN_RESULT, false)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            .let(context::startActivity)
     }
 }
 
@@ -192,6 +183,57 @@ object KotlinNovelExtensionLoader {
         (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES else 0)
 
     private fun getPrivateExtensionDir(context: Context) = File(context.filesDir, "novel_exts")
+
+    fun installPrivateExtensionFile(
+        context: Context,
+        file: File,
+        pkgName: String,
+    ): Boolean {
+        val pkgManager = context.packageManager
+        val archiveInfo = pkgManager.getPackageArchiveInfo(file.absolutePath, PACKAGE_FLAGS)
+            ?.takeIf { isPackageAnExtension(it) }
+            ?: run {
+                logcat(LogPriority.ERROR) { "File is not a Kotlin novel extension APK: ${file.absolutePath}" }
+                return false
+            }
+        if (archiveInfo.packageName != pkgName) {
+            logcat(LogPriority.ERROR) {
+                "Kotlin novel extension package mismatch: expected=$pkgName actual=${archiveInfo.packageName}"
+            }
+            return false
+        }
+
+        val privateExtensionDir = getPrivateExtensionDir(context)
+        if (!privateExtensionDir.exists() && !privateExtensionDir.mkdirs()) {
+            logcat(LogPriority.ERROR) { "Failed to create private Kotlin novel extension directory." }
+            return false
+        }
+
+        val target = File(privateExtensionDir, "$pkgName.$PRIVATE_EXTENSION_EXTENSION")
+        val part = File(privateExtensionDir, "$pkgName.$PRIVATE_EXTENSION_EXTENSION.part")
+        return try {
+            part.delete()
+            file.copyAndSetReadOnlyTo(part, overwrite = true)
+            if (target.exists() && !target.delete()) {
+                logcat(LogPriority.ERROR) {
+                    "Failed to replace existing private Kotlin novel extension file: ${target.absolutePath}"
+                }
+                part.delete()
+                return false
+            }
+            if (!part.renameTo(target)) {
+                part.copyTo(target, overwrite = true)
+                target.setReadOnly()
+                part.delete()
+            }
+            true
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to install private Kotlin novel extension file for $pkgName." }
+            part.delete()
+            target.delete()
+            false
+        }
+    }
 
     fun uninstallPrivateExtension(context: Context, pkgName: String) {
         File(getPrivateExtensionDir(context), "$pkgName.$PRIVATE_EXTENSION_EXTENSION").delete()
