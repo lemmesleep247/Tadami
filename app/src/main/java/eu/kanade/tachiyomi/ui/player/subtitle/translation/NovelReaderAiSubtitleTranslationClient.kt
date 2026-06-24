@@ -25,7 +25,22 @@ class NovelReaderAiSubtitleTranslationClient(
     private val ollamaCloudTranslationService: OllamaCloudTranslationService,
 ) : AiSubtitleTranslationClient {
     override val fingerprint: String
-        get() = "novel-reader-ai-${preferences.translationProvider().get().name.lowercase()}"
+        get() {
+            val provider = preferences.translationProvider().get()
+            val model = when (provider) {
+                NovelTranslationProvider.GEMINI,
+                NovelTranslationProvider.GEMINI_PRIVATE,
+                -> preferences.geminiModel().get()
+                NovelTranslationProvider.OPENROUTER -> preferences.openRouterModel().get()
+                NovelTranslationProvider.DEEPSEEK -> preferences.deepSeekModel().get()
+                NovelTranslationProvider.MISTRAL -> preferences.mistralModel().get()
+                NovelTranslationProvider.NVIDIA -> preferences.nvidiaModel().get()
+                NovelTranslationProvider.OLLAMA_CLOUD -> preferences.ollamaCloudModel().get()
+            }
+            val temperature = preferences.geminiTemperature().get()
+            val promptMode = preferences.geminiPromptMode().get()
+            return "novel-reader-ai-${provider.name.lowercase()}-$model-t$temperature-$promptMode-v2"
+        }
 
     override suspend fun translateIndexedSegments(
         prompt: String,
