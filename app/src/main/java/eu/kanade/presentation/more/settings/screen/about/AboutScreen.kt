@@ -309,7 +309,7 @@ object AboutScreen : Screen() {
                             title = stringResource(MR.strings.help_translate),
                             onPreferenceClick = {
                                 uriHandler.openUri(
-                                    "https://aniyomi.org/docs/contribute#translation",
+                                    "https://github.com/andarcanum/Tadami-Aniyomi-fork/blob/ranobe-novel/TRANSLATION.md",
                                 )
                             },
                         )
