@@ -6,7 +6,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -63,6 +64,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -70,10 +72,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -82,6 +88,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -163,6 +170,7 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
@@ -172,7 +180,6 @@ import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.entries.anime.model.Anime
 import tachiyomi.domain.entries.manga.model.Manga
-import tachiyomi.domain.entries.novel.interactor.GetLibraryNovel
 import tachiyomi.domain.items.episode.model.Episode
 import tachiyomi.domain.library.anime.LibraryAnime
 import tachiyomi.domain.library.manga.LibraryManga
@@ -204,6 +211,8 @@ data object AnimeLibraryTab : Tab {
 
     private var lastAuroraSection: Section = Section.Anime
 
+    private const val AURORA_LIBRARY_IDLE_PRELOAD_DELAY_MS = 300L
+
     @OptIn(ExperimentalAnimationGraphicsApi::class)
     override val options: TabOptions
         @Composable
@@ -233,7 +242,7 @@ data object AnimeLibraryTab : Tab {
         val haptic = LocalHapticFeedback.current
 
         val screenModel = rememberScreenModel { AnimeLibraryScreenModel() }
-        val mangaScreenModel = rememberScreenModel { MangaLibraryScreenModel() }
+        val mangaScreenModel = rememberScreenModel { MangaLibraryScreenModel(startActive = false) }
         val settingsScreenModel = rememberScreenModel { AnimeLibrarySettingsScreenModel() }
         val mangaSettingsScreenModel = rememberScreenModel { MangaLibrarySettingsScreenModel() }
         val state by screenModel.state.collectAsStateWithLifecycle()
@@ -289,32 +298,32 @@ data object AnimeLibraryTab : Tab {
         } else {
             null
         }
-        val shouldActivateNovelLibrary = showNovelSection && auroraCurrentSection == Section.Novel
-        val inactiveNovelRawItems = if (showNovelSection && !shouldActivateNovelLibrary) {
-            val getLibraryNovel = remember { Injekt.get<GetLibraryNovel>() }
-            val items by getLibraryNovel.subscribe().collectAsStateWithLifecycle(initialValue = emptyList())
-            items
-        } else {
-            emptyList()
-        }
         val novelScreenModel = if (showNovelSection) {
-            rememberScreenModel { NovelLibraryScreenModel() }
+            rememberScreenModel { NovelLibraryScreenModel(startActive = false) }
         } else {
             null
         }
         val novelState = novelScreenModel?.state?.collectAsStateWithLifecycle()?.value ?: NovelLibraryScreenModel.State(
             isLoading = false,
-            library = mapOf(
-                Category(
-                    id = Category.UNCATEGORIZED_ID,
-                    name = "",
-                    order = 0,
-                    flags = 0,
-                    hidden = false,
-                    hiddenFromHomeHub = false,
-                ) to inactiveNovelRawItems.map { eu.kanade.presentation.library.novel.NovelLibraryItem.Single(it) },
-            ),
         )
+        LaunchedEffect(isAurora, auroraCurrentSection, showMangaSection, showNovelSection, novelScreenModel) {
+            if (!isAurora) {
+                mangaScreenModel.setLibraryPipelineActive(true)
+                novelScreenModel?.setLibraryPipelineActive(true)
+                return@LaunchedEffect
+            }
+
+            if (showMangaSection && auroraCurrentSection == Section.Manga) {
+                mangaScreenModel.setLibraryPipelineActive(true)
+            }
+            if (showNovelSection && auroraCurrentSection == Section.Novel) {
+                novelScreenModel?.setLibraryPipelineActive(true)
+            }
+
+            delay(AURORA_LIBRARY_IDLE_PRELOAD_DELAY_MS)
+            if (showMangaSection) mangaScreenModel.setLibraryPipelineActive(true)
+            if (showNovelSection) novelScreenModel?.setLibraryPipelineActive(true)
+        }
         val animeDisplayMode by remember(useSeparateDisplayModePerMedia) {
             screenModel.getDisplayMode(useSeparateDisplayModePerMedia)
         }
@@ -511,9 +520,12 @@ data object AnimeLibraryTab : Tab {
                 // When model changes from tap → animate pager
                 LaunchedEffect(animeCategoryIndex) {
                     if (animeCategoryIndex != pagerState.currentPage) {
-                        isProgrammaticScroll.value = true
-                        pagerState.animateScrollToPage(animeCategoryIndex)
-                        isProgrammaticScroll.value = false
+                        try {
+                            isProgrammaticScroll.value = true
+                            pagerState.animateScrollToPage(animeCategoryIndex)
+                        } finally {
+                            isProgrammaticScroll.value = false
+                        }
                     }
                 }
                 HorizontalPager(
@@ -526,6 +538,7 @@ data object AnimeLibraryTab : Tab {
                     AnimeLibraryAuroraContent(
                         items = items,
                         selection = state.selection,
+                        selectedIds = state.selectedIds,
                         searchQuery = state.searchQuery,
                         hasActiveFilters = state.hasActiveFilters,
                         displayMode = animeDisplayMode,
@@ -569,9 +582,12 @@ data object AnimeLibraryTab : Tab {
                 }
                 LaunchedEffect(mangaCategoryIndex) {
                     if (mangaCategoryIndex != pagerState.currentPage) {
-                        isProgrammaticScroll.value = true
-                        pagerState.animateScrollToPage(mangaCategoryIndex)
-                        isProgrammaticScroll.value = false
+                        try {
+                            isProgrammaticScroll.value = true
+                            pagerState.animateScrollToPage(mangaCategoryIndex)
+                        } finally {
+                            isProgrammaticScroll.value = false
+                        }
                     }
                 }
                 HorizontalPager(
@@ -584,6 +600,7 @@ data object AnimeLibraryTab : Tab {
                     MangaLibraryAuroraContent(
                         items = items,
                         selection = mangaState.selection,
+                        selectedIds = mangaState.selectedIds,
                         searchQuery = mangaState.searchQuery,
                         hasActiveFilters = mangaState.hasActiveFilters,
                         displayMode = mangaDisplayMode,
@@ -627,28 +644,6 @@ data object AnimeLibraryTab : Tab {
                 val activeNovelScreenModel = novelScreenModel
                     ?: return@TabContent LoadingScreen(Modifier.padding(contentPadding))
 
-                val epubImportLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.OpenDocument(),
-                    onResult = { uri ->
-                        if (uri != null) {
-                            scope.launchIO {
-                                try {
-                                    activeNovelScreenModel.importEpub(uri)
-                                    snackbarHostState.showSnackbar(
-                                        context.stringResource(AYMR.strings.novel_library_import_success),
-                                        duration = SnackbarDuration.Short,
-                                    )
-                                } catch (e: Exception) {
-                                    snackbarHostState.showSnackbar(
-                                        context.stringResource(AYMR.strings.novel_library_import_failed),
-                                        duration = SnackbarDuration.Short,
-                                    )
-                                }
-                            }
-                        }
-                    },
-                )
-
                 val pagerState = rememberPagerState(
                     initialPage = novelCategoryIndex,
                     pageCount = { novelState.categories.size },
@@ -661,9 +656,12 @@ data object AnimeLibraryTab : Tab {
                 }
                 LaunchedEffect(novelCategoryIndex) {
                     if (novelCategoryIndex != pagerState.currentPage) {
-                        isProgrammaticScroll.value = true
-                        pagerState.animateScrollToPage(novelCategoryIndex)
-                        isProgrammaticScroll.value = false
+                        try {
+                            isProgrammaticScroll.value = true
+                            pagerState.animateScrollToPage(novelCategoryIndex)
+                        } finally {
+                            isProgrammaticScroll.value = false
+                        }
                     }
                 }
                 HorizontalPager(
@@ -676,6 +674,7 @@ data object AnimeLibraryTab : Tab {
                     NovelLibraryAuroraContent(
                         items = items,
                         selection = novelState.selection,
+                        selectedIds = novelState.selectedIds,
                         searchQuery = novelState.searchQuery,
                         onSearchQueryChange = activeNovelScreenModel::search,
                         onNovelClicked = { id ->
@@ -769,7 +768,9 @@ data object AnimeLibraryTab : Tab {
         val isMangaLibraryEmpty = mangaState.searchQuery.isNullOrEmpty() &&
             !mangaState.hasActiveFilters &&
             mangaState.isLibraryEmpty
-        val isNovelLibraryEmpty = novelState.searchQuery.isNullOrEmpty() && novelState.isLibraryEmpty
+        val isNovelLibraryEmpty =
+            novelState.searchQuery.isNullOrEmpty() &&
+                (!showNovelSection || (novelState.hasLoaded && novelState.isLibraryEmpty))
         val isSectionEmpty: (Section) -> Boolean = { section ->
             when (section) {
                 Section.Anime -> isAnimeLibraryEmpty
@@ -791,7 +792,8 @@ data object AnimeLibraryTab : Tab {
             }
         }
         val isLoading = if (isAurora) {
-            sectionTabs.all { (section, _) -> isSectionLoading(section) }
+            auroraCurrentSection?.let(isSectionLoading)
+                ?: sectionTabs.all { (section, _) -> isSectionLoading(section) }
         } else {
             state.isLoading
         }
@@ -1908,8 +1910,8 @@ private fun AuroraLibraryCategoryTabs(
     val colors = AuroraTheme.colors
     val appHaptics = LocalAppHaptics.current
     val coercedSelected = coerceAuroraLibraryCategoryIndex(selectedIndex, categories.size)
-    val rowShape = RoundedCornerShape(28.dp)
-    val tabShape = RoundedCornerShape(20.dp)
+    val rowShape = CircleShape
+    val tabShape = CircleShape
     val isLightTheme = !colors.isDark && !colors.isEInk
     val rowContainerColor = remember(colors) { resolveAuroraLibraryCategoryTabRowContainerColor(colors) }
     val selectedTabBrush = remember(colors) { resolveAuroraLibraryCategorySelectedTabBrush(colors) }
@@ -1917,9 +1919,56 @@ private fun AuroraLibraryCategoryTabs(
     val menuBorderBrush = remember(colors) { auroraMenuRimLightBrush(colors) }
 
     val scrollState = rememberScrollState()
-    val tabWidths = remember { mutableMapOf<Int, Int>() }
+    val tabWidths = remember(categories) { mutableMapOf<Int, Int>() }
     var containerWidthPx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
+
+    val animTabWidths = remember(categories) { mutableStateMapOf<Int, Float>() }
+    val animTabHeights = remember(categories) { mutableStateMapOf<Int, Float>() }
+    val animTabPositionsX = remember(categories) { mutableStateMapOf<Int, Float>() }
+    val animTabPositionsY = remember(categories) { mutableStateMapOf<Int, Float>() }
+
+    var prevSelectedIndex by remember { mutableIntStateOf(coercedSelected) }
+    LaunchedEffect(coercedSelected) {
+        prevSelectedIndex = coercedSelected
+    }
+
+    val activeWidth = animTabWidths[coercedSelected] ?: 0f
+    val activeHeight = animTabHeights[coercedSelected] ?: 0f
+    val activeX = animTabPositionsX[coercedSelected] ?: 0f
+    val activeY = animTabPositionsY[coercedSelected] ?: 0f
+
+    val activeLeft = activeX
+    val activeRight = activeX + activeWidth
+
+    val leadingStiffness = 500f
+    val trailingStiffness = 250f
+    val damping = 0.78f
+
+    val isMovingRight = coercedSelected > prevSelectedIndex
+    val leftStiffness = if (isMovingRight) trailingStiffness else leadingStiffness
+    val rightStiffness = if (isMovingRight) leadingStiffness else trailingStiffness
+
+    val animatedLeft by animateFloatAsState(
+        targetValue = activeLeft,
+        animationSpec = spring(dampingRatio = damping, stiffness = leftStiffness),
+        label = "tabLeft",
+    )
+    val animatedRight by animateFloatAsState(
+        targetValue = activeRight,
+        animationSpec = spring(dampingRatio = damping, stiffness = rightStiffness),
+        label = "tabRight",
+    )
+    val animatedHeight by animateFloatAsState(
+        targetValue = activeHeight,
+        animationSpec = spring(dampingRatio = damping, stiffness = leadingStiffness),
+        label = "tabHeight",
+    )
+    val animatedY by animateFloatAsState(
+        targetValue = activeY,
+        animationSpec = spring(dampingRatio = damping, stiffness = leadingStiffness),
+        label = "tabY",
+    )
 
     // Auto-scroll to center the selected category (except first two which stay at start).
     // Keys: selection change, categories change, or container laid out (first time / resize).
@@ -1996,7 +2045,36 @@ private fun AuroraLibraryCategoryTabs(
                 .fillMaxWidth()
                 .onSizeChanged { containerWidthPx = it.width }
                 .horizontalScroll(scrollState)
-                .padding(horizontal = 6.dp, vertical = 6.dp),
+                .padding(6.dp)
+                .drawBehind {
+                    if (animatedRight > animatedLeft &&
+                        animatedHeight > 0f &&
+                        colors.eInkProfile != EInkProfile.MONOCHROME
+                    ) {
+                        val minWidth = minOf(activeWidth, animatedHeight)
+                        val drawWidth = (animatedRight - animatedLeft).coerceAtLeast(minWidth)
+                        val drawX = if (animatedRight - animatedLeft < minWidth) {
+                            animatedLeft - (minWidth - (animatedRight - animatedLeft)) / 2f
+                        } else {
+                            animatedLeft
+                        }
+
+                        val radiusPx = animatedHeight / 2f
+                        drawRoundRect(
+                            brush = selectedTabBrush,
+                            topLeft = Offset(drawX, animatedY),
+                            size = Size(drawWidth, animatedHeight),
+                            cornerRadius = CornerRadius(radiusPx, radiusPx),
+                        )
+                        drawRoundRect(
+                            color = selectedTabBorderColor,
+                            topLeft = Offset(drawX, animatedY),
+                            size = Size(drawWidth, animatedHeight),
+                            cornerRadius = CornerRadius(radiusPx, radiusPx),
+                            style = Stroke(width = 1.dp.toPx()),
+                        )
+                    }
+                },
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             categories.forEachIndexed { index, category ->
@@ -2012,29 +2090,26 @@ private fun AuroraLibraryCategoryTabs(
                     textOnAccent = colors.textOnAccent,
                     background = colors.background,
                 )
-                val animatedBorderColor by animateColorAsState(
-                    targetValue = if (isSelected) selectedTabBorderColor else Color.Transparent,
-                    animationSpec = tween(250),
-                    label = "tabBorder",
-                )
 
                 key(category.id) {
                     Row(
                         modifier = Modifier
                             .clip(tabShape)
                             .background(
-                                brush = if (isSelected && colors.eInkProfile != EInkProfile.MONOCHROME) {
-                                    selectedTabBrush
-                                } else {
+                                brush = if (colors.eInkProfile == EInkProfile.MONOCHROME) {
                                     Brush.linearGradient(
                                         colors = listOf(tabColors.tabBackground, tabColors.tabBackground),
+                                    )
+                                } else {
+                                    Brush.linearGradient(
+                                        colors = listOf(Color.Transparent, Color.Transparent),
                                     )
                                 },
                                 shape = tabShape,
                             )
                             .then(
-                                if (isSelected || animatedBorderColor.alpha > 0f) {
-                                    Modifier.border(1.dp, animatedBorderColor, tabShape)
+                                if (colors.eInkProfile == EInkProfile.MONOCHROME && isSelected) {
+                                    Modifier.border(1.dp, selectedTabBorderColor, tabShape)
                                 } else {
                                     Modifier
                                 },
@@ -2053,6 +2128,13 @@ private fun AuroraLibraryCategoryTabs(
                                     null
                                 },
                             )
+                            .onGloballyPositioned { coordinates ->
+                                animTabWidths[index] = coordinates.size.width.toFloat()
+                                animTabHeights[index] = coordinates.size.height.toFloat()
+                                val pos = coordinates.positionInParent()
+                                animTabPositionsX[index] = pos.x
+                                animTabPositionsY[index] = pos.y
+                            }
                             .padding(horizontal = 14.dp, vertical = 9.dp)
                             .onGloballyPositioned { coordinates ->
                                 tabWidths[index] = coordinates.size.width

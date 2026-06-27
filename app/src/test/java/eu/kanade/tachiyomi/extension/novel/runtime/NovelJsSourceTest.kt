@@ -414,6 +414,110 @@ class NovelJsSourceTest {
         result.novels.map { it.title } shouldBe listOf("Latest 1")
     }
 
+    @Test
+    fun `getSearchNovels delegates to getPopularNovels when query is blank`() {
+        val runtimeFactory = mockk<NovelJsRuntimeFactory>()
+        val runtime = mockk<NovelJsRuntime>(relaxed = true)
+        val popularNovelsCalled = AtomicInteger(0)
+        val searchNovelsCalled = AtomicInteger(0)
+
+        every { runtimeFactory.create(any()) } returns runtime
+        every { runtime.evaluate(any(), any(), any()) } answers {
+            val script = firstArg<String>()
+            when {
+                script.contains("__plugin.popularNovels") -> {
+                    popularNovelsCalled.incrementAndGet()
+                    null
+                }
+                script.contains("__plugin.searchNovels") -> {
+                    searchNovelsCalled.incrementAndGet()
+                    null
+                }
+                script.contains("globalThis.__d_") -> true
+                script.contains("globalThis.__e_") -> null
+                script.contains("globalThis.__r_") -> """
+                    [
+                        {
+                            "name": "Popular Novel",
+                            "path": "/popular-1",
+                            "cover": "https://example.com/popular-1.jpg"
+                        }
+                    ]
+                """.trimIndent()
+                script.contains("Array.isArray(__plugin && __plugin.settings)") -> false
+                script.contains("JSON.stringify(__plugin.settings || [])") -> "[]"
+                script.contains("JSON.stringify(__plugin && __plugin.filters ? __plugin.filters : {})") -> "{}"
+                else -> null
+            }
+        }
+
+        val source = createSource(
+            hasSettings = false,
+            runtimeFactory = runtimeFactory,
+        )
+
+        val result = kotlinx.coroutines.runBlocking {
+            source.getSearchNovels(1, query = "", filters = eu.kanade.tachiyomi.novelsource.model.NovelFilterList())
+        }
+
+        result.novels.size shouldBe 1
+        result.novels[0].title shouldBe "Popular Novel"
+        popularNovelsCalled.get() shouldBe 1
+        searchNovelsCalled.get() shouldBe 0
+    }
+
+    @Test
+    fun `getSearchNovels calls searchNovels when query is not blank`() {
+        val runtimeFactory = mockk<NovelJsRuntimeFactory>()
+        val runtime = mockk<NovelJsRuntime>(relaxed = true)
+        val popularNovelsCalled = AtomicInteger(0)
+        val searchNovelsCalled = AtomicInteger(0)
+
+        every { runtimeFactory.create(any()) } returns runtime
+        every { runtime.evaluate(any(), any(), any()) } answers {
+            val script = firstArg<String>()
+            when {
+                script.contains("__plugin.popularNovels") -> {
+                    popularNovelsCalled.incrementAndGet()
+                    null
+                }
+                script.contains("__plugin.searchNovels") -> {
+                    searchNovelsCalled.incrementAndGet()
+                    null
+                }
+                script.contains("globalThis.__d_") -> true
+                script.contains("globalThis.__e_") -> null
+                script.contains("globalThis.__r_") -> """
+                    [
+                        {
+                            "name": "Search Result",
+                            "path": "/search-1",
+                            "cover": "https://example.com/search-1.jpg"
+                        }
+                    ]
+                """.trimIndent()
+                script.contains("Array.isArray(__plugin && __plugin.settings)") -> false
+                script.contains("JSON.stringify(__plugin.settings || [])") -> "[]"
+                script.contains("JSON.stringify(__plugin && __plugin.filters ? __plugin.filters : {})") -> "{}"
+                else -> null
+            }
+        }
+
+        val source = createSource(
+            hasSettings = false,
+            runtimeFactory = runtimeFactory,
+        )
+
+        val result = kotlinx.coroutines.runBlocking {
+            source.getSearchNovels(1, query = "test", filters = eu.kanade.tachiyomi.novelsource.model.NovelFilterList())
+        }
+
+        result.novels.size shouldBe 1
+        result.novels[0].title shouldBe "Search Result"
+        popularNovelsCalled.get() shouldBe 0
+        searchNovelsCalled.get() shouldBe 1
+    }
+
     private fun createSource(
         hasSettings: Boolean,
         runtimeFactory: NovelJsRuntimeFactory = mockk(relaxed = true),

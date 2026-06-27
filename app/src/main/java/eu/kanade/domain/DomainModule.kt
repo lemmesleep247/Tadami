@@ -67,6 +67,7 @@ import eu.kanade.domain.track.manga.interactor.AddMangaTracks
 import eu.kanade.domain.track.manga.interactor.RefreshMangaTracks
 import eu.kanade.domain.track.manga.interactor.SyncChapterProgressWithTrack
 import eu.kanade.domain.track.manga.interactor.TrackChapter
+import eu.kanade.domain.track.novel.interactor.AddNovelTracks
 import eu.kanade.domain.track.novel.interactor.RefreshNovelTracks
 import eu.kanade.domain.track.novel.interactor.SyncNovelChapterProgressWithTrack
 import eu.kanade.domain.track.novel.interactor.TrackNovelChapter
@@ -405,6 +406,9 @@ class DomainModule : InjektModule {
         addFactory { SetAnimeDefaultSeasonFlags(get(), get(), get()) }
         addFactory { SetAnimeViewerFlags(get()) }
         addFactory { NetworkToLocalAnime(get(), get()) }
+        addFactory {
+            eu.kanade.tachiyomi.data.anixart.ImportAnixartEntries(get(), get(), get(), get(), get())
+        }
         addFactory { UpdateAnime(get(), get()) }
         addFactory { SetAnimeCategories(get()) }
         addFactory { ShouldUpdateDbSeason() }
@@ -490,6 +494,7 @@ class DomainModule : InjektModule {
         addFactory { GetTracksPerNovel(get()) }
         addFactory { GetNovelTracks(get()) }
         addFactory { InsertNovelTrack(get()) }
+        addFactory { AddNovelTracks(get(), get(), get()) }
         addFactory { TrackNovelChapter(get(), get(), get(), get()) }
         addFactory { SyncNovelChapterProgressWithTrack(get(), get(), get(), get(), get()) }
         addFactory { RefreshNovelTracks(get(), get(), get(), get()) }

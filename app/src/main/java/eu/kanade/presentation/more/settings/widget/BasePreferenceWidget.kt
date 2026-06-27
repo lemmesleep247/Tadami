@@ -64,6 +64,11 @@ internal fun AuroraSettingsCard(
 ) {
     val colors = AuroraTheme.colors
     val appHaptics = LocalAppHaptics.current
+    val containerColor = if (!colors.isDark && !colors.isEInk) {
+        Color.Transparent
+    } else {
+        resolveAuroraMoreCardContainerColor(colors)
+    }
 
     Card(
         onClick = {
@@ -77,11 +82,8 @@ internal fun AuroraSettingsCard(
             .auroraCardStyle(colors, AURORA_SETTINGS_CARD_SHAPE, applyDarkRimLight = darkRimLightEnabled),
         shape = AURORA_SETTINGS_CARD_SHAPE,
         colors = CardDefaults.cardColors(
-            containerColor = if (!colors.isDark && !colors.isEInk) {
-                Color.Transparent
-            } else {
-                resolveAuroraMoreCardContainerColor(colors)
-            },
+            containerColor = containerColor,
+            disabledContainerColor = containerColor,
         ),
         border = if (colors.isEInk) {
             BorderStroke(

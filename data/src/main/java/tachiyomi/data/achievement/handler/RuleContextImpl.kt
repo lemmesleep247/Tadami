@@ -1,15 +1,15 @@
 package tachiyomi.data.achievement.handler
 
-import kotlinx.coroutines.flow.first
 import tachiyomi.data.achievement.handler.checkers.DiversityAchievementChecker
 import tachiyomi.data.achievement.handler.checkers.StreakAchievementChecker
 import tachiyomi.data.achievement.rules.GenreAliases
 import tachiyomi.data.handlers.anime.AnimeDatabaseHandler
 import tachiyomi.data.handlers.manga.MangaDatabaseHandler
 import tachiyomi.data.handlers.novel.NovelDatabaseHandler
+import tachiyomi.domain.achievement.model.Achievement
 import tachiyomi.domain.achievement.model.AchievementCategory
 import tachiyomi.domain.achievement.model.AchievementEvent
-import tachiyomi.domain.achievement.repository.AchievementRepository
+import tachiyomi.domain.achievement.model.AchievementProgress
 import tachiyomi.domain.achievement.rule.RuleContext
 import tachiyomi.domain.entries.anime.repository.AnimeRepository
 import tachiyomi.domain.entries.manga.repository.MangaRepository
@@ -25,8 +25,8 @@ class RuleContextImpl(
     private val diversityChecker: DiversityAchievementChecker,
     private val streakChecker: StreakAchievementChecker,
     private val featureCollector: FeatureUsageCollector,
-    private val pointsManager: PointsManager,
-    private val achievementRepository: AchievementRepository,
+    private val allProgress: Map<String, AchievementProgress>,
+    private val allAchievementsMap: Map<String, Achievement>,
 ) : RuleContext {
 
     override suspend fun getChaptersRead(category: AchievementCategory): Int {
@@ -145,11 +145,19 @@ class RuleContextImpl(
     }
 
     override suspend fun hasLibraryGenre(genre: String): Int {
-        return GenreAliases.allGenreSearchTerms(genre).sumOf { term ->
-            val manga = mangaHandler.awaitOneOrNull { db -> db.mangasQueries.getLibraryGenreCount(term) } ?: 0L
-            val anime = animeHandler.awaitOneOrNull { db -> db.animesQueries.getLibraryGenreCount(term) } ?: 0L
-            val novel = novelHandler.awaitOneOrNull { db -> db.novelsQueries.getLibraryGenreCount(term) } ?: 0L
-            (manga + anime + novel).toInt()
+        // NOTE: matching is done in Kotlin instead of via SQL LOWER() because
+        // SQLite's built-in LOWER() only lowercases ASCII - it leaves Cyrillic
+        // (and other non-Latin scripts) untouched, which made the SQL genre
+        // comparison effectively case-SENSITIVE for localized genres like
+        // "Гарем"/"гарем". GenreAliases.genreMatches uses Kotlin's Unicode-aware
+        // lowercase() plus ё/э folding and alias expansion, so a library entry
+        // counts regardless of the casing/spelling the source used.
+        val canonical = listOf(genre)
+        val mangaGenres = mangaHandler.awaitList { db -> db.mangasQueries.getLibraryGenres() }
+        val animeGenres = animeHandler.awaitList { db -> db.animesQueries.getLibraryGenres() }
+        val novelGenres = novelHandler.awaitList { db -> db.novelsQueries.getLibraryGenres() }
+        return (mangaGenres + animeGenres + novelGenres).count { entryGenres ->
+            entryGenres.orEmpty().any { g -> GenreAliases.genreMatches(g, canonical) }
         }
     }
 
@@ -179,11 +187,20 @@ class RuleContextImpl(
     }
 
     override suspend fun getUnlockedAchievementsCountExcluding(metaIds: Set<String>): Int {
-        return achievementRepository.getAllProgress().first()
+        return allProgress.values
             .count { it.isUnlocked && it.achievementId !in metaIds }
     }
 
     override suspend fun getCurrentPoints(): Int {
-        return pointsManager.getCurrentPoints().totalPoints
+        return allProgress.values
+            .filter { it.isUnlocked }
+            .sumOf { progress ->
+                val achievement = allAchievementsMap[progress.achievementId] ?: return@sumOf 0
+                if (achievement.isTiered) {
+                    achievement.tiers?.take(progress.currentTier)?.sumOf { it.points } ?: 0
+                } else {
+                    achievement.points
+                }
+            }
     }
 }

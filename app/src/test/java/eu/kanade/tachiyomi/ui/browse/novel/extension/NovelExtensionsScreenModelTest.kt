@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.ui.browse.novel.extension
 
+import android.app.Application
+import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.components.SEARCH_DEBOUNCE_MILLIS
 import eu.kanade.tachiyomi.extension.InstallStep
@@ -31,12 +33,15 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.data.extension.novel.toInstalled
 import tachiyomi.domain.extension.novel.model.NovelPlugin
 import tachiyomi.domain.source.novel.model.StubNovelSource
+import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 
 class NovelExtensionsScreenModelTest {
 
     private val sourcePreferences: SourcePreferences = mockk(relaxed = true)
+    private val basePreferences: BasePreferences = mockk(relaxed = true)
+    private val application: Application = mockk(relaxed = true)
     private val enabledLanguages = MutableStateFlow(setOf("en"))
     private val activeScreenModels = mutableListOf<NovelExtensionsScreenModel>()
 
@@ -46,6 +51,17 @@ class NovelExtensionsScreenModelTest {
         val enabledLanguagesPreference = mockk<Preference<Set<String>>>()
         every { enabledLanguagesPreference.changes() } returns enabledLanguages
         every { sourcePreferences.enabledLanguages() } returns enabledLanguagesPreference
+    }
+
+    private fun createScreenModel(
+        extensionManager: NovelExtensionManager,
+    ): NovelExtensionsScreenModel {
+        return NovelExtensionsScreenModel(
+            extensionManager = extensionManager,
+            sourcePreferences = sourcePreferences,
+            context = application,
+            basePreferences = basePreferences,
+        ).also(activeScreenModels::add)
     }
 
     @AfterEach
@@ -68,14 +84,13 @@ class NovelExtensionsScreenModelTest {
                 pluginAvailable("id-2", 1),
             )
 
-            val screenModel = NovelExtensionsScreenModel(
-                extensionManager = FakeNovelExtensionManager(
+            val screenModel = createScreenModel(
+                FakeNovelExtensionManager(
                     installed = listOf(installed),
                     available = available,
                     updates = updates,
                 ),
-                sourcePreferences = sourcePreferences,
-            ).also(activeScreenModels::add)
+            )
 
             withTimeout(1_000) {
                 while (screenModel.state.value.isLoading) {
@@ -96,14 +111,13 @@ class NovelExtensionsScreenModelTest {
         runBlocking {
             val duplicate = pluginAvailable("id-dup", 1)
 
-            val screenModel = NovelExtensionsScreenModel(
-                extensionManager = FakeNovelExtensionManager(
+            val screenModel = createScreenModel(
+                FakeNovelExtensionManager(
                     installed = emptyList(),
                     available = listOf(duplicate, duplicate),
                     updates = emptyList(),
                 ),
-                sourcePreferences = sourcePreferences,
-            ).also(activeScreenModels::add)
+            )
 
             withTimeout(1_000) {
                 while (screenModel.state.value.isLoading) {
@@ -130,14 +144,13 @@ class NovelExtensionsScreenModelTest {
                 pluginAvailable("id-2", 2),
             )
 
-            val screenModel = NovelExtensionsScreenModel(
-                extensionManager = FakeNovelExtensionManager(
+            val screenModel = createScreenModel(
+                FakeNovelExtensionManager(
                     installed = updates,
                     available = available,
                     updates = updates,
                 ),
-                sourcePreferences = sourcePreferences,
-            ).also(activeScreenModels::add)
+            )
 
             withTimeout(1_000) {
                 while (screenModel.state.value.isLoading) {
@@ -154,14 +167,13 @@ class NovelExtensionsScreenModelTest {
         runBlocking {
             val available = pluginAvailable("id-1", 1).copy(site = "ExampleSite")
 
-            val screenModel = NovelExtensionsScreenModel(
-                extensionManager = FakeNovelExtensionManager(
+            val screenModel = createScreenModel(
+                FakeNovelExtensionManager(
                     installed = emptyList(),
                     available = listOf(available),
                     updates = emptyList(),
                 ),
-                sourcePreferences = sourcePreferences,
-            ).also(activeScreenModels::add)
+            )
 
             withTimeout(1_000) {
                 while (screenModel.state.value.isLoading) {
@@ -182,14 +194,13 @@ class NovelExtensionsScreenModelTest {
             val english = pluginAvailable("id-en", 1).copy(lang = "en")
             val russian = pluginAvailable("id-ru", 1).copy(lang = "ru")
 
-            val screenModel = NovelExtensionsScreenModel(
-                extensionManager = FakeNovelExtensionManager(
+            val screenModel = createScreenModel(
+                FakeNovelExtensionManager(
                     installed = emptyList(),
                     available = listOf(english, russian),
                     updates = emptyList(),
                 ),
-                sourcePreferences = sourcePreferences,
-            ).also(activeScreenModels::add)
+            )
 
             withTimeout(1_000) {
                 while (screenModel.state.value.isLoading) {
@@ -202,19 +213,69 @@ class NovelExtensionsScreenModelTest {
     }
 
     @Test
+    fun `untrusted plugins are listed as installed items without sources`() {
+        runBlocking {
+            val untrusted = pluginUntrusted("pkg.untrusted")
+
+            val screenModel = createScreenModel(
+                FakeNovelExtensionManager(
+                    installed = emptyList(),
+                    available = emptyList(),
+                    updates = emptyList(),
+                    untrusted = listOf(untrusted),
+                ),
+            )
+
+            withTimeout(1_000) {
+                while (screenModel.state.value.isLoading) {
+                    yield()
+                }
+            }
+
+            val item = screenModel.state.value.items.single()
+            item.plugin shouldBe untrusted
+            item.status shouldBe NovelExtensionItem.Status.Untrusted
+            item.settingsSourceId shouldBe null
+        }
+    }
+
+    @Test
+    fun `trust delegates to extension manager`() {
+        runBlocking {
+            val untrusted = pluginUntrusted("pkg.trust")
+            val extensionManager = FakeNovelExtensionManager(
+                installed = emptyList(),
+                available = emptyList(),
+                updates = emptyList(),
+                untrusted = listOf(untrusted),
+            )
+            val screenModel = createScreenModel(extensionManager)
+
+            screenModel.trust(untrusted)
+
+            withTimeout(1_000) {
+                while (extensionManager.trustedPlugin == null) {
+                    yield()
+                }
+            }
+
+            extensionManager.trustedPlugin shouldBe untrusted
+        }
+    }
+
+    @Test
     fun `failed install marks plugin as error instead of crashing`() {
         runBlocking {
             val available = pluginAvailable("id-timeout", 1)
 
-            val screenModel = NovelExtensionsScreenModel(
-                extensionManager = FakeNovelExtensionManager(
+            val screenModel = createScreenModel(
+                FakeNovelExtensionManager(
                     installed = emptyList(),
                     available = listOf(available),
                     updates = emptyList(),
                     installFailure = IOException("timeout"),
                 ),
-                sourcePreferences = sourcePreferences,
-            ).also(activeScreenModels::add)
+            )
 
             withTimeout(1_000) {
                 while (screenModel.state.value.isLoading) {
@@ -245,8 +306,8 @@ class NovelExtensionsScreenModelTest {
         runBlocking {
             val installed = pluginInstalled("komga", 1)
 
-            val screenModel = NovelExtensionsScreenModel(
-                extensionManager = FakeNovelExtensionManager(
+            val screenModel = createScreenModel(
+                FakeNovelExtensionManager(
                     installed = listOf(installed),
                     installedSources = listOf(
                         FakeNovelPluginSource(
@@ -257,8 +318,7 @@ class NovelExtensionsScreenModelTest {
                     available = emptyList(),
                     updates = emptyList(),
                 ),
-                sourcePreferences = sourcePreferences,
-            ).also(activeScreenModels::add)
+            )
 
             withTimeout(1_000) {
                 while (screenModel.state.value.isLoading) {
@@ -268,6 +328,40 @@ class NovelExtensionsScreenModelTest {
 
             val item = screenModel.state.value.items.first { it.plugin.id == "komga" }
             item.hasSettings shouldBe true
+            item.settingsSourceId shouldBe 1L
+        }
+    }
+
+    @Test
+    fun `installed kotlin plugin settings uses actual source id instead of plugin hash`() {
+        runBlocking {
+            val installed = pluginInstalled("eu.kanade.tachiyomi.novelextension.all.shosetsu", 1)
+
+            val screenModel = createScreenModel(
+                FakeNovelExtensionManager(
+                    installed = listOf(installed),
+                    installedSources = listOf(
+                        FakeNovelPluginSource(
+                            id = 42L,
+                            pluginId = "eu.kanade.tachiyomi.novelextension.all.shosetsu",
+                            hasSettings = true,
+                        ),
+                    ),
+                    available = emptyList(),
+                    updates = emptyList(),
+                ),
+            )
+
+            withTimeout(1_000) {
+                while (screenModel.state.value.isLoading) {
+                    yield()
+                }
+            }
+
+            val item = screenModel.state.value.items.first {
+                it.plugin.id == "eu.kanade.tachiyomi.novelextension.all.shosetsu"
+            }
+            item.settingsSourceId shouldBe 42L
         }
     }
 
@@ -290,6 +384,7 @@ class NovelExtensionsScreenModelTest {
             every { extensionManager.installedSourcesFlow } returns MutableStateFlow(emptyList())
             every { extensionManager.installedPluginsFlow } returns MutableStateFlow(installed)
             every { extensionManager.availablePluginsFlow } returns MutableStateFlow(available)
+            every { extensionManager.untrustedPluginsFlow } returns MutableStateFlow(emptyList())
             every { extensionManager.updatesFlow } returns MutableStateFlow(installed)
             coEvery { extensionManager.refreshAvailablePlugins() } returns Unit
             coEvery { extensionManager.installPlugin(available[0]) } coAnswers {
@@ -305,10 +400,7 @@ class NovelExtensionsScreenModelTest {
                 available[1].toInstalled()
             }
 
-            val screenModel = NovelExtensionsScreenModel(
-                extensionManager = extensionManager,
-                sourcePreferences = sourcePreferences,
-            ).also(activeScreenModels::add)
+            val screenModel = createScreenModel(extensionManager)
 
             withTimeout(1_000) {
                 while (screenModel.state.value.isLoading) {
@@ -339,6 +431,24 @@ class NovelExtensionsScreenModelTest {
             installStarted.get() shouldBe 2
         }
     }
+
+    private fun pluginUntrusted(id: String) = NovelPlugin.Untrusted(
+        id = id,
+        name = "Source $id",
+        site = "",
+        lang = "",
+        versionCode = 1,
+        versionName = "1",
+        url = "",
+        iconUrl = null,
+        customJs = null,
+        customCss = null,
+        hasSettings = false,
+        sha256 = "",
+        repoUrl = "",
+        pkgName = id,
+        signatureHash = "signature",
+    )
 
     private fun pluginAvailable(id: String, version: Int) = NovelPlugin.Available(
         id = id,
@@ -377,14 +487,20 @@ class NovelExtensionsScreenModelTest {
         installedSources: List<NovelSource> = emptyList(),
         available: List<NovelPlugin.Available>,
         updates: List<NovelPlugin.Installed>,
+        untrusted: List<NovelPlugin.Untrusted> = emptyList(),
         private val installFailure: Throwable? = null,
     ) : NovelExtensionManager {
+        var trustedPlugin: NovelPlugin.Untrusted? = null
+            private set
+
         override val installedSourcesFlow: Flow<List<NovelSource>> =
             MutableStateFlow(installedSources)
         override val installedPluginsFlow: Flow<List<NovelPlugin.Installed>> =
             MutableStateFlow(installed)
         override val availablePluginsFlow: Flow<List<NovelPlugin.Available>> =
             MutableStateFlow(available)
+        override val untrustedPluginsFlow: Flow<List<NovelPlugin.Untrusted>> =
+            MutableStateFlow(untrusted)
         override val updatesFlow: Flow<List<NovelPlugin.Installed>> =
             MutableStateFlow(updates)
 
@@ -396,6 +512,12 @@ class NovelExtensionsScreenModelTest {
         }
 
         override suspend fun uninstallPlugin(plugin: NovelPlugin.Installed) = Unit
+
+        override suspend fun uninstallPlugin(plugin: NovelPlugin.Untrusted) = Unit
+
+        override suspend fun trustPlugin(plugin: NovelPlugin.Untrusted) {
+            trustedPlugin = plugin
+        }
 
         override suspend fun replacePluginFromRepo(
             installed: NovelPlugin.Installed,

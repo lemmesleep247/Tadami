@@ -1,5 +1,13 @@
 package eu.kanade.tachiyomi.ui.player.subtitle.translation
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import java.util.concurrent.atomic.AtomicInteger
+
 interface AiSubtitleTranslationClient {
     val fingerprint: String
 
@@ -19,15 +27,26 @@ data class IndexedSubtitleSegment(
 class AiSubtitleTranslationProvider(
     private val client: AiSubtitleTranslationClient?,
     private val maxCueChars: Int = 24_000,
+    private val maxConcurrency: Int = 3,
+    private val maxAttemptsPerChunk: Int = 3,
 ) : SubtitleTranslationProvider {
     override val id = SubtitleTranslationProviderId.Ai
-    override val fingerprint = "ai-subtitle-${client?.fingerprint ?: "unconfigured"}-v1"
+    override val fingerprint = "ai-subtitle-${client?.fingerprint ?: "unconfigured"}-v2"
     override val supportsBatch = true
 
     override suspend fun translate(
         cues: List<SubtitleCue>,
         sourceLanguage: String,
         targetLanguage: String,
+        onProgress: (SubtitleTranslationProgress) -> Unit,
+    ): SubtitleTranslationProviderResult =
+        translate(cues, sourceLanguage, targetLanguage, SubtitleTranslationContext(), onProgress)
+
+    override suspend fun translate(
+        cues: List<SubtitleCue>,
+        sourceLanguage: String,
+        targetLanguage: String,
+        context: SubtitleTranslationContext,
         onProgress: (SubtitleTranslationProgress) -> Unit,
     ): SubtitleTranslationProviderResult {
         val aiClient = client ?: return SubtitleTranslationProviderResult.Failure(
@@ -42,38 +61,95 @@ class AiSubtitleTranslationProvider(
         }
 
         val chunks = cleanSegments.chunkByCharacterBudget(maxCueChars)
-        val translatedByIndex = linkedMapOf<Int, String>()
-        var translatedCount = 0
-        onProgress(SubtitleTranslationProgress(0, cleanSegments.size, SubtitleTranslationStage.Translating))
+        val total = cleanSegments.size
+        val done = AtomicInteger(0)
+        onProgress(SubtitleTranslationProgress(0, total, SubtitleTranslationStage.Translating))
 
-        chunks.forEach { chunk ->
-            val raw = aiClient.translateIndexedSegments(
-                prompt = buildSubtitleAiPrompt(sourceLanguage, targetLanguage),
-                segments = chunk,
-                sourceLanguage = sourceLanguage,
-                targetLanguage = targetLanguage,
-            )
-            val parsed = parseIndexedSubtitleTranslationResponse(raw)
-            chunk.forEach { segment ->
-                parsed[segment.index]
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let { translatedByIndex[segment.index] = restoreSubtitleText(it) }
+        val prompt = buildSubtitleAiPrompt(sourceLanguage, targetLanguage, context)
+        val semaphore = Semaphore(maxConcurrency.coerceAtLeast(1))
+
+        val chunkResults = try {
+            coroutineScope {
+                chunks.map { chunk ->
+                    async {
+                        semaphore.withPermit {
+                            val parsed = translateChunkWithRetry(
+                                aiClient = aiClient,
+                                prompt = prompt,
+                                chunk = chunk,
+                                sourceLanguage = sourceLanguage,
+                                targetLanguage = targetLanguage,
+                            )
+                            val mapped = LinkedHashMap<Int, String>()
+                            chunk.forEach { segment ->
+                                parsed[segment.index]
+                                    ?.takeIf { it.isNotBlank() }
+                                    ?.let { mapped[segment.index] = restoreSubtitleText(it) }
+                            }
+                            val progress = done.addAndGet(chunk.size).coerceAtMost(total)
+                            onProgress(
+                                SubtitleTranslationProgress(progress, total, SubtitleTranslationStage.Translating),
+                            )
+                            mapped
+                        }
+                    }
+                }.awaitAll()
             }
-            translatedCount += chunk.size
-            onProgress(
-                SubtitleTranslationProgress(
-                    translated = translatedCount.coerceAtMost(cleanSegments.size),
-                    total = cleanSegments.size,
-                    stage = SubtitleTranslationStage.Translating,
-                ),
+        } catch (error: Throwable) {
+            return SubtitleTranslationProviderResult.Failure(
+                message = error.message ?: "AI subtitle translation failed",
+                retryable = error.isRetryable(),
             )
         }
 
-        onProgress(
-            SubtitleTranslationProgress(translatedByIndex.size, cleanSegments.size, SubtitleTranslationStage.Writing),
-        )
+        val translatedByIndex = linkedMapOf<Int, String>()
+        chunkResults.forEach { translatedByIndex.putAll(it) }
+
+        onProgress(SubtitleTranslationProgress(translatedByIndex.size, total, SubtitleTranslationStage.Writing))
         return SubtitleTranslationProviderResult.Success(translatedByIndex)
     }
+
+    private suspend fun translateChunkWithRetry(
+        aiClient: AiSubtitleTranslationClient,
+        prompt: String,
+        chunk: List<IndexedSubtitleSegment>,
+        sourceLanguage: String,
+        targetLanguage: String,
+    ): Map<Int, String> {
+        var attempt = 0
+        var lastError: Throwable? = null
+        while (attempt < maxAttemptsPerChunk.coerceAtLeast(1)) {
+            try {
+                val raw = aiClient.translateIndexedSegments(
+                    prompt = prompt,
+                    segments = chunk,
+                    sourceLanguage = sourceLanguage,
+                    targetLanguage = targetLanguage,
+                )
+                return parseIndexedSubtitleTranslationResponse(raw)
+            } catch (error: Throwable) {
+                lastError = error
+                if (!error.isRetryable()) throw error
+                attempt++
+                if (attempt >= maxAttemptsPerChunk) break
+                delay(backoffDelayMs(attempt))
+            }
+        }
+        throw lastError ?: IllegalStateException("AI subtitle translation failed")
+    }
+}
+
+private fun backoffDelayMs(attempt: Int): Long {
+    val base = 500L * (1L shl (attempt - 1).coerceIn(0, 5))
+    val jitter = (0..250).random().toLong()
+    return (base + jitter).coerceAtMost(8_000L)
+}
+
+private fun Throwable.isRetryable(): Boolean {
+    val message = (message ?: "").lowercase()
+    val fatal = listOf("unauthor", "forbidden", "invalid api", "api key", "400", "401", "403")
+    if (fatal.any { message.contains(it) }) return false
+    return true
 }
 
 private fun List<IndexedSubtitleSegment>.chunkByCharacterBudget(maxChars: Int): List<List<IndexedSubtitleSegment>> {
@@ -99,15 +175,30 @@ private fun List<IndexedSubtitleSegment>.chunkByCharacterBudget(maxChars: Int): 
     return chunks
 }
 
-fun buildSubtitleAiPrompt(sourceLanguage: String, targetLanguage: String): String {
+fun buildSubtitleAiPrompt(
+    sourceLanguage: String,
+    targetLanguage: String,
+    context: SubtitleTranslationContext = SubtitleTranslationContext(),
+): String {
+    val domain = buildString {
+        context.title?.takeIf { it.isNotBlank() }?.let { append("Title: ").append(it).append('\n') }
+        context.genreHint?.takeIf { it.isNotBlank() }?.let { append("Genre: ").append(it).append('\n') }
+        if (context.glossaryTerms.isNotEmpty()) {
+            append("Keep these names/terms transliterated consistently across the whole file: ")
+            append(context.glossaryTerms.joinToString(", "))
+            append('\n')
+        }
+    }
     return """
         Translate subtitle cues from ${sourceLanguage.ifBlank { "auto" }} to $targetLanguage.
+        $domain
         Preserve cue order, meaning, tone and reasonable line breaks.
+        Use natural, fluent dialogue consistent with previous lines.
         Return only indexed XML-like segments in this exact format:
-        <s i=\"0\">translated text</s>
-        <s i=\"1\">translated text</s>
+        <s i="0">translated text</s>
+        <s i="1">translated text</s>
         Do not add explanations. Do not merge, remove, reorder or add segments.
-        Preserve placeholders and protected subtitle styling markers.
+        Preserve placeholders and protected subtitle styling markers exactly as given.
     """.trimIndent()
 }
 

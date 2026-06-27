@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -26,9 +27,9 @@ import eu.kanade.presentation.browse.novel.NovelRepoPickerDialog
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
 import eu.kanade.presentation.more.settings.screen.browse.NovelExtensionReposScreen
-import eu.kanade.tachiyomi.extension.novel.NovelPluginId
 import eu.kanade.tachiyomi.ui.browse.novel.extension.details.NovelExtensionDetailsScreen
 import eu.kanade.tachiyomi.ui.browse.novel.extension.details.NovelSourcePreferencesScreen
+import eu.kanade.tachiyomi.util.system.copyToClipboard
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.domain.extension.novel.model.NovelPlugin
 import tachiyomi.i18n.MR
@@ -41,9 +42,11 @@ fun novelExtensionsTab(
     extensionsScreenModel: NovelExtensionsScreenModel,
 ): TabContent {
     val navigator = LocalNavigator.currentOrThrow
+    val context = LocalContext.current
     val state by extensionsScreenModel.state.collectAsStateWithLifecycle()
     var pluginToUninstall by remember { mutableStateOf<NovelPlugin.Installed?>(null) }
     var pluginToReinstall by remember { mutableStateOf<NovelPlugin.Installed?>(null) }
+    var showInstallerDiagnostics by remember { mutableStateOf(false) }
 
     return TabContent(
         titleRes = AYMR.strings.label_novel_extensions,
@@ -58,6 +61,10 @@ fun novelExtensionsTab(
                 title = stringResource(MR.strings.label_extension_repos),
                 onClick = { navigator.push(NovelExtensionReposScreen()) },
             ),
+            AppBar.OverflowAction(
+                title = "Installer diagnostics",
+                onClick = { showInstallerDiagnostics = true },
+            ),
         ),
         content = { contentPadding, _ ->
             NovelExtensionScreen(
@@ -68,11 +75,20 @@ fun novelExtensionsTab(
                 onUpdateExtension = extensionsScreenModel::updateExtension,
                 onReinstallExtension = { pluginToReinstall = it },
                 onOpenExtension = { navigator.push(novelExtensionDetailsScreen(it.id)) },
-                onOpenExtensionSettings = { navigator.push(novelExtensionSettingsScreen(it.id)) },
+                onOpenExtensionSettings = { navigator.push(novelExtensionSettingsScreen(it)) },
                 onUninstallExtension = { pluginToUninstall = it },
+                onUninstallUntrustedExtension = extensionsScreenModel::uninstallExtension,
+                onTrustExtension = extensionsScreenModel::trust,
                 onUpdateAll = extensionsScreenModel::updateAllExtensions,
                 onRefresh = extensionsScreenModel::refresh,
                 onToggleSection = extensionsScreenModel::toggleSection,
+                onCopyDiagnostic = { plugin ->
+                    context.copyToClipboard(
+                        label = "Novel extension diagnostic",
+                        content = extensionsScreenModel.diagnosticFor(plugin),
+                    )
+                },
+                onShareApk = extensionsScreenModel::shareApk,
             )
 
             pluginToUninstall?.let { plugin ->
@@ -116,6 +132,32 @@ fun novelExtensionsTab(
                     options = state.repoPickerOptions,
                     onSelectPlugin = extensionsScreenModel::installFromRepo,
                     onDismiss = extensionsScreenModel::dismissRepoPicker,
+                )
+            }
+
+            if (showInstallerDiagnostics) {
+                val diagnostic = extensionsScreenModel.installerCompatibilityDiagnostic()
+                AlertDialog(
+                    title = { Text(text = "Installer diagnostics") },
+                    text = { Text(text = diagnostic) },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                context.copyToClipboard(
+                                    label = "Installer diagnostics",
+                                    content = diagnostic,
+                                )
+                            },
+                        ) {
+                            Text(text = stringResource(MR.strings.action_copy_to_clipboard))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showInstallerDiagnostics = false }) {
+                            Text(text = stringResource(MR.strings.action_cancel))
+                        }
+                    },
+                    onDismissRequest = { showInstallerDiagnostics = false },
                 )
             }
         },
@@ -182,6 +224,6 @@ internal fun novelExtensionDetailsScreen(pluginId: String): NovelExtensionDetail
     return NovelExtensionDetailsScreen(pluginId)
 }
 
-internal fun novelExtensionSettingsScreen(pluginId: String): NovelSourcePreferencesScreen {
-    return NovelSourcePreferencesScreen(NovelPluginId.toSourceId(pluginId))
+internal fun novelExtensionSettingsScreen(sourceId: Long): NovelSourcePreferencesScreen {
+    return NovelSourcePreferencesScreen(sourceId)
 }

@@ -20,6 +20,12 @@ import tachiyomi.core.common.preference.getEnum
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
+enum class NovelAutoScrollChapterEndBehavior {
+    StopAtEnd,
+    AdvanceAndStop,
+    ContinuousReading,
+}
+
 data class NovelReaderSettings(
     // Display
     val fontSize: Int,
@@ -74,6 +80,9 @@ data class NovelReaderSettings(
     val autoScroll: Boolean,
     val autoScrollInterval: Int,
     val autoScrollOffset: Int,
+    val autoScrollChapterEndBehavior: NovelAutoScrollChapterEndBehavior = NovelAutoScrollChapterEndBehavior.StopAtEnd,
+    val autoScrollAdaptiveDelay: Boolean = true,
+    val autoScrollEndPauseMs: Long = 5000L,
     val showAutoScrollFloatingButton: Boolean,
     val prefetchNextChapter: Boolean,
 
@@ -337,6 +346,9 @@ data class NovelReaderOverride(
     val autoScroll: Boolean? = null,
     val autoScrollInterval: Int? = null,
     val autoScrollOffset: Int? = null,
+    val autoScrollChapterEndBehavior: NovelAutoScrollChapterEndBehavior? = null,
+    val autoScrollAdaptiveDelay: Boolean? = null,
+    val autoScrollEndPauseMs: Long? = null,
     val showAutoScrollFloatingButton: Boolean? = null,
     val prefetchNextChapter: Boolean? = null,
 
@@ -577,6 +589,18 @@ class NovelReaderPreferences(
     fun autoScrollInterval() = preferenceStore.getInt("novel_reader_auto_scroll_interval", DEFAULT_AUTO_SCROLL_INTERVAL)
 
     fun autoScrollOffset() = preferenceStore.getInt("novel_reader_auto_scroll_offset", DEFAULT_AUTO_SCROLL_OFFSET)
+
+    fun autoScrollChapterEndBehavior() =
+        preferenceStore.getEnum(
+            "novel_reader_auto_scroll_chapter_end_behavior",
+            NovelAutoScrollChapterEndBehavior.StopAtEnd,
+        )
+
+    fun autoScrollAdaptiveDelay() =
+        preferenceStore.getBoolean("novel_reader_auto_scroll_adaptive_delay", true)
+
+    fun autoScrollEndPauseMs() =
+        preferenceStore.getLong("novel_reader_auto_scroll_end_pause_ms", 5000L)
 
     fun showAutoScrollFloatingButton() =
         preferenceStore.getBoolean("novel_reader_show_auto_scroll_floating_button", false)
@@ -998,6 +1022,9 @@ class NovelReaderPreferences(
                 autoScroll = autoScroll().get(),
                 autoScrollInterval = autoScrollInterval().get(),
                 autoScrollOffset = autoScrollOffset().get(),
+                autoScrollChapterEndBehavior = autoScrollChapterEndBehavior().get(),
+                autoScrollAdaptiveDelay = autoScrollAdaptiveDelay().get(),
+                autoScrollEndPauseMs = autoScrollEndPauseMs().get(),
                 showAutoScrollFloatingButton = showAutoScrollFloatingButton().get(),
                 prefetchNextChapter = prefetchNextChapter().get(),
                 fullScreenMode = fullScreenMode().get(),
@@ -1133,6 +1160,12 @@ class NovelReaderPreferences(
             autoScroll = override?.autoScroll ?: autoScroll().get(),
             autoScrollInterval = override?.autoScrollInterval ?: autoScrollInterval().get(),
             autoScrollOffset = override?.autoScrollOffset ?: autoScrollOffset().get(),
+            autoScrollChapterEndBehavior =
+            override?.autoScrollChapterEndBehavior ?: autoScrollChapterEndBehavior().get(),
+            autoScrollAdaptiveDelay =
+            override?.autoScrollAdaptiveDelay ?: autoScrollAdaptiveDelay().get(),
+            autoScrollEndPauseMs =
+            override?.autoScrollEndPauseMs ?: autoScrollEndPauseMs().get(),
             showAutoScrollFloatingButton =
             override?.showAutoScrollFloatingButton ?: showAutoScrollFloatingButton().get(),
             prefetchNextChapter = override?.prefetchNextChapter ?: prefetchNextChapter().get(),
@@ -1311,6 +1344,9 @@ class NovelReaderPreferences(
             autoScroll().changes(),
             autoScrollInterval().changes(),
             autoScrollOffset().changes(),
+            autoScrollChapterEndBehavior().changes(),
+            autoScrollAdaptiveDelay().changes(),
+            autoScrollEndPauseMs().changes(),
             showAutoScrollFloatingButton().changes(),
             prefetchNextChapter().changes(),
         ) { values: Array<Any?> ->
@@ -1334,8 +1370,11 @@ class NovelReaderPreferences(
                 values[16] as Boolean,
                 values[17] as Int,
                 values[18] as Int,
-                values[19] as Boolean,
+                (values[19] as? NovelAutoScrollChapterEndBehavior) ?: NovelAutoScrollChapterEndBehavior.StopAtEnd,
                 values[20] as Boolean,
+                values[21] as Long,
+                values[22] as Boolean,
+                values[23] as Boolean,
             )
         }.distinctUntilChanged()
 
@@ -1577,6 +1616,12 @@ class NovelReaderPreferences(
                 autoScroll = override?.autoScroll ?: navigation.autoScroll,
                 autoScrollInterval = override?.autoScrollInterval ?: navigation.autoScrollInterval,
                 autoScrollOffset = override?.autoScrollOffset ?: navigation.autoScrollOffset,
+                autoScrollChapterEndBehavior =
+                override?.autoScrollChapterEndBehavior ?: navigation.autoScrollChapterEndBehavior,
+                autoScrollAdaptiveDelay =
+                override?.autoScrollAdaptiveDelay ?: navigation.autoScrollAdaptiveDelay,
+                autoScrollEndPauseMs =
+                override?.autoScrollEndPauseMs ?: navigation.autoScrollEndPauseMs,
                 showAutoScrollFloatingButton =
                 override?.showAutoScrollFloatingButton ?: navigation.showAutoScrollFloatingButton,
                 prefetchNextChapter = override?.prefetchNextChapter ?: navigation.prefetchNextChapter,
@@ -1718,6 +1763,9 @@ class NovelReaderPreferences(
         val autoScroll: Boolean,
         val autoScrollInterval: Int,
         val autoScrollOffset: Int,
+        val autoScrollChapterEndBehavior: NovelAutoScrollChapterEndBehavior,
+        val autoScrollAdaptiveDelay: Boolean,
+        val autoScrollEndPauseMs: Long,
         val showAutoScrollFloatingButton: Boolean,
         val prefetchNextChapter: Boolean,
     )

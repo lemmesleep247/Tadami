@@ -44,6 +44,7 @@ internal object AnimeExtensionLoader {
     private const val METADATA_NSFW = "tachiyomi.animeextension.nsfw"
     private const val METADATA_HAS_README = "tachiyomi.animeextension.hasReadme"
     private const val METADATA_HAS_CHANGELOG = "tachiyomi.animeextension.hasChangelog"
+    private const val METADATA_TORRENT = "tachiyomi.animeextension.torrent"
     const val LIB_VERSION_MIN = 12
     const val LIB_VERSION_MAX = 16
 
@@ -171,10 +172,14 @@ internal object AnimeExtensionLoader {
 
         if (extPkgs.isEmpty()) return emptyList()
 
+        val trustedFingerprints = runBlocking {
+            trustExtension.getTrustedFingerprints()
+        }
+
         // Load each extension concurrently and wait for completion
         return runBlocking {
             val deferred = extPkgs.map {
-                async { loadExtension(context, it) }
+                async { loadExtension(context, it, trustedFingerprints) }
             }
             deferred.awaitAll()
         }
@@ -241,7 +246,11 @@ internal object AnimeExtensionLoader {
      * @param context The application context.
      * @param extensionInfo The extension to load.
      */
-    private suspend fun loadExtension(context: Context, extensionInfo: AnimeExtensionInfo): AnimeLoadResult {
+    private suspend fun loadExtension(
+        context: Context,
+        extensionInfo: AnimeExtensionInfo,
+        trustedFingerprints: Set<String>? = null,
+    ): AnimeLoadResult {
         val pkgManager = context.packageManager
 
         val pkgInfo = extensionInfo.packageInfo
@@ -268,10 +277,18 @@ internal object AnimeExtensionLoader {
         }
 
         val signatures = getSignatures(pkgInfo)
+        val isTrusted = if (signatures.isNullOrEmpty()) {
+            false
+        } else if (trustedFingerprints != null) {
+            trustExtension.isTrusted(pkgInfo, signatures, trustedFingerprints)
+        } else {
+            trustExtension.isTrusted(pkgInfo, signatures)
+        }
+
         if (signatures.isNullOrEmpty()) {
             logcat(LogPriority.WARN) { "Package $pkgName isn't signed" }
             return AnimeLoadResult.Error
-        } else if (!trustExtension.isTrusted(pkgInfo, signatures)) {
+        } else if (!isTrusted) {
             val extension = AnimeExtension.Untrusted(
                 extName,
                 pkgName,
@@ -285,6 +302,7 @@ internal object AnimeExtensionLoader {
         }
 
         val isNsfw = appInfo.metaData.getInt(METADATA_NSFW) == 1
+        val isTorrent = appInfo.metaData.getInt(METADATA_TORRENT) == 1
         if (!loadNsfwSource && isNsfw) {
             logcat(LogPriority.WARN) { "NSFW extension $pkgName not allowed" }
             return AnimeLoadResult.Error
@@ -357,6 +375,7 @@ internal object AnimeExtensionLoader {
             libVersion = libVersion,
             lang = lang,
             isNsfw = isNsfw,
+            isTorrent = isTorrent,
             sources = sources,
             pkgFactory = appInfo.metaData.getString(METADATA_SOURCE_FACTORY),
             icon = appInfo.loadIcon(pkgManager),

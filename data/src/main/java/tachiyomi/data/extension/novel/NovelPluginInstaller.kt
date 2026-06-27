@@ -20,6 +20,9 @@ class NovelPluginInstaller(
         if (plugin.sha256.isNotBlank()) {
             val checksum = Hash.sha256(scriptBytes)
             if (!checksum.equals(plugin.sha256, ignoreCase = true)) {
+                logcat(LogPriority.WARN) {
+                    "Novel plugin checksum mismatch id=${plugin.id} expected=${plugin.sha256} actual=$checksum"
+                }
                 throw NovelPluginInstallException.ChecksumMismatch(plugin.id, plugin.sha256, checksum)
             }
         }
@@ -55,13 +58,22 @@ interface NovelPluginDownloader {
     suspend fun download(url: String): ByteArray
 }
 
-sealed class NovelPluginInstallException(message: String) : RuntimeException(message) {
+sealed class NovelPluginInstallException(message: String, cause: Throwable? = null) : RuntimeException(message, cause) {
     class ChecksumMismatch(
         val pluginId: String,
         val expected: String,
         val actual: String,
     ) : NovelPluginInstallException(
         "Checksum mismatch for $pluginId. Expected $expected but got $actual.",
+    )
+
+    class DownloadFailed(
+        val url: String,
+        val reason: String,
+        cause: Throwable? = null,
+    ) : NovelPluginInstallException(
+        "Failed to download novel plugin asset ($reason): $url",
+        cause,
     )
 }
 

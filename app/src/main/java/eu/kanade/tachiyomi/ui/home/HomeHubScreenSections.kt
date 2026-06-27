@@ -81,19 +81,24 @@ internal fun AnimeHomeHub(
     activeSection: HomeHubSection,
     scrollResetToken: Int,
     onScrollSignal: (HomeHubSection, Float, Boolean) -> Unit,
+    providedScreenModel: HomeHubScreenModel? = null,
 ) {
-    val screenModel = HomeHubTab.rememberScreenModel { HomeHubScreenModel() }
+    val screenModel = providedScreenModel ?: HomeHubTab.rememberScreenModel { HomeHubScreenModel() }
     val state by screenModel.state.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.currentOrThrow
     val context = LocalContext.current
     val tabNavigator = LocalTabNavigator.current
 
-    LaunchedEffect(screenModel) {
+    LaunchedEffect(screenModel, activeSection) {
         HomeHubScreenModel.setInstance(screenModel)
-        screenModel.startLiveUpdates()
+        if (activeSection == HomeHubSection.Anime) {
+            screenModel.startLiveUpdates()
+        }
     }
 
-    val lastSourceName = remember { screenModel.getLastUsedAnimeSourceName() }
+    val lastSourceName = remember(activeSection) {
+        if (activeSection == HomeHubSection.Anime) screenModel.getLastUsedAnimeSourceName() else null
+    }
 
     HomeHubScreen(
         section = HomeHubSection.Anime,
@@ -135,20 +140,25 @@ internal fun MangaHomeHub(
     activeSection: HomeHubSection,
     scrollResetToken: Int,
     onScrollSignal: (HomeHubSection, Float, Boolean) -> Unit,
+    providedScreenModel: MangaHomeHubScreenModel? = null,
 ) {
-    val screenModel = HomeHubTab.rememberScreenModel { MangaHomeHubScreenModel() }
+    val screenModel = providedScreenModel ?: HomeHubTab.rememberScreenModel { MangaHomeHubScreenModel() }
     val state by screenModel.state.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.currentOrThrow
     val context = LocalContext.current
     val tabNavigator = LocalTabNavigator.current
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(screenModel) {
+    LaunchedEffect(screenModel, activeSection) {
         MangaHomeHubScreenModel.setInstance(screenModel)
-        screenModel.startLiveUpdates()
+        if (activeSection == HomeHubSection.Manga) {
+            screenModel.startLiveUpdates()
+        }
     }
 
-    val lastSourceName = remember { screenModel.getLastUsedMangaSourceName() }
+    val lastSourceName = remember(activeSection) {
+        if (activeSection == HomeHubSection.Manga) screenModel.getLastUsedMangaSourceName() else null
+    }
 
     HomeHubScreen(
         section = HomeHubSection.Manga,
@@ -193,19 +203,24 @@ internal fun NovelHomeHub(
     activeSection: HomeHubSection,
     scrollResetToken: Int,
     onScrollSignal: (HomeHubSection, Float, Boolean) -> Unit,
+    providedScreenModel: NovelHomeHubScreenModel? = null,
 ) {
-    val screenModel = HomeHubTab.rememberScreenModel { NovelHomeHubScreenModel() }
+    val screenModel = providedScreenModel ?: HomeHubTab.rememberScreenModel { NovelHomeHubScreenModel() }
     val state by screenModel.state.collectAsStateWithLifecycle()
     val navigator = LocalNavigator.currentOrThrow
     val tabNavigator = LocalTabNavigator.current
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(screenModel) {
+    LaunchedEffect(screenModel, activeSection) {
         NovelHomeHubScreenModel.setInstance(screenModel)
-        screenModel.startLiveUpdates()
+        if (activeSection == HomeHubSection.Novel) {
+            screenModel.startLiveUpdates()
+        }
     }
 
-    val lastSourceName = remember { screenModel.getLastUsedNovelSourceName() }
+    val lastSourceName = remember(activeSection) {
+        if (activeSection == HomeHubSection.Novel) screenModel.getLastUsedNovelSourceName() else null
+    }
 
     HomeHubScreen(
         section = HomeHubSection.Novel,

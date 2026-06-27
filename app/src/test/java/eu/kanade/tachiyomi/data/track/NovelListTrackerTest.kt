@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.data.track
 
 import eu.kanade.tachiyomi.data.track.novellist.NovelList
+import eu.kanade.tachiyomi.data.track.novellist.buildNovelListTrackingUrl
+import eu.kanade.tachiyomi.data.track.novellist.extractNovelListUuid
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
@@ -32,5 +34,13 @@ class NovelListTrackerTest {
         }
 
         failed shouldBe true
+    }
+
+    @Test
+    fun `tracking url uses public novels route and stores uuid fragment`() {
+        val url = buildNovelListTrackingUrl("sample-novel", "uuid-123")
+
+        url shouldBe "https://www.novellist.co/novels/sample-novel#uuid-123"
+        extractNovelListUuid(url) shouldBe "uuid-123"
     }
 }

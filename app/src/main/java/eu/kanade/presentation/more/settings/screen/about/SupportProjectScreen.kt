@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -186,7 +187,7 @@ private fun SupportIntroCardContent(
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Top,
         ) {
             Box(
                 modifier = Modifier
@@ -221,6 +222,14 @@ private fun SupportIntroCardContent(
                 )
                 Text(
                     text = stringResource(MR.strings.support_info),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        lineHeight = 20.sp,
+                    ),
+                    color = auroraColors.textSecondary,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = stringResource(MR.strings.support_legal_disclaimer),
                     style = MaterialTheme.typography.bodyMedium.copy(
                         lineHeight = 20.sp,
                     ),

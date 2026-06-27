@@ -2,6 +2,10 @@ package eu.kanade.tachiyomi.ui.player.subtitle.translation
 
 import java.security.MessageDigest
 
+// Bump when the translation pipeline changes its output shape (tag masking,
+// segment cleaning, prompt schema). Old cache entries are then invalidated.
+const val SUBTITLE_TRANSLATION_CACHE_SCHEMA_VERSION = 2
+
 data class SubtitleCue(
     val index: Int,
     val startMs: Long,
@@ -35,6 +39,16 @@ data class SubtitleTranslationRequest(
     val providerId: SubtitleTranslationProviderId,
     val sourceIdentity: String,
     val useCache: Boolean = true,
+    val bilingual: Boolean = false,
+    val title: String? = null,
+    val genreHint: String? = null,
+)
+
+/** Extra signals passed to providers for higher-quality, consistent output. */
+data class SubtitleTranslationContext(
+    val glossaryTerms: List<String> = emptyList(),
+    val title: String? = null,
+    val genreHint: String? = null,
 )
 
 data class SubtitleTranslationProgress(
@@ -46,10 +60,14 @@ data class SubtitleTranslationProgress(
 }
 
 enum class SubtitleTranslationStage {
+    Downloading,
+    Extracting,
     Parsing,
     CacheLookup,
     Translating,
+    Retrying,
     Writing,
+    Applying,
     Complete,
 }
 
@@ -58,7 +76,13 @@ data class SubtitleTranslationResult(
     val translatedCueCount: Int,
     val cacheKey: String,
     val fromCache: Boolean,
-)
+    val requestedCueCount: Int = translatedCueCount,
+    val untranslatedCount: Int = 0,
+) {
+    val partial: Boolean get() = untranslatedCount > 0
+    val coverage: Float
+        get() = if (requestedCueCount <= 0) 1f else translatedCueCount.toFloat() / requestedCueCount
+}
 
 sealed interface SubtitleTranslationProviderResult {
     data class Success(
@@ -83,6 +107,19 @@ interface SubtitleTranslationProvider {
         targetLanguage: String,
         onProgress: (SubtitleTranslationProgress) -> Unit = {},
     ): SubtitleTranslationProviderResult
+
+    /**
+     * Context-aware overload. Defaults to the legacy [translate] so existing
+     * providers and tests keep compiling; richer providers (AI) override it.
+     */
+    suspend fun translate(
+        cues: List<SubtitleCue>,
+        sourceLanguage: String,
+        targetLanguage: String,
+        context: SubtitleTranslationContext,
+        onProgress: (SubtitleTranslationProgress) -> Unit = {},
+    ): SubtitleTranslationProviderResult =
+        translate(cues, sourceLanguage, targetLanguage, onProgress)
 }
 
 fun buildSubtitleTranslationCacheKey(
@@ -91,16 +128,19 @@ fun buildSubtitleTranslationCacheKey(
     sourceLanguage: String,
     targetLanguage: String,
     document: SubtitleDocument,
+    bilingual: Boolean = false,
 ): String {
     val digest = MessageDigest.getInstance("SHA-256")
     fun update(value: String) {
         digest.update(value.toByteArray(Charsets.UTF_8))
         digest.update(0)
     }
+    update("schema=" + SUBTITLE_TRANSLATION_CACHE_SCHEMA_VERSION)
     update(providerFingerprint)
     update(sourceIdentity)
     update(sourceLanguage.trim().lowercase())
     update(targetLanguage.trim().lowercase())
+    update("bilingual=" + bilingual)
     update(document.format.name)
     document.cues.forEach { cue ->
         update(cue.startMs.toString())

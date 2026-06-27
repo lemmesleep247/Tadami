@@ -310,7 +310,7 @@ object AboutScreen : Screen() {
                             title = stringResource(MR.strings.help_translate),
                             onPreferenceClick = {
                                 uriHandler.openUri(
-                                    "https://aniyomi.org/docs/contribute#translation",
+                                    "https://github.com/andarcanum/Tadami-Aniyomi-fork/blob/ranobe-novel/TRANSLATION.md",
                                 )
                             },
                         )
@@ -327,8 +327,60 @@ object AboutScreen : Screen() {
                     item {
                         TextPreferenceWidget(
                             modifier = itemModifier,
+                            title = stringResource(MR.strings.pref_disclaimer),
+                            onPreferenceClick = {
+                                navigator.push(
+                                    AboutTextScreen(
+                                        titleRes = MR.strings.pref_disclaimer,
+                                        contentRes = MR.strings.pref_disclaimer_text,
+                                    ),
+                                )
+                            },
+                        )
+                    }
+
+                    item {
+                        TextPreferenceWidget(
+                            modifier = itemModifier,
+                            title = stringResource(MR.strings.pref_terms_of_service),
+                            onPreferenceClick = {
+                                navigator.push(
+                                    AboutTextScreen(
+                                        titleRes = MR.strings.pref_terms_of_service,
+                                        contentRes = MR.strings.pref_terms_of_service_text,
+                                    ),
+                                )
+                            },
+                        )
+                    }
+
+                    item {
+                        TextPreferenceWidget(
+                            modifier = itemModifier,
                             title = stringResource(MR.strings.privacy_policy),
-                            onPreferenceClick = { uriHandler.openUri("https://aniyomi.org/privacy/") },
+                            onPreferenceClick = {
+                                navigator.push(
+                                    AboutTextScreen(
+                                        titleRes = MR.strings.privacy_policy,
+                                        contentRes = MR.strings.privacy_policy_text_content,
+                                    ),
+                                )
+                            },
+                        )
+                    }
+
+                    item {
+                        TextPreferenceWidget(
+                            modifier = itemModifier,
+                            title = stringResource(MR.strings.pref_copyright_dmca),
+                            onPreferenceClick = {
+                                navigator.push(
+                                    AboutTextScreen(
+                                        titleRes = MR.strings.pref_copyright_dmca,
+                                        contentRes = MR.strings.pref_copyright_dmca_text,
+                                    ),
+                                )
+                            },
                         )
                     }
 

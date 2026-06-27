@@ -1,12 +1,17 @@
 package eu.kanade.tachiyomi.ui.browse.novel.extension
 
+import android.app.Application
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.components.SEARCH_DEBOUNCE_MILLIS
 import eu.kanade.tachiyomi.extension.InstallStep
+import eu.kanade.tachiyomi.extension.installer.ExtensionApkFileStore
+import eu.kanade.tachiyomi.extension.installer.ExtensionInstallDiagnostic
 import eu.kanade.tachiyomi.extension.novel.NovelExtensionManager
+import eu.kanade.tachiyomi.extension.novel.NovelPluginId
 import eu.kanade.tachiyomi.extension.novel.runtime.NovelPluginIdentitySource
 import eu.kanade.tachiyomi.extension.novel.runtime.hasVisiblePluginSettingsByDiscovery
 import eu.kanade.tachiyomi.util.system.LocaleHelper
@@ -18,6 +23,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
@@ -28,10 +34,14 @@ import uy.kohesive.injekt.api.get
 class NovelExtensionsScreenModel(
     private val extensionManager: NovelExtensionManager = Injekt.get(),
     private val sourcePreferences: SourcePreferences = Injekt.get(),
+    private val context: Application = Injekt.get(),
+    private val basePreferences: BasePreferences = Injekt.get(),
 ) : StateScreenModel<NovelExtensionsScreenModel.State>(State()) {
 
     private val currentDownloads = MutableStateFlow<Map<String, InstallStep>>(hashMapOf())
     private val allPluginVariants = MutableStateFlow<Map<String, List<NovelPlugin.Available>>>(emptyMap())
+    private val lastDiagnostics = MutableStateFlow<Map<String, ExtensionInstallDiagnostic>>(emptyMap())
+    private val apkFileStore = ExtensionApkFileStore(basePreferences)
 
     init {
         screenModelScope.launchIO {
@@ -40,12 +50,14 @@ class NovelExtensionsScreenModel(
                 extensionManager.installedPluginsFlow,
                 extensionManager.installedSourcesFlow,
                 extensionManager.availablePluginsFlow,
-            ) { downloads, installed, installedSources, available ->
+                extensionManager.untrustedPluginsFlow,
+            ) { downloads, installed, installedSources, available, untrusted ->
                 ListingSourceState(
                     downloads = downloads,
                     installed = installed,
                     installedSources = installedSources,
                     available = available,
+                    untrusted = untrusted,
                 )
             }
             val listingFlow = combine(
@@ -58,6 +70,7 @@ class NovelExtensionsScreenModel(
                     installed = sourceState.installed,
                     installedSources = sourceState.installedSources,
                     available = sourceState.available,
+                    untrusted = sourceState.untrusted,
                 )
             }
 
@@ -73,11 +86,15 @@ class NovelExtensionsScreenModel(
                 val available = variantsMap.mapNotNull { (_, plugins) ->
                     plugins.maxWithOrNull(NOVEL_AVAILABLE_COMPARATOR)
                 }
-                val installedSettingsPluginIds = input.installedSources
+                val installedSettingsSourceIdsByPluginId = input.installedSources
                     .asSequence()
                     .filter { source -> source.hasVisiblePluginSettingsByDiscovery() }
-                    .mapNotNull { source -> (source as? NovelPluginIdentitySource)?.pluginId }
-                    .toSet()
+                    .mapNotNull { source ->
+                        val pluginId = (source as? NovelPluginIdentitySource)?.pluginId ?: return@mapNotNull null
+                        pluginId to source.id
+                    }
+                    .groupBy({ it.first }, { it.second })
+                    .mapValues { (_, sourceIds) -> sourceIds.first() }
                 val searchQuery = input.query
 
                 val updateStatesById = input.installed.associate { plugin ->
@@ -89,7 +106,7 @@ class NovelExtensionsScreenModel(
                 val updateIds = updateStatesById
                     .filterValues { it.hasAnyUpdate }
                     .keys
-                val installedIds = input.installed.map { it.id }.toSet()
+                val installedIds = (input.installed.map { it.id } + input.untrusted.map { it.id }).toSet()
                 val matches: (NovelPlugin) -> Boolean = { plugin ->
                     if (searchQuery.isEmpty()) {
                         true
@@ -101,23 +118,32 @@ class NovelExtensionsScreenModel(
                     }
                 }
 
-                val availableByLanguage = available
-                    .asSequence()
+                val availableSorted = available
                     .filter { it.id !in installedIds }
                     .filter(matches)
                     .filter { it.lang in enabledLanguages }
+                    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
                     .groupBy { it.lang }
                     .toSortedMap(LocaleHelper.comparator)
 
+                val updatesList = input.installed.filter { it.id in updateIds }.filter(matches)
+                    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+
+                val installedList = input.installed.filter { it.id !in updateIds }.filter(matches)
+                    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+
+                val untrustedList = input.untrusted.filter(matches)
+                    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+
                 val items = buildList {
-                    input.installed.filter { it.id in updateIds }.filter(matches).forEach { plugin ->
+                    updatesList.forEach { plugin ->
                         val updateState = updateStatesById.getValue(plugin.id)
                         add(
                             NovelExtensionItem(
                                 plugin = plugin,
                                 status = NovelExtensionItem.Status.UpdateAvailable,
                                 installStep = input.downloads[plugin.id] ?: InstallStep.Idle,
-                                hasSettings = plugin.hasSettings || plugin.id in installedSettingsPluginIds,
+                                settingsSourceId = plugin.settingsSourceId(installedSettingsSourceIdsByPluginId),
                                 repoSourceCount = repoCounts[plugin.id] ?: 1,
                                 hasUpdate = updateState.hasSameRepoUpdate,
                                 hasRepoUpdate = updateState.hasOtherRepoUpdate,
@@ -125,32 +151,42 @@ class NovelExtensionsScreenModel(
                             ),
                         )
                     }
-                    input.installed.filter { it.id !in updateIds }.filter(matches).forEach { plugin ->
+                    installedList.forEach { plugin ->
                         add(
                             NovelExtensionItem(
                                 plugin = plugin,
                                 status = NovelExtensionItem.Status.Installed,
                                 installStep = input.downloads[plugin.id] ?: InstallStep.Idle,
-                                hasSettings = plugin.hasSettings || plugin.id in installedSettingsPluginIds,
+                                settingsSourceId = plugin.settingsSourceId(installedSettingsSourceIdsByPluginId),
                                 repoSourceCount = repoCounts[plugin.id] ?: 1,
                                 repoDisplayName = plugin.fallbackRepoDisplayName(variantsMap[plugin.id].orEmpty()),
                             ),
                         )
                     }
-                    availableByLanguage.values.flatten().forEach { plugin ->
+                    untrustedList.forEach { plugin ->
+                        add(
+                            NovelExtensionItem(
+                                plugin = plugin,
+                                status = NovelExtensionItem.Status.Untrusted,
+                                installStep = input.downloads[plugin.id] ?: InstallStep.Idle,
+                                settingsSourceId = null,
+                            ),
+                        )
+                    }
+                    availableSorted.values.flatten().forEach { plugin ->
                         add(
                             NovelExtensionItem(
                                 plugin = plugin,
                                 status = NovelExtensionItem.Status.Available,
                                 installStep = input.downloads[plugin.id] ?: InstallStep.Idle,
-                                hasSettings = plugin.hasSettings,
+                                settingsSourceId = null,
                                 repoSourceCount = repoCounts[plugin.id] ?: 1,
                             ),
                         )
                     }
                 }
 
-                Triple(items, updateIds.size, availableByLanguage.keys.toList())
+                Triple(items, updateIds.size, availableSorted.keys.toList())
             }
                 .collectLatest { (items, updatesCount, availableLanguages) ->
                     sourcePreferences.novelExtensionUpdatesCount().set(updatesCount)
@@ -220,6 +256,20 @@ class NovelExtensionsScreenModel(
         currentDownloads.update { it - plugin.id }
     }
 
+    fun diagnosticFor(plugin: NovelPlugin): String {
+        return (lastDiagnostics.value[plugin.id] ?: buildDiagnostic(plugin, null)).format()
+    }
+
+    fun shareApk(plugin: NovelPlugin) {
+        screenModelScope.launch {
+            apkFileStore.share(context, plugin.packageNameForDiagnostic())
+        }
+    }
+
+    fun installerCompatibilityDiagnostic(): String {
+        return ExtensionInstallDiagnostic.getInstallerDiagnosticString(context, basePreferences)
+    }
+
     fun updateAllExtensions() {
         screenModelScope.launchIO {
             state.value.items
@@ -250,17 +300,61 @@ class NovelExtensionsScreenModel(
             addDownloadState(installed, InstallStep.Installing)
             try {
                 extensionManager.replacePluginFromRepo(installed, replacement)
+                clearDiagnostic(installed)
                 addDownloadState(installed, InstallStep.Installed)
                 removeDownloadState(installed)
             } catch (e: CancellationException) {
                 removeDownloadState(installed)
                 throw e
             } catch (e: Throwable) {
+                val diagnostic = buildDiagnostic(replacement, e)
+                lastDiagnostics.update { it + (installed.id to diagnostic) }
                 logcat(LogPriority.WARN, e) {
-                    "Failed to reinstall novel plugin ${installed.id} from ${replacement.repoUrl}"
+                    "Failed to reinstall novel plugin ${installed.id} from ${replacement.repoUrl}\n${diagnostic.format()}"
                 }
                 addDownloadState(installed, InstallStep.Error)
             }
+        }
+    }
+
+    private fun buildDiagnostic(plugin: NovelPlugin, failure: Throwable?): ExtensionInstallDiagnostic {
+        return ExtensionInstallDiagnostic.forNovelPlugin(
+            context = context,
+            basePreferences = basePreferences,
+            packageName = plugin.packageNameForDiagnostic(),
+            displayName = plugin.name,
+            repoUrl = plugin.repoUrl,
+            assetUrl = plugin.assetUrlForDiagnostic(),
+            isKotlinExtension = plugin.isKotlinExtensionForDiagnostic(),
+            failure = failure,
+        )
+    }
+
+    private fun clearDiagnostic(plugin: NovelPlugin) {
+        lastDiagnostics.update { it - plugin.id }
+    }
+
+    private fun NovelPlugin.packageNameForDiagnostic(): String {
+        return when (this) {
+            is NovelPlugin.Available -> pkgName ?: id
+            is NovelPlugin.Installed -> pkgName ?: id
+            is NovelPlugin.Untrusted -> pkgName
+        }
+    }
+
+    private fun NovelPlugin.assetUrlForDiagnostic(): String {
+        return when (this) {
+            is NovelPlugin.Available -> apkUrl ?: url
+            is NovelPlugin.Installed -> apkUrl ?: url
+            is NovelPlugin.Untrusted -> url
+        }
+    }
+
+    private fun NovelPlugin.isKotlinExtensionForDiagnostic(): Boolean {
+        return when (this) {
+            is NovelPlugin.Available -> isKotlinExtension
+            is NovelPlugin.Installed -> isKotlinExtension
+            is NovelPlugin.Untrusted -> isKotlinExtension
         }
     }
 
@@ -286,6 +380,18 @@ class NovelExtensionsScreenModel(
         }
     }
 
+    fun uninstallExtension(plugin: NovelPlugin.Untrusted) {
+        screenModelScope.launchIO {
+            extensionManager.uninstallPlugin(plugin)
+        }
+    }
+
+    fun trust(extension: NovelPlugin.Untrusted) {
+        screenModelScope.launchIO {
+            extensionManager.trustPlugin(extension)
+        }
+    }
+
     private fun addDownloadState(plugin: NovelPlugin, installStep: InstallStep) {
         currentDownloads.update { it + Pair(plugin.id, installStep) }
     }
@@ -298,13 +404,19 @@ class NovelExtensionsScreenModel(
         addDownloadState(plugin, InstallStep.Installing)
         try {
             extensionManager.installPlugin(plugin)
+            clearDiagnostic(plugin)
             addDownloadState(plugin, InstallStep.Installed)
             removeDownloadState(plugin)
         } catch (e: CancellationException) {
             removeDownloadState(plugin)
             throw e
         } catch (e: Throwable) {
-            logcat(LogPriority.WARN, e) { "Failed to install novel plugin ${plugin.id}" }
+            val reason = e.message ?: e::class.simpleName.orEmpty()
+            val diagnostic = buildDiagnostic(plugin, e)
+            lastDiagnostics.update { it + (plugin.id to diagnostic) }
+            logcat(LogPriority.WARN, e) {
+                "Failed to install novel plugin ${plugin.id}: $reason\n${diagnostic.format()}"
+            }
             addDownloadState(plugin, InstallStep.Error)
         }
     }
@@ -334,6 +446,7 @@ class NovelExtensionsScreenModel(
         val installed: List<NovelPlugin.Installed>,
         val installedSources: List<eu.kanade.tachiyomi.novelsource.NovelSource>,
         val available: List<NovelPlugin.Available>,
+        val untrusted: List<NovelPlugin.Untrusted>,
     )
 
     private data class ListingSourceState(
@@ -341,6 +454,7 @@ class NovelExtensionsScreenModel(
         val installed: List<NovelPlugin.Installed>,
         val installedSources: List<eu.kanade.tachiyomi.novelsource.NovelSource>,
         val available: List<NovelPlugin.Available>,
+        val untrusted: List<NovelPlugin.Untrusted>,
     )
 }
 
@@ -348,17 +462,27 @@ data class NovelExtensionItem(
     val plugin: NovelPlugin,
     val status: Status,
     val installStep: InstallStep,
-    val hasSettings: Boolean,
+    val settingsSourceId: Long?,
     val repoSourceCount: Int = 1,
     val hasUpdate: Boolean = false,
     val hasRepoUpdate: Boolean = false,
     val repoDisplayName: String? = null,
 ) {
+    val hasSettings: Boolean
+        get() = settingsSourceId != null
+
     sealed interface Status {
         data object UpdateAvailable : Status
         data object Installed : Status
+        data object Untrusted : Status
         data object Available : Status
     }
+}
+
+private fun NovelPlugin.Installed.settingsSourceId(
+    sourceIdsByPluginId: Map<String, Long>,
+): Long? {
+    return sourceIdsByPluginId[id] ?: if (hasSettings) NovelPluginId.toSourceId(id) else null
 }
 
 private fun NovelPlugin.Installed.fallbackRepoDisplayName(

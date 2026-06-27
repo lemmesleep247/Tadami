@@ -358,6 +358,9 @@ class NovelJsSource internal constructor(
     }
 
     override suspend fun getSearchNovels(page: Int, query: String, filters: NovelFilterList): NovelsPage {
+        if (query.isBlank()) {
+            return getPopularNovels(page, filters)
+        }
         return runPluginSafe(
             operation = "searchNovels(page=$page)",
             defaultValue = NovelsPage(emptyList(), hasNextPage = false),

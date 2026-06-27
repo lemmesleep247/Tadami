@@ -496,6 +496,15 @@ object SettingsTreasuryScreen : SearchableSettings {
                 onApply = { uiPreferences.specialBackgroundStyle().set("shadow_realm") },
                 onDeactivate = { uiPreferences.specialBackgroundStyle().set("none") },
             ),
+            TreasuryPreset(
+                unlockableId = "special_background_event_horizon_library",
+                title = stringResource(AYMR.strings.treasury_bg_event_horizon_title),
+                description = stringResource(AYMR.strings.treasury_bg_event_horizon_desc),
+                accentColor = Color(0xFFFF6F00),
+                isActive = { specialBackgroundStyleKey == "event_horizon_library" },
+                onApply = { uiPreferences.specialBackgroundStyle().set("event_horizon_library") },
+                onDeactivate = { uiPreferences.specialBackgroundStyle().set("none") },
+            ),
         )
 
         val preferences = mutableListOf<Preference>()
@@ -733,14 +742,33 @@ object SettingsTreasuryScreen : SearchableSettings {
                                     badgeStyleKey = homeBadgeStyleKey,
                                 )
                                 if (profileTitleKey != "none") {
-                                    Text(
-                                        text = profileTitleDisplayName(profileTitleKey),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = colors.accent,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .border(
+                                                width = 1.dp,
+                                                brush = Brush.horizontalGradient(
+                                                    listOf(
+                                                        colors.accent,
+                                                        colors.accent.copy(alpha = 0.4f),
+                                                    ),
+                                                ),
+                                                shape = RoundedCornerShape(6.dp),
+                                            )
+                                            .background(
+                                                color = colors.accent.copy(alpha = 0.07f),
+                                                shape = RoundedCornerShape(6.dp),
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                                    ) {
+                                        Text(
+                                            text = profileTitleDisplayName(profileTitleKey),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = colors.accent,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1633,6 +1661,12 @@ private fun TreasuryThemeSelector(
             rarity = AYMR.strings.treasury_exclusive_rarity_transcendent,
             tagline = AYMR.strings.treasury_tagline_nebula_tide,
             accentColor = TreasuryCyan,
+        ),
+        TreasuryExclusiveThemeSpec(
+            theme = AppTheme.EVENT_HORIZON,
+            rarity = AYMR.strings.treasury_exclusive_rarity_mythic,
+            tagline = AYMR.strings.treasury_tagline_event_horizon,
+            accentColor = Color(0xFFFF6F00),
         ),
     )
 
@@ -2737,6 +2771,7 @@ private fun getRewardIconResourceId(rewardId: String, context: android.content.C
         "special_background_trinity_constellation" -> "ic_reward_background_trinity_constellation"
         "special_background_deep_space_archive" -> "ic_reward_background_deep_space_archive"
         "special_background_shadow_realm" -> "ic_reward_background_shadow_realm"
+        "special_background_event_horizon_library" -> "ic_reward_background_event_horizon_library"
         else -> "ic_reward_$rewardId"
     }
 

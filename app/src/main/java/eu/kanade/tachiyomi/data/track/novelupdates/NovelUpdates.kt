@@ -20,6 +20,7 @@ import kotlinx.serialization.json.Json
 import logcat.LogPriority
 import okhttp3.FormBody
 import okhttp3.Headers
+import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.track.novel.interactor.InsertNovelTrack
@@ -240,15 +241,7 @@ class NovelUpdates(id: Long) : BaseTracker(id, "NovelUpdates"), MangaTracker {
     override suspend fun register(item: MangaTrack, mangaId: Long) {
         item.manga_id = mangaId
         try {
-            bind(item, false)
-            if (item.status == PLAN_TO_READ) {
-                item.status = READING
-            }
-            logcat(LogPriority.DEBUG) {
-                "NovelUpdates register: after bind, remote_id=${item.remote_id}, status=${item.status}, calling update()"
-            }
-            update(item)
-            logcat(LogPriority.DEBUG) { "NovelUpdates register: update() completed, saving to DB" }
+            bind(item, hasReadChapters = item.last_chapter_read > 0.0)
             item.toNovelTrack(idRequired = false)?.let { insertTrack.await(it) }
         } catch (e: Throwable) {
             logcat(LogPriority.ERROR, e) { "NovelUpdates register failed" }
@@ -379,6 +372,61 @@ class NovelUpdates(id: Long) : BaseTracker(id, "NovelUpdates"), MangaTracker {
 
     override suspend fun login(username: String, password: String) {
         saveCredentials(username, password)
+    }
+
+    override suspend fun setRemoteMangaStatus(track: MangaTrack, status: Long) {
+        track.status = status
+        if (track.status == getCompletionStatus() && track.total_chapters != 0L) {
+            track.last_chapter_read = track.total_chapters.toDouble()
+        }
+        updateRemoteNovel(track)
+    }
+
+    override suspend fun setRemoteLastChapterRead(track: MangaTrack, chapterNumber: Int) {
+        if (track.last_chapter_read == 0.0 &&
+            track.last_chapter_read < chapterNumber &&
+            track.status != getRereadingStatus()
+        ) {
+            track.status = getReadingStatus()
+        }
+        track.last_chapter_read = chapterNumber.toDouble()
+        if (track.total_chapters != 0L &&
+            track.last_chapter_read.toLong() == track.total_chapters
+        ) {
+            track.status = getCompletionStatus()
+            track.finished_reading_date = System.currentTimeMillis()
+        }
+        updateRemoteNovel(track)
+    }
+
+    override suspend fun setRemoteScore(track: MangaTrack, scoreString: String) {
+        track.score = indexToScore(getScoreList().indexOf(scoreString))
+        updateRemoteNovel(track)
+    }
+
+    override suspend fun setRemoteStartDate(track: MangaTrack, epochMillis: Long) {
+        track.started_reading_date = epochMillis
+        updateRemoteNovel(track)
+    }
+
+    override suspend fun setRemoteFinishDate(track: MangaTrack, epochMillis: Long) {
+        track.finished_reading_date = epochMillis
+        updateRemoteNovel(track)
+    }
+
+    override suspend fun setRemotePrivate(track: MangaTrack, private: Boolean) {
+        track.private = private
+        updateRemoteNovel(track)
+    }
+
+    private suspend fun updateRemoteNovel(track: MangaTrack): Unit = withIOContext {
+        try {
+            update(track)
+            track.toNovelTrack(idRequired = false)?.let { insertTrack.await(it) }
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to update remote NovelUpdates track data id=${track.id}" }
+            withUIContext { Injekt.get<Application>().toast(e.message) }
+        }
     }
 
     companion object {

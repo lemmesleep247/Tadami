@@ -37,8 +37,10 @@ import eu.kanade.tachiyomi.data.download.novel.NovelQueuedDownloadStatus
 import eu.kanade.tachiyomi.data.download.novel.NovelQueuedDownloadType
 import eu.kanade.tachiyomi.data.download.novel.NovelTranslatedDownloadFormat
 import eu.kanade.tachiyomi.data.download.novel.NovelTranslatedDownloadManager
+import eu.kanade.tachiyomi.data.export.novel.NovelEpubExportFailure
 import eu.kanade.tachiyomi.data.export.novel.NovelEpubExportOptions
 import eu.kanade.tachiyomi.data.export.novel.NovelEpubExportProgress
+import eu.kanade.tachiyomi.data.export.novel.NovelEpubExportResult
 import eu.kanade.tachiyomi.data.export.novel.NovelEpubExporter
 import eu.kanade.tachiyomi.data.suggestions.SuggestionCoordinator
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
@@ -130,7 +132,6 @@ import tachiyomi.domain.track.novel.model.NovelTrack
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.io.File
 import java.time.Instant
 import java.util.LinkedHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -1022,18 +1023,22 @@ class NovelScreenModel(
 
             var downloadedIds = emptySet<Long>()
 
-            val cachedIds = downloadCache?.getDownloadedChapterIds(state.novel.id)
+            val cachedIds = if (deferFilesystemFallback) {
+                downloadCache?.getDownloadedChapterIds(state.novel.id)
+            } else {
+                null
+            }
             if (cachedIds != null) {
                 downloadedIds = cachedIds.intersect(state.chapters.map { it.id }.toSet())
                 logcat(LogPriority.DEBUG) {
                     "Novel downloaded-state sync: novel=${state.novel.id}, from_cache=true, count=${downloadedIds.size}"
                 }
             } else {
-                if (deferFilesystemFallback) {
-                    logcat(LogPriority.DEBUG) {
-                        "Novel downloaded-state sync: novel=${state.novel.id}, cache_miss=true, deferred_filesystem=true"
-                    }
-                    return@launchIO
+                // Cache miss: always fall back to a filesystem scan so that downloads present on
+                // disk (e.g. under legacy/STABLE_ID folder schemes) are re-indexed and synced into
+                // the app instead of being silently skipped.
+                logcat(LogPriority.DEBUG) {
+                    "Novel downloaded-state sync: novel=${state.novel.id}, cache_miss=true, filesystem_fallback=true, deferred=$deferFilesystemFallback"
                 }
                 val elapsed = measureTimeMillis {
                     downloadedIds = resolveDownloadedChapterIds(state.novel, state.chapters)
@@ -1961,7 +1966,8 @@ class NovelScreenModel(
         screenModelScope.launchIO {
             val added = enqueueOriginal(state.novel, listOf(chapter))
             notifyQueueStarted(added)
-            syncDownloadedState(deferFilesystemFallback = false)
+            // ponytail: queue state already updates the download icons; avoid an immediate SAF scan.
+            syncDownloadedState(deferFilesystemFallback = true)
         }
     }
 
@@ -1976,7 +1982,8 @@ class NovelScreenModel(
             val added = enqueueOriginal(state.novel, selectedChapters)
             notifyQueueStarted(added)
             toggleAllSelection(false)
-            syncDownloadedState(deferFilesystemFallback = false)
+            // ponytail: queue state already updates the download icons; avoid an immediate SAF scan.
+            syncDownloadedState(deferFilesystemFallback = true)
         }
     }
 
@@ -1997,7 +2004,8 @@ class NovelScreenModel(
         screenModelScope.launchIO {
             val added = enqueueOriginal(state.novel, chaptersToDownload)
             notifyQueueStarted(added)
-            syncDownloadedState(deferFilesystemFallback = false)
+            // ponytail: queue state already updates the download icons; avoid an immediate SAF scan.
+            syncDownloadedState(deferFilesystemFallback = true)
         }
     }
 
@@ -2024,7 +2032,8 @@ class NovelScreenModel(
 
         val added = NovelDownloadQueueManager.enqueueOriginal(state.novel, chapters)
         notifyQueueStarted(added)
-        syncDownloadedState(deferFilesystemFallback = false)
+        // ponytail: queue state already updates the download icons; avoid an immediate SAF scan.
+        syncDownloadedState(deferFilesystemFallback = true)
         return added
     }
 
@@ -2269,8 +2278,8 @@ class NovelScreenModel(
         includeCustomCss: Boolean,
         includeCustomJs: Boolean,
         onProgress: (NovelEpubExportProgress) -> Unit = {},
-    ): File? {
-        val state = successState ?: return null
+    ): NovelEpubExportResult {
+        val state = successState ?: return NovelEpubExportResult.Failure(NovelEpubExportFailure.UNKNOWN)
         val readerSettings = resolveReaderSettings(state.novel.source)
         val stylesheet = NovelEpubStyleBuilder.buildStylesheet(
             settings = readerSettings,
@@ -2286,7 +2295,7 @@ class NovelScreenModel(
         )
 
         return withContext(Dispatchers.IO) {
-            novelEpubExporter.export(
+            novelEpubExporter.exportWithResult(
                 novel = state.novel,
                 chapters = state.chapters,
                 options = NovelEpubExportOptions(
@@ -2296,6 +2305,7 @@ class NovelScreenModel(
                     destinationTreeUri = destinationTreeUri.trim().ifBlank { null },
                     stylesheet = stylesheet,
                     javaScript = javaScript,
+                    failOnMissingChapters = downloadedOnly,
                 ),
                 onProgress = onProgress,
             )

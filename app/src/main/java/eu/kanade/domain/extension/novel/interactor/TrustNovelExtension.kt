@@ -10,12 +10,19 @@ class TrustNovelExtension(
     private val novelExtensionRepoRepository: NovelExtensionRepoRepository,
     private val preferences: SourcePreferences,
 ) {
-    suspend fun isTrusted(pkgInfo: PackageInfo, fingerprints: List<String>): Boolean {
-        val trustedFingerprints = novelExtensionRepoRepository.getAll()
+    suspend fun getTrustedFingerprints(): Set<String> {
+        return novelExtensionRepoRepository.getAll()
             .map { it.signingKeyFingerprint }
             .toHashSet()
+    }
+
+    fun isTrusted(pkgInfo: PackageInfo, fingerprints: List<String>, trustedFingerprints: Set<String>): Boolean {
         val key = "${pkgInfo.packageName}:${PackageInfoCompat.getLongVersionCode(pkgInfo)}:${fingerprints.last()}"
         return trustedFingerprints.any { fingerprints.contains(it) } || key in preferences.trustedExtensions().get()
+    }
+
+    suspend fun isTrusted(pkgInfo: PackageInfo, fingerprints: List<String>): Boolean {
+        return isTrusted(pkgInfo, fingerprints, getTrustedFingerprints())
     }
 
     fun trust(pkgName: String, versionCode: Long, signatureHash: String) {

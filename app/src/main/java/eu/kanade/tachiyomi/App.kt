@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -32,9 +33,12 @@ import dev.mihon.injekt.patchInjekt
 import eu.kanade.domain.DomainModule
 import eu.kanade.domain.SYDomainModule
 import eu.kanade.domain.base.BasePreferences
+import eu.kanade.domain.tutorial.TutorialPreferences
+import eu.kanade.domain.tutorial.model.TutorialMode
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.domain.ui.model.setAppCompatDelegateThemeMode
 import eu.kanade.presentation.achievement.components.AchievementBannerManager
+import eu.kanade.presentation.tutorial.CoachTipRegistry
 import eu.kanade.tachiyomi.crash.CrashActivity
 import eu.kanade.tachiyomi.crash.GlobalExceptionHandler
 import eu.kanade.tachiyomi.data.coil.AnimeCoverKeyer
@@ -62,6 +66,7 @@ import eu.kanade.tachiyomi.data.notification.Notifications
 import eu.kanade.tachiyomi.data.updater.AppUpdateFileManager
 import eu.kanade.tachiyomi.di.AppModule
 import eu.kanade.tachiyomi.di.PreferenceModule
+import eu.kanade.tachiyomi.extension.installer.PendingApkInstallStore
 import eu.kanade.tachiyomi.extension.novel.NovelPluginSourceFactory
 import eu.kanade.tachiyomi.extension.novel.runtime.NovelRuntimeCacheTrimCallbacks
 import eu.kanade.tachiyomi.network.NetworkHelper
@@ -113,6 +118,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
 
     private val disableIncognitoReceiver = DisableIncognitoReceiver()
     private val achievementScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     @SuppressLint("LaunchActivityFromNotification")
     @OptIn(DelicateCoilApi::class)
@@ -133,25 +139,36 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         }
 
         // Avoid potential crashes
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val isMainProcess = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val process = getProcessName()
             if (packageName != process) WebView.setDataDirectorySuffix(process)
+            packageName == process
+        } else {
+            true
+        }
+
+        // Warm up the WebView default user agent on the main thread before any source loads.
+        // Some sources call WebSettings.getDefaultUserAgent() while being constructed on a
+        // background thread. If Chromium needs the main thread at the same time, startup can
+        // stall behind the splash.
+        if (isMainProcess) {
+            try {
+                WebSettings.getDefaultUserAgent(this)
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR) { "Failed to warm up WebView user agent: ${e.message}" }
+            }
         }
 
         Injekt.importModule(PreferenceModule(this))
-        Injekt.importModule(AppModule(this))
+        // Register domain interactors before app managers. Some app managers can be touched by
+        // async platform callbacks during AppModule registration, so their domain dependencies
+        // must already exist in Injekt.
         Injekt.importModule(DomainModule())
         // SY -->
         Injekt.importModule(SYDomainModule())
         // SY <--
+        Injekt.importModule(AppModule(this))
         SingletonImageLoader.setUnsafe { context -> newImageLoader(context) }
-
-        // Register memory-pressure callback that trims novel plugin runtime caches
-        registerComponentCallbacks(
-            NovelRuntimeCacheTrimCallbacks(
-                sourceFactory = Injekt.get<NovelPluginSourceFactory>(),
-            ),
-        )
 
         Handler(Looper.getMainLooper()).post {
             achievementScope.launch {
@@ -165,6 +182,13 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
                     this@App.systemLogcat(LogPriority.ERROR, error) { "App update cleanup failed" }
                 }
             }
+
+            // Register memory-pressure callback that trims novel plugin runtime caches
+            registerComponentCallbacks(
+                NovelRuntimeCacheTrimCallbacks(
+                    sourceFactory = Injekt.get<NovelPluginSourceFactory>(),
+                ),
+            )
         }
 
         setupNotificationChannels()
@@ -321,6 +345,19 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
         ) {
             pendingUpdatedChangelogPreviousVersionCode.set(oldVersionCode)
         }
+
+        if (oldVersionCode > 0) {
+            if (!basePreferences.shownOnboardingFlow().get()) {
+                basePreferences.shownOnboardingFlow().set(true)
+                val tutorialPreferences = Injekt.get<TutorialPreferences>()
+                tutorialPreferences.tutorialMode().set(TutorialMode.OFF)
+                tutorialPreferences.tourCompleted().set(true)
+                tutorialPreferences.shownTips().set(
+                    CoachTipRegistry.tips.map { it.id }.toSet(),
+                )
+            }
+        }
+
         logcat { "Migration from $oldVersionCode to ${BuildConfig.VERSION_CODE}" }
         Migrator.initialize(
             old = oldVersionCode,
@@ -391,6 +428,9 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
     override fun onStart(owner: LifecycleOwner) {
         SecureActivityDelegate.onApplicationStart()
         sessionManager.onSessionStart()
+        applicationScope.launch {
+            PendingApkInstallStore(basePreferences).resumeIfPermissionGranted(this@App)
+        }
         val libraryPreferences = Injekt.get<tachiyomi.domain.library.service.LibraryPreferences>()
         val autoUpdateInterval = libraryPreferences.autoUpdateInterval().get()
         if (autoUpdateInterval == -1) {

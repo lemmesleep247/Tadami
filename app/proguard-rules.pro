@@ -40,6 +40,22 @@
 # WorkManager/Room use reflection for the generated database implementation in release builds.
 -keep class * extends androidx.room.RoomDatabase { <init>(); }
 
+# Extension loading is a dynamic ClassLoader seam. Keep loaders non-optimized so
+# release builds don't diverge from debug through R8 lambda merging/specialization
+# around reflective source instantiation and fallback class loaders.
+-keep class eu.kanade.tachiyomi.extension.manga.util.MangaExtensionLoader { *; }
+-keep class eu.kanade.tachiyomi.extension.manga.util.MangaExtensionLoader$* { *; }
+-keep class eu.kanade.tachiyomi.extension.anime.util.AnimeExtensionLoader { *; }
+-keep class eu.kanade.tachiyomi.extension.anime.util.AnimeExtensionLoader$* { *; }
+-keep class eu.kanade.tachiyomi.extension.novel.kotlin.KotlinNovelExtensionSupport { *; }
+-keep class eu.kanade.tachiyomi.extension.novel.kotlin.KotlinNovelExtensionSupport$* { *; }
+-keep class eu.kanade.tachiyomi.util.system.ChildFirstPathClassLoader { *; }
+
+# Novel Kotlin extensions are dynamically loaded and cast to host-side source APIs.
+# Keep the extension-facing API stable in release/minified builds.
+-keep class eu.kanade.tachiyomi.novelsource.** { *; }
+-keep class eu.kanade.tachiyomi.source.novel.** { *; }
+
 # From extensions-lib
 -keep,allowoptimization class eu.kanade.tachiyomi.network.interceptor.RateLimitInterceptorKt { public protected *; }
 -keep,allowoptimization class eu.kanade.tachiyomi.network.interceptor.SpecificHostRateLimitInterceptorKt { public protected *; }
@@ -202,3 +218,17 @@
 -keep class eu.kanade.presentation.reader.novel.PageTurnPageRendererKt$* { *; }
 -keep class eu.kanade.presentation.reader.novel.NovelReaderSystemUiPolicyKt { *; }
 -keep class eu.kanade.presentation.reader.novel.NovelReaderSystemUiPolicyKt$* { *; }
+
+# TorrServer / torrent streaming
+# Keep public torrent extension API and core TorrServer models stable for
+# extension calls, kotlinx.serialization, and native TorrServer bridge usage.
+-keep,allowoptimization class eu.kanade.tachiyomi.torrentutils.** { public protected *; }
+-keep,allowoptimization class aniyomi.core.common.torrent.** { public protected *; }
+-keep,allowoptimization class aniyomi.core.common.torrent.model.** { public protected *; }
+-keepclassmembers class aniyomi.core.common.torrent.model.** {
+    *** Companion;
+}
+-keepclasseswithmembers class aniyomi.core.common.torrent.model.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-dontwarn xyz.secozzi.torrserver.**

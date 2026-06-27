@@ -19,8 +19,8 @@ android {
     defaultConfig {
         applicationId = "com.tadami.aurora"
 
-        versionCode = 178
-        versionName = "0.52.5"
+        versionCode = 182
+        versionName = "0.54"
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")
         buildConfigField("String", "COMMIT_SHA", "\"${getGitSha()}\"")
@@ -117,6 +117,7 @@ android {
                 "libffmpegkit_abidetect",
                 "libffmpegkit",
                 "libimagedecoder",
+                "liblibrary",
                 "libmpv",
                 "libplayer",
                 "libpostproc",
@@ -124,6 +125,7 @@ android {
                 "libsqlite3x",
                 "libswresample",
                 "libswscale",
+                "libtorrserver",
                 "libxml2",
             )
                 .map { "**/$it.so" }
@@ -257,6 +259,8 @@ dependencies {
     implementation(androidx.splashscreen)
     implementation(androidx.recyclerview)
     implementation(androidx.viewpager)
+    implementation(androidx.localbroadcastmanager)
+    implementation(androidx.documentfile)
     implementation(androidx.profileinstaller)
     implementation(androidx.webkit)
     implementation(aniyomilibs.mediasession)
@@ -335,6 +339,7 @@ dependencies {
     testRuntimeOnly(libs.junitVintageEngine)
     testRuntimeOnly(libs.conscrypt.openjdk.uber)
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.epubcheck)
 
     // For detecting memory leaks; see https://square.github.io/leakcanary/
     // debugImplementation(libs.leakcanary.android)
@@ -358,6 +363,8 @@ dependencies {
     // FFmpeg-kit
     implementation(aniyomilibs.ffmpeg.kit)
     implementation(aniyomilibs.arthenica.smartexceptions)
+    // TorrServer
+    implementation(aniyomilibs.torrserver)
     // seeker seek bar
     implementation(aniyomilibs.seeker)
     // true type parser

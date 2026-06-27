@@ -19,6 +19,31 @@
     <string name="relative_time_now">Now</string>
     <string name="action_stop">Stop</string>
     <string name="action_continue">Continue</string>
+
+    <!-- TorrServer / torrent streaming -->
+    <string name="pref_player_torrents">Torrents</string>
+    <string name="pref_player_torrents_summary">Experimental TorrServer-based torrent streaming</string>
+    <string name="pref_player_torrents_enable">Enable TorrServer</string>
+    <string name="pref_player_torrents_notice">Torrent streaming notice</string>
+    <string name="pref_player_torrents_notice_text">Torrent streaming uses peer-to-peer networking. Only stream content you are legally allowed to access and share. Your IP address may be visible to other peers.</string>
+    <string name="pref_player_torrents_notice_footer">By continuing, you accept responsibility for how this feature is used.</string>
+    <string name="pref_player_torrents_port">TorrServer port</string>
+    <string name="pref_player_torrents_port_summary">Use 0 to let the system choose a dynamic port</string>
+    <string name="pref_player_torrents_port_error">Port must be between 0 and 65535</string>
+    <string name="pref_player_torrents_trackers">Trackers</string>
+    <string name="pref_player_torrents_trackers_reset">Reset trackers</string>
+    <string name="pref_player_torrents_proxy_mode">Proxy mode</string>
+    <string name="pref_player_torrents_proxy_mode_none">None</string>
+    <string name="pref_player_torrents_proxy_mode_tracker">Tracker</string>
+    <string name="pref_player_torrents_proxy_mode_peers">Peers</string>
+    <string name="pref_player_torrents_proxy_mode_full">Full</string>
+    <string name="pref_player_torrents_proxy_url">Proxy URL</string>
+    <string name="pref_player_torrents_proxy_url_dialog">Enter proxy URL</string>
+    <string name="pref_player_torrents_proxy_url_invalid_uri">Invalid proxy URL</string>
+    <string name="pref_player_torrents_proxy_url_invalid_protocol">Unsupported proxy protocol</string>
+    <string name="torrentserver_is_running">TorrServer is running</string>
+    <string name="torrserver_disabled">TorrServer is disabled or unavailable</string>
+    <string name="dead_torrent">Torrent is unavailable or has no files</string>
     <!-- Changed from mihon -->
     <string name="manga">Manga</string>
     <string name="pref_library_summary">Categories, global update, chapter/episode swipe</string>
@@ -455,6 +480,7 @@
     <string name="theme_onyx_gold">Onyx Regalia</string>
     <string name="theme_sakura_noir">Sakura Eclipse</string>
     <string name="theme_nebula_tide">Astral Tide</string>
+    <string name="theme_event_horizon">Event Horizon</string>
     <string name="pref_library_rows">List size</string>
     <!-- Reader section -->
     <string name="pref_preserve_reading_position">Preserve reading position on read chapters</string>
@@ -639,8 +665,27 @@
     <string name="novel_reader_auto_scroll_speed">Auto-scroll speed</string>
     <string name="reader_auto_scroll_speed_value">%1$s: %2$d</string>
     <string name="reader_auto_scroll_page_time">~%1$d sec/page</string>
+    <string name="novel_reader_auto_scroll_page_delay">Page turn delay</string>
+    <string name="reader_auto_scroll_page_time_fixed">%1$d sec/page</string>
     <string name="novel_reader_auto_scroll_interval">Auto-scroll interval (sec)</string>
     <string name="novel_reader_auto_scroll_offset">Auto-scroll offset (px)</string>
+    <string name="novel_reader_auto_scroll_chapter_end_behavior">Auto-scroll chapter end behavior</string>
+    <string name="novel_reader_auto_scroll_end_pause">Chapter end pause</string>
+    <string name="novel_reader_auto_scroll_end_pause_value">%1$d sec</string>
+    <string name="novel_reader_auto_scroll_adaptive_delay">Adjust delay based on page text length</string>
+    <string name="novel_reader_auto_scroll_adaptive_delay_summary">Automatically scale page turn delay based on character count</string>
+    <string name="novel_reader_auto_scroll_chapter_end_stop">Stop at chapter end</string>
+    <string name="novel_reader_auto_scroll_chapter_end_advance_stop">Open next chapter and stop</string>
+    <string name="novel_reader_auto_scroll_chapter_end_continuous">Continuous reading</string>
+    <string name="novel_reader_auto_scroll_next_countdown">Next chapter in %1$d sec</string>
+    <string name="novel_reader_auto_scroll_next_static_eink">Opening next chapter...</string>
+    <string name="novel_reader_auto_scroll_next_chapter_named">Next: %1$s</string>
+    <string name="novel_reader_auto_scroll_go_now">Go now</string>
+    <string name="novel_reader_auto_scroll_stop_here">Stop</string>
+    <string name="novel_reader_auto_scroll_stay_here">Stay here</string>
+    <string name="novel_reader_auto_scroll_play_description">Start auto-scroll</string>
+    <string name="novel_reader_auto_scroll_pause_description">Pause auto-scroll</string>
+    <string name="novel_reader_auto_scroll_settings_description">Open auto-scroll settings</string>
     <string name="reader_auto_scroll_floating_button">Show floating control button</string>
     <string name="novel_reader_prefetch_next_chapter">Prefetch next chapter</string>
     <string name="novel_reader_prefetch_next_chapter_summary">Silently prefetch next chapter after reaching 50% progress</string>
@@ -1165,6 +1210,10 @@
     <string name="pref_track_on_add_library">Open track menu on adding to library</string>
     <string name="novel_trackers_title">Novel Trackers</string>
     <string name="novel_trackers_info">Use these services to track novel progress and reading lists.</string>
+    <string name="novel_list_mark_chapters_read_title">Mark chapters as read on NovelList</string>
+    <string name="novel_list_mark_chapters_read_summary">Automatically push novel chapter progress to NovelList.</string>
+    <string name="novel_list_sync_reading_list_title">Sync NovelList reading list</string>
+    <string name="novel_list_sync_reading_list_summary">Push NovelList status changes when you update tracking status.</string>
     <string name="novel_updates_use_custom_list_mapping_title">Use custom NovelUpdates list mapping</string>
     <string name="novel_updates_use_custom_list_mapping_summary">Map reading statuses to custom NovelUpdates lists.</string>
     <string name="novel_updates_configure_list_mapping_title">Configure NovelUpdates list mapping</string>
@@ -1798,7 +1847,7 @@
     <string name="aurora_no_description">No description</string>
 
     <!-- Metadata Integration -->
-    <string name="pref_category_metadata">Anime Metadata</string>
+    <string name="pref_category_metadata">Anime and Manga Metadata</string>
     <string name="pref_anime_metadata_source">Metadata source</string>
     <string name="pref_anime_metadata_source_summary">Source for anime posters, ratings, and status</string>
 
@@ -1899,6 +1948,7 @@
     <string name="treasury_tagline_onyx_gold">Black-diamond surfaces with royal gold and a ruby trophy accent</string>
     <string name="treasury_tagline_sakura_noir">Midnight sakura neon, plum noir cards, and jade hidden-hall glow</string>
     <string name="treasury_tagline_nebula_tide">Abyssal space blue with plasma cyan, violet gravity, and alien-lime sparks</string>
+    <string name="treasury_tagline_event_horizon">X-ray white controls, infrared event bands, cold lensing green, and cut-glass void surfaces</string>
     <!-- Treasury Vault hero -->
     <string name="treasury_vault_group_title">Aurora Vault</string>
     <string name="treasury_vault_header">AURORA TREASURY</string>
@@ -1958,6 +2008,8 @@
     <string name="treasury_bg_deep_space_archive_desc">Ancient folios drifting silently through the cosmic void.</string>
     <string name="treasury_bg_shadow_realm_title">Shadow Realm</string>
     <string name="treasury_bg_shadow_realm_desc">A swirling abyss where light and time lose their meaning.</string>
+    <string name="treasury_bg_event_horizon_title">Event Horizon Library</string>
+    <string name="treasury_bg_event_horizon_desc">A cinematic singularity scene with lensing rings, drifting archive shards, parallax gates, and restrained motion.</string>
     <!-- Treasury misc -->
     <string name="treasury_nickname_preview">Nickname Preview</string>
     <string name="treasury_default_user_name">User Name</string>
@@ -2236,6 +2288,8 @@
     <string name="achievement_cross_media_champion_gold_desc">Reach 2,000 chapters across manga, anime and novels</string>
     <string name="achievement_three_realms_collector_title">Three Realms Collector</string>
     <string name="achievement_three_realms_collector_desc">Build a library spanning manga, anime and novels</string>
+    <string name="achievement_event_horizon_cartographer_title">Event Horizon Cartographer</string>
+    <string name="achievement_event_horizon_cartographer_desc">Curate 12 manga, 12 anime, 12 novels, and 12 different sources</string>
     <string name="achievement_the_finisher_title">The Finisher</string>
     <string name="achievement_the_finisher_desc">Complete 50% of the titles you start</string>
     <string name="achievement_the_closer_title">The Closer</string>
@@ -2402,4 +2456,32 @@
     <string name="player_subtitle_translation_progress">%1$d%%, %2$d/%3$d cues</string>
     <string name="player_subtitle_translation_from_to">%1$s → %2$s</string>
 
+    <!-- Anixart import -->
+    <string name="anixart_import_title">Import from Anixart</string>
+    <string name="anixart_import_summary">Import your bookmarks from an Anixart CSV export</string>
+    <string name="anixart_import_pick_file">Select CSV file</string>
+    <string name="anixart_import_pick_file_hint">In Anixart: Data Management → Export Bookmarks → CSV</string>
+    <string name="anixart_import_select_sources">Select sources to match against</string>
+    <string name="anixart_import_searching">Matching titles…</string>
+    <string name="anixart_import_review_title">Review matches</string>
+    <string name="anixart_import_group_exact">Exact matches</string>
+    <string name="anixart_import_group_review">Needs review</string>
+    <string name="anixart_import_group_nomatch">Not found</string>
+    <string name="anixart_import_action_import">Import (%1$d)</string>
+    <string name="anixart_import_importing">Importing…</string>
+    <string name="anixart_import_done">Import complete</string>
+    <string name="anixart_import_report">Added %1$d, already in library %2$d, failed %3$d</string>
+    <string name="anixart_import_error_invalid">This file is not a valid Anixart CSV export</string>
+    <string name="anixart_import_empty">No entries found in the file</string>
+    <string name="anixart_import_legal_notice">Only import bookmarks you are legally entitled to access. This tool only reads a file you exported yourself.</string>
+    <string name="anixart_import_category_mapping_title">Category Mapping</string>
+    <string name="anixart_import_status_watching">Watching</string>
+    <string name="anixart_import_status_completed">Completed</string>
+    <string name="anixart_import_status_plan_to_watch">Plan to Watch</string>
+    <string name="anixart_import_status_dropped">Dropped</string>
+    <string name="anixart_import_status_favorite">Starred (Favorites)</string>
+    <string name="anixart_import_category_none">Default Library (No Category)</string>
+    <string name="anixart_import_change_match">Change Match</string>
+    <string name="anixart_import_score_match">Match score: %1$d%%</string>
+    <string name="anixart_import_preference_group_title">Import</string>
 </resources>

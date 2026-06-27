@@ -1,10 +1,8 @@
 package eu.kanade.tachiyomi.extension.novel.kotlin
 
 import android.annotation.SuppressLint
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
@@ -14,20 +12,26 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
-import android.provider.Settings
-import androidx.core.content.ContextCompat
 import androidx.core.content.pm.PackageInfoCompat
 import androidx.preference.PreferenceScreen
 import dalvik.system.PathClassLoader
+import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.extension.novel.interactor.TrustNovelExtension
 import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.tachiyomi.extension.InstallStep
+import eu.kanade.tachiyomi.extension.installer.ApkExtensionKind
+import eu.kanade.tachiyomi.extension.installer.ApkInstallRequest
+import eu.kanade.tachiyomi.extension.installer.ExtensionApkFileStore
+import eu.kanade.tachiyomi.extension.installer.PendingApkInstallStore
+import eu.kanade.tachiyomi.extension.installer.UnifiedApkExtensionInstaller
+import eu.kanade.tachiyomi.extension.installer.toApkInstallBackend
+import eu.kanade.tachiyomi.extension.novel.runtime.NovelPluginIdentitySource
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.novelsource.ConfigurableNovelSource
 import eu.kanade.tachiyomi.novelsource.NovelCatalogueSource
 import eu.kanade.tachiyomi.novelsource.NovelSource
 import eu.kanade.tachiyomi.novelsource.NovelSourceFactory
-import eu.kanade.tachiyomi.novelsource.model.NovelFilter
 import eu.kanade.tachiyomi.novelsource.model.NovelFilterList
 import eu.kanade.tachiyomi.novelsource.model.NovelsPage
 import eu.kanade.tachiyomi.novelsource.model.SNovel
@@ -36,8 +40,6 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.MangaSource
 import eu.kanade.tachiyomi.source.SourceFactory
-import eu.kanade.tachiyomi.source.model.Filter
-import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -45,15 +47,15 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.novel.NovelSiteSource
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.lang.Hash
+import eu.kanade.tachiyomi.util.storage.copyAndSetReadOnlyTo
 import eu.kanade.tachiyomi.util.storage.getUriCompat
 import eu.kanade.tachiyomi.util.system.ChildFirstPathClassLoader
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import logcat.LogPriority
 import okhttp3.OkHttpClient
 import rx.Observable
@@ -69,12 +71,18 @@ private const val INSTALL_TIMEOUT_MS = 5 * 60 * 1000L
 class KotlinNovelExtensionInstaller(
     private val context: Context,
     private val client: OkHttpClient,
+    private val basePreferences: BasePreferences,
+    private val unifiedInstaller: UnifiedApkExtensionInstaller,
 ) {
+    private val pendingInstallStore = PendingApkInstallStore(basePreferences)
+    private val apkFileStore = ExtensionApkFileStore(basePreferences)
+
     suspend fun install(plugin: NovelPlugin.Available): NovelPlugin.Installed {
         val apkUrl = plugin.apkUrl ?: plugin.url
+        val pkgName = plugin.pkgName ?: plugin.id
         val apkFile = withContext(Dispatchers.IO) {
             val safeName = plugin.id.replace(Regex("[^A-Za-z0-9_.-]"), "_")
-            val dir = File(context.externalCacheDir ?: context.cacheDir, "novel_kotlin_extensions")
+            val dir = File(context.cacheDir, "novel_kotlin_extensions")
             dir.mkdirs()
             val file = File(dir, "$safeName.apk")
             client.newCall(GET(apkUrl)).awaitSuccess().use { response ->
@@ -84,7 +92,31 @@ class KotlinNovelExtensionInstaller(
             }
             file
         }
-        awaitSystemInstall(plugin.pkgName ?: plugin.id, apkFile)
+
+        apkFileStore.save(
+            ExtensionApkFileStore.ApkFile(
+                packageName = pkgName,
+                displayName = plugin.name,
+                filePath = apkFile.absolutePath,
+                kind = ApkExtensionKind.NOVEL_KOTLIN,
+            ),
+        )
+
+        val installer = basePreferences.extensionInstaller().get()
+        val terminalStep = unifiedInstaller.install(
+            ApkInstallRequest(
+                id = pkgName,
+                packageName = pkgName,
+                displayName = plugin.name,
+                uri = apkFile.getUriCompat(context),
+                file = apkFile,
+                backend = installer.toApkInstallBackend(),
+                kind = ApkExtensionKind.NOVEL_KOTLIN,
+            ),
+        ).first { it.isCompleted() }
+        if (terminalStep != InstallStep.Installed) {
+            error("Failed to install Kotlin novel extension $pkgName using ${installer.name}: $terminalStep")
+        }
         return plugin.toInstalledKotlin()
     }
 
@@ -100,49 +132,6 @@ class KotlinNovelExtensionInstaller(
         }.onFailure {
             logcat(LogPriority.WARN, it) { "Failed to launch system uninstall for Kotlin novel extension $pkgName" }
         }
-    }
-
-    private suspend fun awaitSystemInstall(pkgName: String, apkFile: File) {
-        val installResult = CompletableDeferred<Unit>()
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent?) {
-                val action = intent?.action ?: return
-                if (action != Intent.ACTION_PACKAGE_ADDED && action != Intent.ACTION_PACKAGE_REPLACED) return
-                val installedPkgName = intent.data?.encodedSchemeSpecificPart ?: return
-                if (installedPkgName == pkgName) {
-                    installResult.complete(Unit)
-                }
-            }
-        }
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_PACKAGE_ADDED)
-            addAction(Intent.ACTION_PACKAGE_REPLACED)
-            addDataScheme("package")
-        }
-        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-        try {
-            installApk(apkFile)
-            withTimeout(INSTALL_TIMEOUT_MS) { installResult.await() }
-        } finally {
-            runCatching { context.unregisterReceiver(receiver) }
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    private fun installApk(apkFile: File) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
-            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                .setData(Uri.parse("package:${context.packageName}"))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                .let(context::startActivity)
-            throw IllegalStateException("Package install permission is required")
-        }
-
-        Intent(Intent.ACTION_INSTALL_PACKAGE)
-            .setDataAndType(apkFile.getUriCompat(context), APK_MIME)
-            .putExtra(Intent.EXTRA_RETURN_RESULT, false)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            .let(context::startActivity)
     }
 }
 
@@ -169,7 +158,7 @@ fun NovelPlugin.Available.toInstalledKotlin(): NovelPlugin.Installed {
 }
 
 data class KotlinNovelExtensionLoadResult(
-    val plugin: NovelPlugin.Installed,
+    val plugin: NovelPlugin,
     val sources: List<NovelSource>,
 )
 
@@ -194,6 +183,57 @@ object KotlinNovelExtensionLoader {
         (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES else 0)
 
     private fun getPrivateExtensionDir(context: Context) = File(context.filesDir, "novel_exts")
+
+    fun installPrivateExtensionFile(
+        context: Context,
+        file: File,
+        pkgName: String,
+    ): Boolean {
+        val pkgManager = context.packageManager
+        val archiveInfo = pkgManager.getPackageArchiveInfo(file.absolutePath, PACKAGE_FLAGS)
+            ?.takeIf { isPackageAnExtension(it) }
+            ?: run {
+                logcat(LogPriority.ERROR) { "File is not a Kotlin novel extension APK: ${file.absolutePath}" }
+                return false
+            }
+        if (archiveInfo.packageName != pkgName) {
+            logcat(LogPriority.ERROR) {
+                "Kotlin novel extension package mismatch: expected=$pkgName actual=${archiveInfo.packageName}"
+            }
+            return false
+        }
+
+        val privateExtensionDir = getPrivateExtensionDir(context)
+        if (!privateExtensionDir.exists() && !privateExtensionDir.mkdirs()) {
+            logcat(LogPriority.ERROR) { "Failed to create private Kotlin novel extension directory." }
+            return false
+        }
+
+        val target = File(privateExtensionDir, "$pkgName.$PRIVATE_EXTENSION_EXTENSION")
+        val part = File(privateExtensionDir, "$pkgName.$PRIVATE_EXTENSION_EXTENSION.part")
+        return try {
+            part.delete()
+            file.copyAndSetReadOnlyTo(part, overwrite = true)
+            if (target.exists() && !target.delete()) {
+                logcat(LogPriority.ERROR) {
+                    "Failed to replace existing private Kotlin novel extension file: ${target.absolutePath}"
+                }
+                part.delete()
+                return false
+            }
+            if (!part.renameTo(target)) {
+                part.copyTo(target, overwrite = true)
+                target.setReadOnly()
+                part.delete()
+            }
+            true
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to install private Kotlin novel extension file for $pkgName." }
+            part.delete()
+            target.delete()
+            false
+        }
+    }
 
     fun uninstallPrivateExtension(context: Context, pkgName: String) {
         File(getPrivateExtensionDir(context), "$pkgName.$PRIVATE_EXTENSION_EXTENSION").delete()
@@ -237,9 +277,13 @@ object KotlinNovelExtensionLoader {
                 selectExtensionPackage(sharedPkg, privatePkg)
             }
 
+        val trustedFingerprints = runBlocking {
+            trustExtension.getTrustedFingerprints()
+        }
+
         return runBlocking {
             extPkgs.map { extensionInfo ->
-                async { loadExtension(context, extensionInfo) }
+                async { loadExtension(context, extensionInfo, trustedFingerprints) }
             }.awaitAll().filterNotNull()
         }
     }
@@ -248,7 +292,11 @@ object KotlinNovelExtensionLoader {
         return getExtensionPackageInfoFromPkgName(context, pkgName) != null
     }
 
-    private suspend fun loadExtension(context: Context, extensionInfo: ExtensionInfo): KotlinNovelExtensionLoadResult? {
+    private suspend fun loadExtension(
+        context: Context,
+        extensionInfo: ExtensionInfo,
+        trustedFingerprints: Set<String>,
+    ): KotlinNovelExtensionLoadResult? {
         val pkgManager = context.packageManager
         val pkgInfo = extensionInfo.packageInfo
         val appInfo = pkgInfo.applicationInfo ?: return null
@@ -269,14 +317,37 @@ object KotlinNovelExtensionLoader {
             logcat(LogPriority.WARN) { "Kotlin novel extension $pkgName is not signed" }
             return null
         }
-        if (!trustExtension.isTrusted(pkgInfo, signatures)) {
-            logcat(LogPriority.WARN) { "Kotlin novel extension $pkgName is not trusted" }
-            return null
-        }
         val isNsfw = appInfo.metaData?.getInt(METADATA_NSFW) == 1
         if (!preferences.showNsfwSource().get() && isNsfw) {
             logcat(LogPriority.WARN) { "NSFW Kotlin novel extension $pkgName not allowed" }
             return null
+        }
+        val iconUrl = runCatching { saveIcon(context, pkgName, appInfo.loadIcon(pkgManager)) }
+            .onFailure { logcat(LogPriority.WARN, it) { "Failed to save Kotlin novel extension icon for $pkgName" } }
+            .getOrNull()
+        if (!trustExtension.isTrusted(pkgInfo, signatures, trustedFingerprints)) {
+            logcat(LogPriority.WARN) { "Kotlin novel extension $pkgName is not trusted" }
+            return KotlinNovelExtensionLoadResult(
+                plugin = NovelPlugin.Untrusted(
+                    id = pkgName,
+                    name = extName,
+                    site = "",
+                    lang = "",
+                    versionCode = versionCode,
+                    versionName = versionName,
+                    url = "",
+                    iconUrl = iconUrl,
+                    customJs = null,
+                    customCss = null,
+                    hasSettings = false,
+                    sha256 = "",
+                    repoUrl = "",
+                    pkgName = pkgName,
+                    signatureHash = signatures.last(),
+                    isKotlinExtension = true,
+                ),
+                sources = emptyList(),
+            )
         }
 
         val classLoader = try {
@@ -303,7 +374,7 @@ object KotlinNovelExtensionLoader {
                 instantiateSources(classLoader, appInfo.sourceDir, className, extName)
                     ?: return null
             }
-            .mapNotNull { it.asNovelSource() }
+            .mapNotNull { it.asNovelSource(pkgName) }
 
         if (sources.isEmpty()) {
             logcat(LogPriority.WARN) { "Kotlin novel extension $pkgName did not expose any compatible novel sources" }
@@ -317,9 +388,6 @@ object KotlinNovelExtensionLoader {
                 else -> "all"
             }
         }
-        val iconUrl = runCatching { saveIcon(context, pkgName, appInfo.loadIcon(pkgManager)) }
-            .onFailure { logcat(LogPriority.WARN, it) { "Failed to save Kotlin novel extension icon for $pkgName" } }
-            .getOrNull()
         val pluginSite = sources.asSequence()
             .mapNotNull { (it as? NovelSiteSource)?.siteUrl }
             .firstOrNull { it.isNotBlank() }
@@ -400,18 +468,18 @@ object KotlinNovelExtensionLoader {
         }
     }
 
-    private fun Any.asNovelSource(): NovelSource? {
+    private fun Any.asNovelSource(pluginId: String): NovelSource? {
         return when (this) {
-            is NovelSource -> this
+            is NovelSource -> this.withKotlinPluginIdentity(pluginId)
             is CatalogueSource -> if (this is ConfigurableSource) {
-                KotlinConfigurableCatalogueNovelSourceAdapter(this, this)
+                KotlinConfigurableCatalogueNovelSourceAdapter(this, this, pluginId)
             } else {
-                KotlinCatalogueNovelSourceAdapter(this)
+                KotlinCatalogueNovelSourceAdapter(this, pluginId)
             }
             is TachiyomiSource -> if (this is ConfigurableSource) {
-                KotlinConfigurableMangaNovelSourceAdapter(this)
+                KotlinConfigurableMangaNovelSourceAdapter(this, pluginId)
             } else {
-                KotlinMangaNovelSourceAdapter(this)
+                KotlinMangaNovelSourceAdapter(this, pluginId)
             }
             else -> null
         }
@@ -469,8 +537,8 @@ object KotlinNovelExtensionLoader {
     }
 
     private fun ApplicationInfo.fixBasePaths(apkPath: String) {
-        if (sourceDir == null) sourceDir = apkPath
-        if (publicSourceDir == null) publicSourceDir = apkPath
+        sourceDir = apkPath
+        publicSourceDir = apkPath
     }
 
     private data class ExtensionInfo(
@@ -479,12 +547,117 @@ object KotlinNovelExtensionLoader {
     )
 }
 
-private open class KotlinMangaNovelSourceAdapter(
-    protected val source: TachiyomiSource,
-) : NovelSource, NovelSiteSource {
+private fun NovelSource.withKotlinPluginIdentity(pluginId: String): NovelSource {
+    if (this is NovelPluginIdentitySource) return this
+    return when {
+        this is NovelCatalogueSource && this is ConfigurableNovelSource -> {
+            KotlinIdentityConfigurableCatalogueNovelSourceAdapter(this, this, pluginId)
+        }
+        this is NovelCatalogueSource -> KotlinIdentityCatalogueNovelSourceAdapter(this, pluginId)
+        this is ConfigurableNovelSource -> KotlinIdentityConfigurableNovelSourceAdapter(this, pluginId)
+        else -> KotlinIdentityBasicNovelSourceAdapter(this, pluginId)
+    }
+}
+
+private open class KotlinIdentityBasicNovelSourceAdapter(
+    protected val source: NovelSource,
+    override val pluginId: String,
+) : NovelSource, NovelSiteSource, NovelPluginIdentitySource {
     override val id: Long = source.id
     override val name: String = source.name
     override val lang: String = source.lang
+    override val isKotlinExtension: Boolean = true
+    override val siteUrl: String? = (source as? NovelSiteSource)?.siteUrl
+
+    override suspend fun getNovelDetails(novel: SNovel): SNovel = source.getNovelDetails(novel)
+
+    override suspend fun getChapterList(novel: SNovel): List<SNovelChapter> = source.getChapterList(novel)
+
+    override suspend fun getChapterText(chapter: SNovelChapter): String = source.getChapterText(chapter)
+
+    @Deprecated("Use the non-RxJava API instead.")
+    @Suppress("DEPRECATION")
+    override fun fetchNovelDetails(novel: SNovel): Observable<SNovel> = source.fetchNovelDetails(novel)
+
+    @Deprecated("Use the non-RxJava API instead.")
+    @Suppress("DEPRECATION")
+    override fun fetchChapterList(novel: SNovel): Observable<List<SNovelChapter>> = source.fetchChapterList(novel)
+
+    @Deprecated("Use the non-RxJava API instead.")
+    @Suppress("DEPRECATION")
+    override fun fetchChapterText(chapter: SNovelChapter): Observable<String> = source.fetchChapterText(chapter)
+}
+
+private open class KotlinIdentityCatalogueNovelSourceAdapter(
+    protected val catalogueSource: NovelCatalogueSource,
+    pluginId: String,
+) : KotlinIdentityBasicNovelSourceAdapter(catalogueSource, pluginId), NovelCatalogueSource {
+    override val supportsLatest: Boolean = catalogueSource.supportsLatest
+
+    override suspend fun getPopularNovels(page: Int): NovelsPage = catalogueSource.getPopularNovels(page)
+
+    override suspend fun getPopularNovels(page: Int, filters: NovelFilterList): NovelsPage {
+        return catalogueSource.getPopularNovels(page, filters)
+    }
+
+    override suspend fun getSearchNovels(page: Int, query: String, filters: NovelFilterList): NovelsPage {
+        return catalogueSource.getSearchNovels(page, query, filters)
+    }
+
+    override suspend fun getLatestUpdates(page: Int): NovelsPage = catalogueSource.getLatestUpdates(page)
+
+    override suspend fun getLatestUpdates(page: Int, filters: NovelFilterList): NovelsPage {
+        return catalogueSource.getLatestUpdates(page, filters)
+    }
+
+    override fun getFilterList(): NovelFilterList = catalogueSource.getFilterList()
+
+    @Deprecated("Use the non-RxJava API instead.")
+    @Suppress("DEPRECATION")
+    override fun fetchPopularNovels(page: Int): Observable<NovelsPage> {
+        return catalogueSource.fetchPopularNovels(page)
+    }
+
+    @Deprecated("Use the non-RxJava API instead.")
+    @Suppress("DEPRECATION")
+    override fun fetchSearchNovels(page: Int, query: String, filters: NovelFilterList): Observable<NovelsPage> {
+        return catalogueSource.fetchSearchNovels(page, query, filters)
+    }
+
+    @Deprecated("Use the non-RxJava API instead.")
+    @Suppress("DEPRECATION")
+    override fun fetchLatestUpdates(page: Int): Observable<NovelsPage> {
+        return catalogueSource.fetchLatestUpdates(page)
+    }
+}
+
+private class KotlinIdentityConfigurableNovelSourceAdapter(
+    source: ConfigurableNovelSource,
+    pluginId: String,
+) : KotlinIdentityBasicNovelSourceAdapter(source, pluginId), ConfigurableNovelSource {
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        (source as ConfigurableNovelSource).setupPreferenceScreen(screen)
+    }
+}
+
+private class KotlinIdentityConfigurableCatalogueNovelSourceAdapter(
+    catalogueSource: NovelCatalogueSource,
+    private val configurableSource: ConfigurableNovelSource,
+    pluginId: String,
+) : KotlinIdentityCatalogueNovelSourceAdapter(catalogueSource, pluginId), ConfigurableNovelSource {
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        configurableSource.setupPreferenceScreen(screen)
+    }
+}
+
+private open class KotlinMangaNovelSourceAdapter(
+    protected val source: TachiyomiSource,
+    override val pluginId: String,
+) : NovelSource, NovelSiteSource, NovelPluginIdentitySource {
+    override val id: Long = source.id
+    override val name: String = source.name
+    override val lang: String = source.lang
+    override val isKotlinExtension: Boolean = true
     override val siteUrl: String? = (source as? HttpSource)?.baseUrl
 
     override suspend fun getNovelDetails(novel: SNovel): SNovel {
@@ -505,7 +678,8 @@ private open class KotlinMangaNovelSourceAdapter(
 
 private open class KotlinConfigurableMangaNovelSourceAdapter(
     source: ConfigurableSource,
-) : KotlinMangaNovelSourceAdapter(source), ConfigurableNovelSource {
+    pluginId: String,
+) : KotlinMangaNovelSourceAdapter(source, pluginId), ConfigurableNovelSource {
     private val configurableSource: ConfigurableSource = source
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -513,9 +687,16 @@ private open class KotlinConfigurableMangaNovelSourceAdapter(
     }
 }
 
+internal fun CatalogueSource.asKotlinNovelCatalogueSource(pluginId: String): NovelCatalogueSource {
+    return KotlinCatalogueNovelSourceAdapter(this, pluginId)
+}
+
+private val filterAdapter: KotlinNovelFilterAdapter = KotlinNovelFilterAdapterImpl()
+
 private open class KotlinCatalogueNovelSourceAdapter(
     source: CatalogueSource,
-) : KotlinMangaNovelSourceAdapter(source), NovelCatalogueSource {
+    pluginId: String,
+) : KotlinMangaNovelSourceAdapter(source, pluginId), NovelCatalogueSource {
     private val catalogueSource: CatalogueSource = source
 
     override val supportsLatest: Boolean = catalogueSource.supportsLatest
@@ -525,11 +706,18 @@ private open class KotlinCatalogueNovelSourceAdapter(
     }
 
     override suspend fun getPopularNovels(page: Int, filters: NovelFilterList): NovelsPage {
-        return catalogueSource.getPopularManga(page).toNovelsPage(source)
+        return when {
+            filters.isEmpty() -> getPopularNovels(page)
+            else -> getSearchNovels(page, query = "", filters = filters)
+        }
     }
 
     override suspend fun getSearchNovels(page: Int, query: String, filters: NovelFilterList): NovelsPage {
-        return catalogueSource.getSearchManga(page, query, filters.toMangaFilterList()).toNovelsPage(source)
+        return catalogueSource.getSearchManga(
+            page,
+            query,
+            filterAdapter.toMangaFilterList(filters, catalogueSource),
+        ).toNovelsPage(source)
     }
 
     override suspend fun getLatestUpdates(page: Int): NovelsPage {
@@ -537,10 +725,13 @@ private open class KotlinCatalogueNovelSourceAdapter(
     }
 
     override suspend fun getLatestUpdates(page: Int, filters: NovelFilterList): NovelsPage {
-        return getLatestUpdates(page)
+        return when {
+            filters.isEmpty() -> getLatestUpdates(page)
+            else -> getSearchNovels(page, query = "", filters = filters)
+        }
     }
 
-    override fun getFilterList(): NovelFilterList = catalogueSource.getFilterList().toNovelFilterList()
+    override fun getFilterList(): NovelFilterList = filterAdapter.toNovelFilterList(catalogueSource.getFilterList())
 
     @Deprecated("Use the non-RxJava API instead.")
     @Suppress("DEPRECATION")
@@ -551,7 +742,11 @@ private open class KotlinCatalogueNovelSourceAdapter(
     @Deprecated("Use the non-RxJava API instead.")
     @Suppress("DEPRECATION")
     override fun fetchSearchNovels(page: Int, query: String, filters: NovelFilterList): Observable<NovelsPage> {
-        return catalogueSource.fetchSearchManga(page, query, filters.toMangaFilterList()).map {
+        return catalogueSource.fetchSearchManga(
+            page,
+            query,
+            filterAdapter.toMangaFilterList(filters, catalogueSource),
+        ).map {
             it.toNovelsPage(source)
         }
     }
@@ -566,63 +761,11 @@ private open class KotlinCatalogueNovelSourceAdapter(
 private class KotlinConfigurableCatalogueNovelSourceAdapter(
     source: CatalogueSource,
     private val configurableSource: ConfigurableSource,
-) : KotlinCatalogueNovelSourceAdapter(source), ConfigurableNovelSource {
+    pluginId: String,
+) : KotlinCatalogueNovelSourceAdapter(source, pluginId), ConfigurableNovelSource {
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         configurableSource.setupPreferenceScreen(screen)
-    }
-}
-
-private fun FilterList.toNovelFilterList(): NovelFilterList {
-    return NovelFilterList(map { it.toNovelFilter() })
-}
-
-private fun NovelFilterList.toMangaFilterList(): FilterList {
-    return FilterList(map { it.toMangaFilter() })
-}
-
-@Suppress("UNCHECKED_CAST")
-private fun Filter<*>.toNovelFilter(): NovelFilter<*> {
-    return when (this) {
-        is Filter.Header -> NovelFilter.Header(name)
-        is Filter.Separator -> NovelFilter.Separator(name)
-        is Filter.CheckBox -> object : NovelFilter.CheckBox(name, state) {}
-        is Filter.TriState -> object : NovelFilter.TriState(name, state) {}
-        is Filter.Text -> object : NovelFilter.Text(name, state) {}
-        is Filter.Select<*> -> object : NovelFilter.Select<Any?>(name, values as Array<Any?>, state) {}
-        is Filter.Group<*> -> object : NovelFilter.Group<NovelFilter<*>>(
-            name,
-            state.filterIsInstance<Filter<*>>().map { it.toNovelFilter() },
-        ) {}
-        is Filter.Sort -> object : NovelFilter.Sort(
-            name,
-            values,
-            state?.let { NovelFilter.Sort.Selection(it.index, it.ascending) },
-        ) {}
-    }
-}
-
-@Suppress("UNCHECKED_CAST")
-private fun NovelFilter<*>.toMangaFilter(): Filter<*> {
-    return when (this) {
-        is NovelFilter.Header -> Filter.Header(name)
-        is NovelFilter.Separator -> Filter.Separator(name)
-        is NovelFilter.CheckBox -> object : Filter.CheckBox(name, state) {}
-        is NovelFilter.Switch -> object : Filter.CheckBox(name, state) {}
-        is NovelFilter.TriState -> object : Filter.TriState(name, state) {}
-        is NovelFilter.Text -> object : Filter.Text(name, state) {}
-        is NovelFilter.Select<*> -> object : Filter.Select<Any?>(name, values as Array<Any?>, state) {}
-        is NovelFilter.Group<*> -> object : Filter.Group<Filter<*>>(
-            name,
-            state.filterIsInstance<NovelFilter<*>>().map { it.toMangaFilter() },
-        ) {}
-        is NovelFilter.Sort -> object : Filter.Sort(
-            name,
-            values,
-            state?.let { Filter.Sort.Selection(it.index, it.ascending) },
-        ) {}
-        is NovelFilter.Picker<*> -> object : Filter.Select<Any?>(name, values as Array<Any?>, state) {}
-        is NovelFilter.XCheckBox -> object : Filter.TriState(name, state) {}
     }
 }
 
@@ -638,8 +781,8 @@ private fun SManga.toNovel(source: TachiyomiSource): SNovel {
         it.author = runCatching { author }.getOrNull() ?: runCatching { artist }.getOrNull()
         it.description = runCatching { description }.getOrNull()
         it.genre = runCatching { genre }.getOrNull()
-        it.status = runCatching { status }.getOrDefault(SNovel.UNKNOWN)
-        it.thumbnail_url = runCatching { thumbnail_url }.getOrNull()
+        it.status = runCatching { status }.getOrDefault(5).toNovelStatus()
+        it.thumbnail_url = runCatching { thumbnail_url }.getOrNull()?.let { resolveSourceUrl(source, it) }
         it.update_strategy = runCatching { update_strategy }.getOrDefault(it.update_strategy)
         it.initialized = runCatching { initialized }.getOrDefault(false)
     }
@@ -654,11 +797,31 @@ private fun SNovel.toManga(): SManga {
         it.author = runCatching { author }.getOrNull()
         it.description = runCatching { description }.getOrNull()
         it.genre = runCatching { genre }.getOrNull()
-        it.status = runCatching { status }.getOrDefault(SManga.UNKNOWN)
+        it.status = runCatching { status }.getOrDefault(SNovel.UNKNOWN).toMangaStatus()
         it.thumbnail_url = runCatching { thumbnail_url }.getOrNull()
         it.update_strategy = runCatching { update_strategy }.getOrDefault(it.update_strategy)
         it.initialized = runCatching { initialized }.getOrDefault(false)
     }
+}
+
+private fun Int.toNovelStatus(): Int = when (this) {
+    0 -> SNovel.ONGOING
+    1 -> SNovel.COMPLETED
+    2 -> SNovel.LICENSED
+    3 -> SNovel.PUBLISHING_FINISHED
+    4 -> SNovel.CANCELLED
+    6 -> SNovel.ON_HIATUS
+    else -> SNovel.UNKNOWN
+}
+
+private fun Int.toMangaStatus(): Int = when (this) {
+    SNovel.ONGOING -> 0
+    SNovel.COMPLETED -> 1
+    SNovel.LICENSED -> 2
+    SNovel.PUBLISHING_FINISHED -> 3
+    SNovel.CANCELLED -> 4
+    SNovel.ON_HIATUS -> 6
+    else -> 5
 }
 
 private fun SChapter.toNovelChapter(source: TachiyomiSource): SNovelChapter {

@@ -47,6 +47,7 @@ import coil3.compose.AsyncImage
 import eu.kanade.presentation.theme.AuroraTheme
 import eu.kanade.tachiyomi.data.suggestions.SuggestionItem
 import eu.kanade.tachiyomi.data.suggestions.SuggestionState
+import eu.kanade.tachiyomi.data.suggestions.suggestionCoverModel
 import kotlinx.coroutines.delay
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -245,23 +246,7 @@ private fun AuroraSuggestionCard(
     }
 }
 
-private fun getCoverModel(item: SuggestionItem): Any? {
-    val url = item.thumbnailUrl ?: return null
-    if (item.mediaType != eu.kanade.tachiyomi.data.suggestions.sources.SuggestionMediaType.NOVEL) return url
-
-    if (eu.kanade.tachiyomi.source.novel.NovelPluginImage.isSupported(url)) {
-        return eu.kanade.tachiyomi.source.novel.NovelPluginImage(url)
-    }
-
-    val sourceId = item.providerId?.substringBefore(":")?.toLongOrNull() ?: -1L
-    return tachiyomi.domain.entries.novel.model.NovelCover(
-        novelId = -1L,
-        sourceId = sourceId,
-        isNovelFavorite = false,
-        url = url,
-        lastModified = 0L,
-    )
-}
+private fun getCoverModel(item: SuggestionItem): Any? = suggestionCoverModel(item)
 
 @Composable
 private fun AuroraSuggestionsShimmer() {

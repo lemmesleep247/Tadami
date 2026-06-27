@@ -2,6 +2,7 @@ package eu.kanade.presentation.more.settings.widget
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Error
@@ -45,6 +46,7 @@ fun EditTextPreferenceWidget(
     formatSubtitle: Boolean = true,
     validate: (String) -> Boolean = { true },
     errorMessage: @Composable ((String) -> String)? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     enabled: Boolean = true,
 ) {
     var isDialogShown by remember { mutableStateOf(false) }
@@ -106,6 +108,7 @@ fun EditTextPreferenceWidget(
                     },
                     isError = (textFieldValue.text.isBlank() && !canBeBlank) || !validate(textFieldValue.text),
                     singleLine = singleLine,
+                    keyboardOptions = keyboardOptions,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = accentColor,
                         focusedLabelColor = accentColor,

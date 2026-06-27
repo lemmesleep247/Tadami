@@ -1,10 +1,12 @@
 package tachiyomi.presentation.core.components.material
 
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +29,7 @@ fun NavigationBar(
     tonalElevation: Dp = 0.dp,
     windowInsets: WindowInsets = NavigationBarDefaults.windowInsets,
     shape: Shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+    contentPadding: PaddingValues = PaddingValues(0.dp),
     content: @Composable RowScope.() -> Unit,
 ) {
     androidx.compose.material3.Surface(
@@ -41,6 +44,7 @@ fun NavigationBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .windowInsetsPadding(windowInsets)
+                .padding(contentPadding)
                 .height(80.dp)
                 .selectableGroup(),
             content = content,

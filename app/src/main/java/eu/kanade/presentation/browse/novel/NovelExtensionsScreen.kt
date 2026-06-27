@@ -1,5 +1,6 @@
 package eu.kanade.presentation.browse.novel
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,12 +12,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -24,8 +28,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.platform.LocalContext
@@ -38,7 +47,9 @@ import coil3.compose.AsyncImage
 import com.tadami.aurora.R
 import eu.kanade.presentation.browse.BaseBrowseItem
 import eu.kanade.presentation.browse.manga.ExtensionHeader
+import eu.kanade.presentation.browse.manga.ExtensionTrustDialog
 import eu.kanade.presentation.more.settings.screen.browse.NovelExtensionReposScreen
+import eu.kanade.presentation.util.animateItemFastScroll
 import eu.kanade.tachiyomi.extension.InstallStep
 import eu.kanade.tachiyomi.ui.browse.novel.extension.NovelExtensionItem
 import eu.kanade.tachiyomi.ui.browse.novel.extension.NovelExtensionsScreenModel
@@ -60,12 +71,66 @@ internal fun shouldLoadNovelPluginIcon(iconUrl: String?): Boolean {
     return !iconUrl.isNullOrBlank()
 }
 
+internal fun uniqueNovelExtensionItemKeys(
+    section: String,
+    items: List<NovelExtensionItem>,
+): List<String> {
+    val seen = mutableMapOf<String, Int>()
+    return items.map { item ->
+        val baseKey = novelExtensionItemBaseKey(section, item)
+        val duplicateIndex = seen.getOrDefault(baseKey, 0)
+        seen[baseKey] = duplicateIndex + 1
+        if (duplicateIndex == 0) {
+            baseKey
+        } else {
+            "$baseKey#$duplicateIndex"
+        }
+    }
+}
+
+private fun novelExtensionItemBaseKey(
+    section: String,
+    item: NovelExtensionItem,
+): String {
+    val plugin = item.plugin
+    val status = when (item.status) {
+        NovelExtensionItem.Status.UpdateAvailable -> "update"
+        NovelExtensionItem.Status.Installed -> "installed"
+        NovelExtensionItem.Status.Untrusted -> "untrusted"
+        NovelExtensionItem.Status.Available -> "available"
+    }
+    val pluginType = when (plugin) {
+        is NovelPlugin.Available -> "available"
+        is NovelPlugin.Installed -> "installed"
+        is NovelPlugin.Untrusted -> "untrusted"
+    }
+    val packageName = when (plugin) {
+        is NovelPlugin.Available -> plugin.pkgName
+        is NovelPlugin.Installed -> plugin.pkgName
+        is NovelPlugin.Untrusted -> plugin.pkgName
+    }.orEmpty()
+    val trustSignature = (plugin as? NovelPlugin.Untrusted)?.signatureHash.orEmpty()
+
+    return listOf(
+        "novel-ext",
+        section,
+        status,
+        pluginType,
+        plugin.id,
+        plugin.repoUrl,
+        packageName,
+        plugin.sha256,
+        trustSignature,
+    ).joinToString(separator = "|")
+}
+
 internal enum class NovelExtensionRowAction {
     None,
     Install,
     Update,
     Reinstall,
     Open,
+    Trust,
 }
 
 internal fun resolveNovelExtensionRowAction(item: NovelExtensionItem): NovelExtensionRowAction {
@@ -78,6 +143,7 @@ internal fun resolveNovelExtensionRowAction(item: NovelExtensionItem): NovelExte
                 NovelExtensionRowAction.Reinstall
             }
             plugin is NovelPlugin.Installed && item.hasUpdate -> NovelExtensionRowAction.Update
+            plugin is NovelPlugin.Untrusted -> NovelExtensionRowAction.Trust
             else -> NovelExtensionRowAction.None
         }
         else -> when {
@@ -87,6 +153,7 @@ internal fun resolveNovelExtensionRowAction(item: NovelExtensionItem): NovelExte
             }
             plugin is NovelPlugin.Installed && item.hasUpdate -> NovelExtensionRowAction.Update
             plugin is NovelPlugin.Installed -> NovelExtensionRowAction.Open
+            plugin is NovelPlugin.Untrusted -> NovelExtensionRowAction.Trust
             else -> NovelExtensionRowAction.None
         }
     }
@@ -101,11 +168,15 @@ fun NovelExtensionScreen(
     onUpdateExtension: (NovelPlugin.Installed) -> Unit,
     onReinstallExtension: (NovelPlugin.Installed) -> Unit,
     onOpenExtension: (NovelPlugin.Installed) -> Unit,
-    onOpenExtensionSettings: (NovelPlugin.Installed) -> Unit,
+    onOpenExtensionSettings: (Long) -> Unit,
     onUninstallExtension: (NovelPlugin.Installed) -> Unit,
+    onUninstallUntrustedExtension: (NovelPlugin.Untrusted) -> Unit,
+    onTrustExtension: (NovelPlugin.Untrusted) -> Unit,
     onUpdateAll: () -> Unit,
     onRefresh: () -> Unit,
     onToggleSection: (String) -> Unit,
+    onCopyDiagnostic: (NovelPlugin) -> Unit,
+    onShareApk: (NovelPlugin) -> Unit,
 ) {
     val navigator = LocalNavigator.currentOrThrow
 
@@ -144,8 +215,12 @@ fun NovelExtensionScreen(
                     onOpenExtension = onOpenExtension,
                     onOpenExtensionSettings = onOpenExtensionSettings,
                     onUninstallExtension = onUninstallExtension,
+                    onUninstallUntrustedExtension = onUninstallUntrustedExtension,
+                    onTrustExtension = onTrustExtension,
                     onUpdateAll = onUpdateAll,
                     onToggleSection = onToggleSection,
+                    onCopyDiagnostic = onCopyDiagnostic,
+                    onShareApk = onShareApk,
                 )
             }
         }
@@ -160,13 +235,18 @@ private fun NovelExtensionContent(
     onUpdateExtension: (NovelPlugin.Installed) -> Unit,
     onReinstallExtension: (NovelPlugin.Installed) -> Unit,
     onOpenExtension: (NovelPlugin.Installed) -> Unit,
-    onOpenExtensionSettings: (NovelPlugin.Installed) -> Unit,
+    onOpenExtensionSettings: (Long) -> Unit,
     onUninstallExtension: (NovelPlugin.Installed) -> Unit,
+    onUninstallUntrustedExtension: (NovelPlugin.Untrusted) -> Unit,
+    onTrustExtension: (NovelPlugin.Untrusted) -> Unit,
     onUpdateAll: () -> Unit,
     onToggleSection: (String) -> Unit,
+    onCopyDiagnostic: (NovelPlugin) -> Unit,
+    onShareApk: (NovelPlugin) -> Unit,
 ) {
     val grouped = state.items.groupBy { it.status }
     val context = LocalContext.current
+    var trustState by remember { mutableStateOf<NovelPlugin.Untrusted?>(null) }
 
     FastScrollLazyColumn(
         contentPadding = contentPadding + topSmallPaddingValues,
@@ -188,35 +268,46 @@ private fun NovelExtensionContent(
                     },
                 )
             }
+            val keyedUpdates = uniqueNovelExtensionItemKeys("update", updates).zip(updates)
             items(
-                items = updates,
-                key = { item -> "novel-ext-update-${item.plugin.id}" },
-            ) { item ->
+                items = keyedUpdates,
+                key = { (key, _) -> key },
+            ) { (_, item) ->
                 NovelExtensionItemRow(
+                    modifier = Modifier.animateItemFastScroll(this),
                     item = item,
                     onUpdateExtension = onUpdateExtension,
                     onReinstallExtension = onReinstallExtension,
                     onOpenExtension = onOpenExtension,
                     onOpenExtensionSettings = onOpenExtensionSettings,
                     onUninstallExtension = onUninstallExtension,
+                    onTrustExtension = { trustState = it },
+                    onCopyDiagnostic = onCopyDiagnostic,
+                    onShareApk = onShareApk,
                 )
             }
         }
 
-        val installed = grouped[NovelExtensionItem.Status.Installed].orEmpty()
+        val installed = grouped[NovelExtensionItem.Status.Installed].orEmpty() +
+            grouped[NovelExtensionItem.Status.Untrusted].orEmpty()
         if (installed.isNotEmpty()) {
             item(key = "novel-ext-installed-header") {
                 ExtensionHeader(textRes = MR.strings.ext_installed)
             }
+            val keyedInstalled = uniqueNovelExtensionItemKeys("installed", installed).zip(installed)
             items(
-                items = installed,
-                key = { item -> "novel-ext-installed-${item.plugin.id}" },
-            ) { item ->
+                items = keyedInstalled,
+                key = { (key, _) -> key },
+            ) { (_, item) ->
                 NovelExtensionItemRow(
+                    modifier = Modifier.animateItemFastScroll(this),
                     item = item,
                     onOpenExtension = onOpenExtension,
                     onOpenExtensionSettings = onOpenExtensionSettings,
                     onUninstallExtension = onUninstallExtension,
+                    onTrustExtension = { trustState = it },
+                    onCopyDiagnostic = onCopyDiagnostic,
+                    onShareApk = onShareApk,
                 )
             }
         }
@@ -253,17 +344,38 @@ private fun NovelExtensionContent(
                     )
                 }
 
+                val keyedLanguageItems = uniqueNovelExtensionItemKeys("available-$language", languageItems)
+                    .zip(languageItems)
                 items(
-                    items = languageItems,
-                    key = { item -> "novel-ext-available-$language-${item.plugin.id}" },
-                ) { item ->
+                    items = keyedLanguageItems,
+                    key = { (key, _) -> key },
+                ) { (_, item) ->
                     NovelExtensionItemRow(
+                        modifier = Modifier.animateItemFastScroll(this),
                         item = item,
                         onInstallExtension = onInstallExtension,
+                        onCopyDiagnostic = onCopyDiagnostic,
+                        onShareApk = onShareApk,
                     )
                 }
             }
         }
+    }
+
+    trustState?.let { plugin ->
+        ExtensionTrustDialog(
+            onClickConfirm = {
+                onTrustExtension(plugin)
+                trustState = null
+            },
+            onClickDismiss = {
+                onUninstallUntrustedExtension(plugin)
+                trustState = null
+            },
+            onDismissRequest = {
+                trustState = null
+            },
+        )
     }
 }
 
@@ -274,8 +386,12 @@ private fun NovelExtensionItemRow(
     onUpdateExtension: ((NovelPlugin.Installed) -> Unit)? = null,
     onReinstallExtension: ((NovelPlugin.Installed) -> Unit)? = null,
     onOpenExtension: ((NovelPlugin.Installed) -> Unit)? = null,
-    onOpenExtensionSettings: ((NovelPlugin.Installed) -> Unit)? = null,
+    onOpenExtensionSettings: ((Long) -> Unit)? = null,
     onUninstallExtension: ((NovelPlugin.Installed) -> Unit)? = null,
+    onTrustExtension: ((NovelPlugin.Untrusted) -> Unit)? = null,
+    onCopyDiagnostic: ((NovelPlugin) -> Unit)? = null,
+    onShareApk: ((NovelPlugin) -> Unit)? = null,
+    modifier: Modifier = Modifier,
 ) {
     val plugin = item.plugin
     val onItemClick: () -> Unit = {
@@ -289,10 +405,12 @@ private fun NovelExtensionItemRow(
                 onReinstallExtension?.invoke(it)
             }
             NovelExtensionRowAction.Open -> (plugin as? NovelPlugin.Installed)?.let { onOpenExtension?.invoke(it) }
+            NovelExtensionRowAction.Trust -> (plugin as? NovelPlugin.Untrusted)?.let { onTrustExtension?.invoke(it) }
         }
     }
 
     BaseBrowseItem(
+        modifier = modifier,
         onClickItem = onItemClick,
         icon = {
             Box(
@@ -302,23 +420,33 @@ private fun NovelExtensionItemRow(
                 val idle = item.installStep.isCompleted()
                 if (!idle) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(32.dp),
+                        modifier = Modifier.size(40.dp),
                         strokeWidth = 2.dp,
                     )
                 }
+                val padding by animateDpAsState(
+                    targetValue = if (idle) 0.dp else 8.dp,
+                    label = "iconPadding",
+                )
                 if (shouldLoadNovelPluginIcon(plugin.iconUrl)) {
                     AsyncImage(
                         model = plugin.iconUrl,
                         contentDescription = null,
                         placeholder = ColorPainter(Color(0x1F888888)),
                         error = painterResource(R.mipmap.ic_default_source),
-                        modifier = Modifier.size(34.dp),
+                        modifier = Modifier
+                            .matchParentSize()
+                            .padding(padding)
+                            .clip(MaterialTheme.shapes.extraSmall),
                     )
                 } else {
                     Image(
                         painter = painterResource(R.mipmap.ic_default_source),
                         contentDescription = null,
-                        modifier = Modifier.size(34.dp),
+                        modifier = Modifier
+                            .matchParentSize()
+                            .padding(padding)
+                            .clip(MaterialTheme.shapes.extraSmall),
                     )
                 }
             }
@@ -327,13 +455,31 @@ private fun NovelExtensionItemRow(
             when (item.installStep) {
                 InstallStep.Pending, InstallStep.Downloading, InstallStep.Installing -> Unit
                 InstallStep.Error -> {
-                    val retryAction = resolveNovelExtensionRowAction(item)
-                    if (retryAction != NovelExtensionRowAction.None) {
-                        IconButton(onClick = onItemClick) {
-                            Icon(
-                                imageVector = Icons.Outlined.Refresh,
-                                contentDescription = stringResource(MR.strings.action_retry),
-                            )
+                    Row {
+                        val retryAction = resolveNovelExtensionRowAction(item)
+                        if (retryAction != NovelExtensionRowAction.None) {
+                            IconButton(onClick = onItemClick) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Refresh,
+                                    contentDescription = stringResource(MR.strings.action_retry),
+                                )
+                            }
+                        }
+                        if (onShareApk != null) {
+                            IconButton(onClick = { onShareApk(plugin) }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Share,
+                                    contentDescription = stringResource(MR.strings.action_share),
+                                )
+                            }
+                        }
+                        if (onCopyDiagnostic != null) {
+                            IconButton(onClick = { onCopyDiagnostic(plugin) }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.ContentCopy,
+                                    contentDescription = stringResource(MR.strings.action_copy_to_clipboard),
+                                )
+                            }
                         }
                     }
                 }
@@ -346,10 +492,18 @@ private fun NovelExtensionItemRow(
                             )
                         }
                     }
+                    plugin is NovelPlugin.Untrusted -> {
+                        IconButton(onClick = { onTrustExtension?.invoke(plugin) }) {
+                            Icon(
+                                imageVector = Icons.Outlined.VerifiedUser,
+                                contentDescription = stringResource(MR.strings.ext_trust),
+                            )
+                        }
+                    }
                     plugin is NovelPlugin.Installed -> {
                         Row {
-                            if (onOpenExtensionSettings != null && item.hasSettings) {
-                                IconButton(onClick = { onOpenExtensionSettings(plugin) }) {
+                            if (onOpenExtensionSettings != null && item.settingsSourceId != null) {
+                                IconButton(onClick = { onOpenExtensionSettings(item.settingsSourceId) }) {
                                     Icon(
                                         imageVector = Icons.Outlined.Settings,
                                         contentDescription = stringResource(MR.strings.action_settings),
@@ -426,6 +580,17 @@ private fun NovelExtensionItemRow(
                         )
                     }
                 }
+                if (plugin is NovelPlugin.Untrusted) {
+                    Row(modifier = Modifier.padding(start = 8.dp)) {
+                        Text(
+                            text = stringResource(MR.strings.ext_untrusted).uppercase(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
                 if (item.hasRepoUpdate) {
                     Row(modifier = Modifier.padding(start = 8.dp)) {
                         Text(
@@ -465,9 +630,10 @@ private fun NovelPlugin.repoDisplayName(repoSourceCount: Int): String? {
     val rawName = when (this) {
         is NovelPlugin.Available -> repoName.ifBlank { repoUrl.shortRepoName() }
         is NovelPlugin.Installed -> repoName?.takeIf { it.isNotBlank() } ?: repoUrl.shortRepoName()
+        is NovelPlugin.Untrusted -> null
     }
 
-    return rawName.takeIf { it.isNotBlank() }?.oneWordRepoName()
+    return rawName?.takeIf { it.isNotBlank() }?.oneWordRepoName()
 }
 
 private fun String.shortRepoName(): String {

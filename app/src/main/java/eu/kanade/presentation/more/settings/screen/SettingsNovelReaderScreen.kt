@@ -67,6 +67,7 @@ import eu.kanade.presentation.reader.novel.ensureLegacyNovelReaderBackgroundItem
 import eu.kanade.presentation.reader.novel.importNovelReaderCustomBackgroundItem
 import eu.kanade.presentation.reader.novel.importNovelReaderCustomFont
 import eu.kanade.presentation.reader.novel.intervalToAutoScrollSpeed
+import eu.kanade.presentation.reader.novel.novelAutoScrollChapterEndBehaviorEntries
 import eu.kanade.presentation.reader.novel.novelBookFlipAnimationSpeedEntries
 import eu.kanade.presentation.reader.novel.novelBookFlipAnimationSpeedSliderIndex
 import eu.kanade.presentation.reader.novel.novelPageTransitionStyleEntries
@@ -100,6 +101,7 @@ import eu.kanade.presentation.reader.novel.shouldShowPageTurnTuningControls
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderChapterDiskCache
 import eu.kanade.tachiyomi.ui.reader.novel.NovelReaderChapterDiskCacheStore
 import eu.kanade.tachiyomi.ui.reader.novel.setting.GeminiPromptMode
+import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelAutoScrollChapterEndBehavior
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelPageTransitionStyle
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundSource
 import eu.kanade.tachiyomi.ui.reader.novel.setting.NovelReaderBackgroundTexture
@@ -980,6 +982,13 @@ object SettingsNovelReaderScreen : SearchableSettings {
         val autoScrollSpeed = intervalToAutoScrollSpeed(autoScrollInterval)
         val autoScrollOffsetPref = prefs.autoScrollOffset()
         val autoScrollOffset by autoScrollOffsetPref.collectAsState()
+        val autoScrollChapterEndBehaviorPref = prefs.autoScrollChapterEndBehavior()
+        val autoScrollChapterEndBehavior by autoScrollChapterEndBehaviorPref.collectAsState()
+        val autoScrollAdaptiveDelayPref = prefs.autoScrollAdaptiveDelay()
+        val autoScrollAdaptiveDelay by autoScrollAdaptiveDelayPref.collectAsState()
+        val autoScrollEndPauseMsPref = prefs.autoScrollEndPauseMs()
+        val autoScrollEndPauseMs by autoScrollEndPauseMsPref.collectAsState()
+        val autoScrollChapterEndBehaviorEntries = novelAutoScrollChapterEndBehaviorEntries()
         val cacheReadChaptersPref = prefs.cacheReadChapters()
         val cacheReadChapters by cacheReadChaptersPref.collectAsState()
         val cacheReadChaptersUnlimitedPref = prefs.cacheReadChaptersUnlimited()
@@ -1239,6 +1248,39 @@ object SettingsNovelReaderScreen : SearchableSettings {
                     enabled = rendererAvailability.richNativeEnabled,
                 ),
             )
+            add(
+                Preference.PreferenceItem.ListPreference(
+                    preference = autoScrollChapterEndBehaviorPref,
+                    title = stringResource(AYMR.strings.novel_reader_auto_scroll_chapter_end_behavior),
+                    subtitle = autoScrollChapterEndBehaviorEntries[autoScrollChapterEndBehavior],
+                    entries = autoScrollChapterEndBehaviorEntries,
+                ),
+            )
+            add(
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = autoScrollAdaptiveDelayPref,
+                    title = stringResource(AYMR.strings.novel_reader_auto_scroll_adaptive_delay),
+                    subtitle = stringResource(AYMR.strings.novel_reader_auto_scroll_adaptive_delay_summary),
+                ),
+            )
+            if (autoScrollChapterEndBehavior != NovelAutoScrollChapterEndBehavior.StopAtEnd) {
+                add(
+                    Preference.PreferenceItem.SliderPreference(
+                        value = (autoScrollEndPauseMs / 1000L).toInt(),
+                        title = stringResource(AYMR.strings.novel_reader_auto_scroll_end_pause),
+                        subtitle = stringResource(
+                            AYMR.strings.novel_reader_auto_scroll_end_pause_value,
+                            (autoScrollEndPauseMs / 1000L).toInt(),
+                        ),
+                        valueRange = 0..10,
+                        enabled = true,
+                        onValueChanged = {
+                            autoScrollEndPauseMsPref.set(it.toLong() * 1000L)
+                            true
+                        },
+                    ),
+                )
+            }
             add(
                 Preference.PreferenceItem.SliderPreference(
                     value = autoScrollSpeed,

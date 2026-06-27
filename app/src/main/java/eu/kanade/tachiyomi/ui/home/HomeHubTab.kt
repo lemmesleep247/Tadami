@@ -80,6 +80,7 @@ import eu.kanade.tachiyomi.ui.home.components.AnimatedNicknameOverlay
 import eu.kanade.tachiyomi.ui.home.components.NicknameBadgeDecorator
 import eu.kanade.tachiyomi.ui.home.components.isTreasury
 import kotlinx.collections.immutable.toPersistentList
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tachiyomi.domain.achievement.model.DayActivity
 import tachiyomi.i18n.MR
@@ -741,9 +742,11 @@ object HomeHubTab : Tab {
         var mangaSearchQuery by rememberSaveable { mutableStateOf<String?>(null) }
         var novelSearchQuery by rememberSaveable { mutableStateOf<String?>(null) }
         val scope = rememberCoroutineScope()
-        val activityDataFlow = remember(activityDataRepository) { activityDataRepository.getActivityData(days = 365) }
-        val activityData by activityDataFlow.collectAsStateWithLifecycle(initialValue = emptyList())
-        val currentStreak = remember(activityData) { calculateHomeOpenStreak(activityData) }
+        var currentStreak by remember { mutableIntStateOf(0) }
+        LaunchedEffect(Unit) {
+            activityDataRepository.getActivityData(days = 365)
+                .collectLatest { currentStreak = calculateHomeOpenStreak(it) }
+        }
         val isNameEdited by userProfilePreferences.nameEdited().collectAsStateWithLifecycle()
         val showHomeGreeting by userProfilePreferences.showHomeGreeting().collectAsStateWithLifecycle()
         val showHomeStreak by userProfilePreferences.showHomeStreak().collectAsStateWithLifecycle()
@@ -807,15 +810,11 @@ object HomeHubTab : Tab {
             italic = greetingItalic,
         )
 
-        val animeScreenModel = HomeHubTab.rememberScreenModel { HomeHubScreenModel() }
-        val mangaScreenModel = HomeHubTab.rememberScreenModel { MangaHomeHubScreenModel() }
-        val novelScreenModel = HomeHubTab.rememberScreenModel { NovelHomeHubScreenModel() }
-
         val profileSection = resolveHomeHubProfileSection(sections, selectedSection)
         val profileScreenModel: BaseHomeHubScreenModel = when (profileSection) {
-            HomeHubSection.Anime -> animeScreenModel
-            HomeHubSection.Manga -> mangaScreenModel
-            HomeHubSection.Novel -> novelScreenModel
+            HomeHubSection.Anime -> HomeHubTab.rememberScreenModel { HomeHubScreenModel() }
+            HomeHubSection.Manga -> HomeHubTab.rememberScreenModel { MangaHomeHubScreenModel() }
+            HomeHubSection.Novel -> HomeHubTab.rememberScreenModel { NovelHomeHubScreenModel() }
         }
         val headerState by profileScreenModel.state.collectAsStateWithLifecycle()
         val headerUserName = headerState.userName
@@ -831,13 +830,7 @@ object HomeHubTab : Tab {
         val photoPickerLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.GetContent(),
         ) { uri ->
-            uri?.let {
-                when (selectedSection) {
-                    HomeHubSection.Anime -> animeScreenModel.updateUserAvatar(it.toString())
-                    HomeHubSection.Manga -> mangaScreenModel.updateUserAvatar(it.toString())
-                    HomeHubSection.Novel -> novelScreenModel.updateUserAvatar(it.toString())
-                }
-            }
+            uri?.let { profileScreenModel.updateUserAvatar(it.toString()) }
         }
 
         var showNameDialog by remember { mutableStateOf(false) }
@@ -926,6 +919,7 @@ object HomeHubTab : Tab {
                             activeSection = selectedSection,
                             scrollResetToken = scrollResetToken,
                             onScrollSignal = onScrollSignal,
+                            providedScreenModel = profileScreenModel as? HomeHubScreenModel,
                         )
                     },
                 )
@@ -941,6 +935,7 @@ object HomeHubTab : Tab {
                             activeSection = selectedSection,
                             scrollResetToken = scrollResetToken,
                             onScrollSignal = onScrollSignal,
+                            providedScreenModel = profileScreenModel as? MangaHomeHubScreenModel,
                         )
                     },
                 )
@@ -956,6 +951,7 @@ object HomeHubTab : Tab {
                             activeSection = selectedSection,
                             scrollResetToken = scrollResetToken,
                             onScrollSignal = onScrollSignal,
+                            providedScreenModel = profileScreenModel as? NovelHomeHubScreenModel,
                         )
                     },
                 )
