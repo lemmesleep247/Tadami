@@ -2493,4 +2493,7 @@
     <string name="anixart_import_change_match">Change Match</string>
     <string name="anixart_import_score_match">Match score: %1$d%%</string>
     <string name="anixart_import_preference_group_title">Import</string>
+    <!-- Time Paradox Achievement -->
+    <string name="achievement_time_paradox_title">Time Paradox</string>
+    <string name="achievement_time_paradox_desc">Read or watch at exactly 11:11</string>
 </resources>

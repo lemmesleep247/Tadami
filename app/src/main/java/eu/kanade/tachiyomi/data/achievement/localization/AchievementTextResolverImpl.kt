@@ -157,6 +157,10 @@ internal fun achievementTextResourceRefs(achievementId: String): AchievementText
         "night_owl" -> timeResources("night_owl")
         "early_bird" -> timeResources("early_bird")
         "marathon_reader" -> timeResources("marathon_reader")
+        "time_paradox" -> text(
+            AYMR.strings.achievement_time_paradox_title,
+            AYMR.strings.achievement_time_paradox_desc,
+        )
 
         "download_starter" -> featureResources("download_starter")
         "chapter_collector" -> featureResources("chapter_collector")

@@ -2870,6 +2870,32 @@
           "description": "Transcendent rank theme"
         }
       ]
+    },
+    {
+      "id": "time_paradox",
+      "type": "event",
+      "category": "both",
+      "threshold": 1,
+      "points": 150,
+      "title": "Time Paradox",
+      "description": "Read or watch at exactly 11:11",
+      "badge_icon": "ic_badge_time_paradox",
+      "is_hidden": false,
+      "is_secret": false,
+      "rarity": "rare",
+      "tags": [
+        "both",
+        "event"
+      ],
+      "season": null,
+      "rewards": [
+        {
+          "type": "SPECIAL",
+          "id": "special_tab_glow",
+          "title": "Tab Bottom Glow",
+          "description": "Unlocks a bottom glow effect for the tab bar"
+        }
+      ]
     }
   ]
 }

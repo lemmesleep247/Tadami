@@ -1693,4 +1693,15 @@
     <string name="novel_download_throttle_limits">Pause: %1$d–%2$d ms. Timeout: %3$d–%4$d ms. Recommended: 1200–3000 ms pause, 300–1000 ms jitter.</string>
     <string name="novel_download_throttle_save">Save</string>
     <string name="novel_download_throttle_cancel">Cancel</string>
+    <!-- Time Paradox & Tab Bottom Glow -->
+    <string name="treasury_tab_customization">Tab Customization</string>
+    <string name="treasury_tab_customization_subtitle">Personalize your navigation tab bar visual effects</string>
+    <string name="pref_show_tab_glow">Show Tab Bottom Glow</string>
+    <string name="pref_show_tab_glow_summary">Show a glowing visual effect at the bottom of the tab bar</string>
+    <string name="treasury_tab_glow_locked">Locked: Requires \'Time Paradox\' achievement</string>
+    <string name="unlockable_special_tab_glow">Tab Bottom Glow</string>
+    <string name="achievement_time_paradox_title">Time Paradox</string>
+    <string name="achievement_time_paradox_desc">Read or watch at exactly 11:11</string>
+    <string name="reward_special_tab_glow_title">Tab Bottom Glow</string>
+    <string name="reward_special_tab_glow_desc">An accent-colored glow below the tab switcher</string>
 </resources>

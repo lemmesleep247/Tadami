@@ -1492,4 +1492,15 @@
     <string name="pref_tutorial_mode">Показывать подсказки для новичков</string>
     <string name="pref_tutorial_restart_tour">Перезапустить обучение</string>
     <string name="pref_tutorial_reset_tips">Сбросить все подсказки</string>
+    <!-- Time Paradox & Tab Bottom Glow -->
+    <string name="treasury_tab_customization">Кастомизация вкладок</string>
+    <string name="treasury_tab_customization_subtitle">Персонализируйте визуальные эффекты панели вкладок</string>
+    <string name="pref_show_tab_glow">Свечение внизу вкладок</string>
+    <string name="pref_show_tab_glow_summary">Показывать светящийся визуальный эффект под панелью вкладок</string>
+    <string name="treasury_tab_glow_locked">Заблокировано: требуется достижение «Временной парадокс»</string>
+    <string name="unlockable_special_tab_glow">Нижняя подсветка табов</string>
+    <string name="achievement_time_paradox_title">Временной парадокс</string>
+    <string name="achievement_time_paradox_desc">Почитайте или посмотрите что-то ровно в 11:11</string>
+    <string name="reward_special_tab_glow_title">Нижняя подсветка табов</string>
+    <string name="reward_special_tab_glow_desc">Акцентная подсветка под панелью переключения вкладок</string>
 </resources>
