@@ -132,6 +132,8 @@ android {
         }
         resources {
             excludes += setOf(
+                "**/*.dylib",
+                "**/*.dll",
                 "kotlin-tooling-metadata.json",
                 "LICENSE.txt",
                 "META-INF/**/*.properties",

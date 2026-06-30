@@ -1656,9 +1656,9 @@
 
     <!-- Shikimori Integration -->
     <string name="pref_use_shikimori_rating">Использовать рейтинг и тип из Shikimori</string>
-    <string name="pref_use_shikimori_rating_summary">Отображать рейтинг и тип аниме из базы данных Shikimori.one</string>
+    <string name="pref_use_shikimori_rating_summary">Отображать рейтинг и тип аниме из базы данных Shikimori.io</string>
     <string name="pref_use_shikimori_covers">Использовать постеры Shikimori</string>
-    <string name="pref_use_shikimori_covers_summary">Заменять постеры аниме на высококачественные версии из Shikimori.one</string>
+    <string name="pref_use_shikimori_covers_summary">Заменять постеры аниме на высококачественные версии из Shikimori.io</string>
 
     <!-- Achievements -->
     <string name="label_achievements">Достижения</string>
