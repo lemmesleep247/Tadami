@@ -114,8 +114,7 @@ jobs:
       # ---------------------------------------------------------
       - name: Sign APK
         if: |
-          github.event_name == 'workflow_dispatch' &&
-          github.repository == 'aniyomiorg/aniyomi'
+          github.event_name == 'workflow_dispatch'
         uses: r0adkll/sign-android-release@f30bdd30588842ac76044ecdbd4b6d0e3e813478
         with:
           releaseDirectory: app/build/outputs/apk/release
@@ -128,40 +127,38 @@ jobs:
 
       - name: Clean up build artifacts
         if: |
-          github.event_name == 'workflow_dispatch' &&
-          github.repository == 'aniyomiorg/aniyomi'
+          github.event_name == 'workflow_dispatch'
         run: |
           set -euo pipefail
 
           mv app/build/outputs/apk/release/app-universal-release-unsigned-signed.apk \
-            "aniyomi-${VERSION_TAG}.apk"
-          sha=$(sha256sum "aniyomi-${VERSION_TAG}.apk" | awk '{ print $1 }')
+            "tadami-${VERSION_TAG}.apk"
+          sha=$(sha256sum "tadami-${VERSION_TAG}.apk" | awk '{ print $1 }')
           echo "APK_UNIVERSAL_SHA=$sha" >> "$GITHUB_ENV"
 
           mv app/build/outputs/apk/release/app-arm64-v8a-release-unsigned-signed.apk \
-            "aniyomi-arm64-v8a-${VERSION_TAG}.apk"
-          sha=$(sha256sum "aniyomi-arm64-v8a-${VERSION_TAG}.apk" | awk '{ print $1 }')
+            "tadami-arm64-v8a-${VERSION_TAG}.apk"
+          sha=$(sha256sum "tadami-arm64-v8a-${VERSION_TAG}.apk" | awk '{ print $1 }')
           echo "APK_ARM64_V8A_SHA=$sha" >> "$GITHUB_ENV"
 
           mv app/build/outputs/apk/release/app-armeabi-v7a-release-unsigned-signed.apk \
-            "aniyomi-armeabi-v7a-${VERSION_TAG}.apk"
-          sha=$(sha256sum "aniyomi-armeabi-v7a-${VERSION_TAG}.apk" | awk '{ print $1 }')
+            "tadami-armeabi-v7a-${VERSION_TAG}.apk"
+          sha=$(sha256sum "tadami-armeabi-v7a-${VERSION_TAG}.apk" | awk '{ print $1 }')
           echo "APK_ARMEABI_V7A_SHA=$sha" >> "$GITHUB_ENV"
 
           mv app/build/outputs/apk/release/app-x86-release-unsigned-signed.apk \
-            "aniyomi-x86-${VERSION_TAG}.apk"
-          sha=$(sha256sum "aniyomi-x86-${VERSION_TAG}.apk" | awk '{ print $1 }')
+            "tadami-x86-${VERSION_TAG}.apk"
+          sha=$(sha256sum "tadami-x86-${VERSION_TAG}.apk" | awk '{ print $1 }')
           echo "APK_X86_SHA=$sha" >> "$GITHUB_ENV"
 
           mv app/build/outputs/apk/release/app-x86_64-release-unsigned-signed.apk \
-            "aniyomi-x86_64-${VERSION_TAG}.apk"
-          sha=$(sha256sum "aniyomi-x86_64-${VERSION_TAG}.apk" | awk '{ print $1 }')
+            "tadami-x86_64-${VERSION_TAG}.apk"
+          sha=$(sha256sum "tadami-x86_64-${VERSION_TAG}.apk" | awk '{ print $1 }')
           echo "APK_X86_64_SHA=$sha" >> "$GITHUB_ENV"
 
       - name: Create Release
         if: |
-          github.event_name == 'workflow_dispatch' &&
-          github.repository == 'aniyomiorg/aniyomi'
+          github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
         with:
           tag_name: ${{ env.VERSION_TAG }}
